@@ -1,0 +1,50 @@
+; FBX 7.4.0 project file
+FBXHeaderExtension: {
+	FBXHeaderVersion: 1003
+	FBXVersion: 7400
+}
+GlobalSettings: {
+	Version: 1000
+	Properties70: {
+		P: "UpAxis", "int", "Integer", "",1
+		P: "UpAxisSign", "int", "Integer", "",1
+		P: "FrontAxis", "int", "Integer", "",2
+		P: "FrontAxisSign", "int", "Integer", "",1
+		P: "CoordAxis", "int", "Integer", "",0
+		P: "CoordAxisSign", "int", "Integer", "",1
+		P: "UnitScaleFactor", "double", "Number", "",1
+		P: "OriginalUnitScaleFactor", "double", "Number", "",1
+	}
+}
+Objects: {
+	Geometry: 100, "Geometry::AuditBox", "Mesh" {
+		Vertices: *24 {
+			a: -1.5,0,-1,1.5,0,-1,1.5,4,-1,-1.5,4,-1,-1.5,0,1,1.5,0,1,1.5,4,1,-1.5,4,1
+		}
+		PolygonVertexIndex: *24 {
+			a: 0,3,2,-2,4,5,6,-8,0,1,5,-5,3,7,6,-3,0,4,7,-4,1,2,6,-6
+		}
+	}
+	Model: 200, "Model::AuditCmBox", "Mesh" {
+		Version: 232
+		Properties70: {
+			P: "Lcl Translation", "Lcl Translation", "", "A",0,0,0
+			P: "Lcl Rotation", "Lcl Rotation", "", "A",0,0,0
+			P: "Lcl Scaling", "Lcl Scaling", "", "A",1,1,1
+		}
+	}
+	Material: 300, "Material::AuditBlue", "" {
+		Version: 102
+		ShadingModel: "phong"
+		MultiLayer: 0
+		Properties70: {
+			P: "DiffuseColor", "Color", "", "A",0.137255,0.34902,0.611765
+			P: "Shininess", "double", "Number", "",30
+		}
+	}
+}
+Connections: {
+	C: "OO",100,200
+	C: "OO",300,200
+	C: "OO",200,0
+}

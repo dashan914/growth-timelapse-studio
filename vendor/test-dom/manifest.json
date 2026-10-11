@@ -1,0 +1,20 @@
+{
+  "repo": "https://github.com/WebReflection/linkedom",
+  "commit": "3fcf145cd95ac9a2f0a1b7db62dbf7c5737b410e",
+  "license": "ISC",
+  "use": "Node-only DOMParser for executing actual ThreeMFLoader tests; not production dependency",
+  "files": [
+    {
+      "file": "worker.mjs",
+      "url": "https://raw.githubusercontent.com/WebReflection/linkedom/3fcf145cd95ac9a2f0a1b7db62dbf7c5737b410e/worker.js",
+      "sha256": "ea9f1de69b009d210968dd8f4d3f4ecf1095bedf80d389ec83244c1713578288",
+      "bytes": 411521
+    },
+    {
+      "file": "LICENSE",
+      "url": "https://raw.githubusercontent.com/WebReflection/linkedom/3fcf145cd95ac9a2f0a1b7db62dbf7c5737b410e/LICENSE",
+      "sha256": "dc6d4961d8b6ee747231582ae9c53ce1d66bf76bc9f5a28f554c0e97210953bf",
+      "bytes": 765
+    }
+  ]
+}

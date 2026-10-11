@@ -1,0 +1,95 @@
+{
+  "file": "测试2.3mf",
+  "source": "用户指定的公开案例",
+  "originalSha256": "af0726a9488e1bf115bebc6cb3d6ce7c66c5c1f64a92448d8ebaf805772b745a",
+  "releaseSha256": "bed665f01beb9aaeeca08a4bcaa5fc0f1a49429b914719e2071bc63f1b1fbb3a",
+  "originalMetadata": {
+    "CopyRight": "[]",
+    "Copyright": "[]",
+    "Designer": "张大山l",
+    "License": "Standard Digital File License",
+    "Title": "河狸变身计划 蜥蜴-汤姆【可动弹簧分件版无需ams】"
+  },
+  "geometrySectionSha256": "33a2c6e3c81c7b22c9cd1254bb669f4438adaf1e3fa01bd76b87f2433e685e27",
+  "geometryChanged": false,
+  "paintChanged": false,
+  "removedNonfunctionalMetadata": [
+    {
+      "file": "3D/3dmodel.model",
+      "field": "CreationDate"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "Description"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "DesignModelId"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "DesignProfileId"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "DesignRegion"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "DesignerCover"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "DesignerUserId"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "ModificationDate"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "Origin"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "ProfileCover"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "ProfileDescription"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "ProfileTitle"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "ProfileUserId"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "ProfileUserName"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "Thumbnail_Middle"
+    },
+    {
+      "file": "3D/3dmodel.model",
+      "field": "Thumbnail_Small"
+    },
+    {
+      "file": "Metadata/project_settings.config",
+      "field": "host_type"
+    },
+    {
+      "file": "Metadata/project_settings.config",
+      "field": "printhost_authorization_type"
+    },
+    {
+      "file": "Metadata/project_settings.config",
+      "field": "printhost_ssl_ignore_revoke"
+    }
+  ],
+  "removedAuxiliaryPictures": 12
+}

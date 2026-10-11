@@ -1,0 +1,21 @@
+{
+  "name": "growth-timelapse-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "本机模型生长延时视频工作台",
+  "license": "MIT",
+  "author": "张大山l",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.mjs",
+    "doctor": "node scripts/check-runtime.mjs",
+    "check:runtime": "node scripts/check-runtime.mjs",
+    "package": "python3 scripts/package-release.py",
+    "test": "node --test tests/*.test.mjs",
+    "test:native-slicing": "GROWTH_NATIVE_SLICER_TESTS=1 node --test --test-concurrency=1 tests/slice-backend.test.mjs tests/slice-source-worker.test.mjs tests/slice-loader-assembly.test.mjs tests/slice-vertex-colors.test.mjs"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  }
+}

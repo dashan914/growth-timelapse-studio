@@ -1,0 +1,26 @@
+mtllib audit-material.mtl
+o Audit30x40x20
+v -15 0 -10
+v 15 0 -10
+v 15 40 -10
+v -15 40 -10
+v -15 0 10
+v 15 0 10
+v 15 40 10
+v -15 40 10
+vt 0 0
+vt 1 0
+vt 1 1
+vt 0 1
+usemtl Blue
+f 1/1 4/2 3/3 2/4
+usemtl Blue
+f 5/1 6/2 7/3 8/4
+usemtl Blue
+f 1/1 2/2 6/3 5/4
+usemtl Gold
+f 4/1 8/2 7/3 3/4
+usemtl Gold
+f 1/1 5/2 8/3 4/4
+usemtl Gold
+f 2/1 3/2 7/3 6/4

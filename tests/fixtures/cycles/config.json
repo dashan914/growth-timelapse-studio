@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "coordinateSystem": "three-y-up",
+  "sceneFile": "scene.glb",
+  "output": {
+    "directory": "frames",
+    "width": 320,
+    "height": 240,
+    "fps": 24,
+    "frames": 3,
+    "growthFrames": 3,
+    "samples": 64
+  },
+  "camera": {
+    "position": [
+      0.2,
+      0.17,
+      0.3
+    ],
+    "quaternion": [
+      -0.14444173755038553,
+      0.2905163374892407,
+      0.07467016235789736,
+      0.94295345004868
+    ],
+    "fov": 46,
+    "aspect": 1.3333333333333333,
+    "near": 0.001,
+    "far": 10,
+    "projectionMatrix": [
+      3.5337785487356297,
+      0,
+      0,
+      0,
+      0,
+      4.711704731647505,
+      0,
+      0,
+      -0.1874999999999999,
+      0.4583333333333333,
+      -1.000200020002,
+      -1,
+      0,
+      0,
+      -0.002000200020002,
+      0
+    ]
+  },
+  "plane": {
+    "widthM": 0.33,
+    "depthM": 0.32,
+    "yM": -1e-05,
+    "shadowEnabled": true
+  },
+  "bounds": {
+    "min": [
+      -0.08,
+      0,
+      -0.035
+    ],
+    "max": [
+      0.08,
+      0.1,
+      0.035
+    ],
+    "minY": 0,
+    "maxY": 0.1
+  },
+  "growth": {
+    "direction": "up",
+    "stepped": false,
+    "layerCount": 180
+  },
+  "lighting": {
+    "colorTemperature": 7400,
+    "keyIntensity": 1.55,
+    "ambientIntensity": 0.72,
+    "fillIntensity": 0.24,
+    "exposure": 0.72,
+    "lightAzimuth": -30,
+    "lightElevation": 66,
+    "shadowRadius": 7
+  },
+  "grading": {
+    "scope": "model-only",
+    "exposure": 0.72,
+    "tint": 3,
+    "shadows": 6,
+    "highlights": -14,
+    "contrast": -8,
+    "saturation": -10
+  },
+  "surface": {
+    "enabled": true,
+    "preset": "auto",
+    "detail": 0.6,
+    "layerHeightM": 0.0002,
+    "firstLayerHeightM": 0.00025,
+    "lineWidthM": 0.00042,
+    "printCoordinatesMatrix": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1
+    ]
+  },
+  "dof": {
+    "dofEnabled": true,
+    "dofStrength": 10,
+    "dofFocus": 40,
+    "focusDistanceM": 0.39
+  },
+  "stats": {
+    "expectedTriangles": 24
+  },
+  "background": {
+    "transparent": true
+  }
+}

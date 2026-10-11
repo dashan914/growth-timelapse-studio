@@ -1,0 +1,89 @@
+{
+  "standard3mf": {
+    "faces": 12,
+    "dimensionsMm": [
+      30,
+      20,
+      40
+    ],
+    "up": "Z",
+    "palette": [
+      "#23599c",
+      "#c89e59"
+    ]
+  },
+  "obj": {
+    "faces": 12,
+    "dimensionsMm": [
+      30,
+      40,
+      20
+    ],
+    "up": "Y",
+    "texture": "audit-checker.png",
+    "units": "estimated-mm"
+  },
+  "glb": {
+    "faces": 12,
+    "dimensionsMetres": [
+      0.03,
+      0.04,
+      0.02
+    ],
+    "up": "Y",
+    "palette": [
+      "#23599c",
+      "#c89e59"
+    ]
+  },
+  "fbx": {
+    "faces": 12,
+    "unitScaleFactor": 1,
+    "dimensionsFileUnits": [
+      3,
+      4,
+      2
+    ],
+    "expectedDimensionsMm": [
+      30,
+      40,
+      20
+    ],
+    "up": "Y",
+    "palette": [
+      "#23599c"
+    ]
+  },
+  "stl": {
+    "faces": 12,
+    "dimensionsFileUnits": [
+      30,
+      20,
+      40
+    ],
+    "expectedDimensionsMm": [
+      30,
+      20,
+      40
+    ],
+    "up": "Z",
+    "units": "estimated-mm",
+    "palette": "uniform-picker"
+  },
+  "texturedGlb": {
+    "faces": 12,
+    "dimensionsMetres": [
+      0.03,
+      0.04,
+      0.02
+    ],
+    "up": "Y",
+    "palette": [
+      "#23599c",
+      "#c89e59"
+    ],
+    "texture": "embedded two-by-two audit-checker.png",
+    "textureMaterial": "Blue only",
+    "externalResources": false
+  }
+}

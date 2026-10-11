@@ -1,0 +1,8 @@
+newmtl Blue
+Kd 0.137255 0.34902 0.611765
+Ns 30
+map_Kd audit-checker.png
+
+newmtl Gold
+Kd 0.784314 0.619608 0.34902
+Ns 30

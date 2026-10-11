@@ -1,0 +1,42 @@
+# Installed dependencies and optional local Python environment
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Local media, generated output and task diagnostics
+exports/
+release/
+test-results/
+/result.json
+.slice-jobs/
+.slice-diagnostics/
+.support-jobs/
+*.log
+
+# Research, historical samples and private runtime bundles
+research/
+samples/
+runtime/
+public-release/
+
+# Local credentials, settings and OS/editor files
+.env
+.env.*
+!.env.example
+.DS_Store
+._*
+Thumbs.db
+.idea/
+.vscode/
+.codex/
+.agents/
+.aws/
+
+# Archive and installer artifacts
+*.zip
+*.dmg
+*.pkg
+*.exe
+*.AppImage

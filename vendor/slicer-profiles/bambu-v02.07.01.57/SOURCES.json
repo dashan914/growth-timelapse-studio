@@ -1,0 +1,55 @@
+{
+  "repository": "https://github.com/bambulab/BambuStudio",
+  "version": "v02.07.01.57",
+  "commit": "3f126b717ed1f10fee0f32f05ed9731808d0c8bb",
+  "files": [
+    {
+      "path": "resources/profiles/BBL/process/0.20mm Standard @BBL H2C.json",
+      "url": "https://raw.githubusercontent.com/bambulab/BambuStudio/3f126b717ed1f10fee0f32f05ed9731808d0c8bb/resources/profiles/BBL/process/0.20mm%20Standard%20%40BBL%20H2C.json",
+      "sha256": "ad4a9b79888710312b2eaf46c14655a301320c6ca8279b84c8d148c6129dd641",
+      "localPath": "process/0.20mm Standard @BBL H2C.json"
+    },
+    {
+      "path": "resources/profiles/BBL/process/fdm_process_dual_0.20_nozzle_0.4.json",
+      "url": "https://raw.githubusercontent.com/bambulab/BambuStudio/3f126b717ed1f10fee0f32f05ed9731808d0c8bb/resources/profiles/BBL/process/fdm_process_dual_0.20_nozzle_0.4.json",
+      "sha256": "8015670b40629f69ec2a2bff47d549d778e95ee545350e5fa9f60f8d8cbf2adc",
+      "localPath": "process/fdm_process_dual_0.20_nozzle_0.4.json"
+    },
+    {
+      "path": "resources/profiles/BBL/process/fdm_process_dual_common.json",
+      "url": "https://raw.githubusercontent.com/bambulab/BambuStudio/3f126b717ed1f10fee0f32f05ed9731808d0c8bb/resources/profiles/BBL/process/fdm_process_dual_common.json",
+      "sha256": "743303a5c3c1962f8c8d178d21e23fc409027ea48574017db51230eac72bd063",
+      "localPath": "process/fdm_process_dual_common.json"
+    },
+    {
+      "path": "resources/profiles/BBL/process/fdm_process_common.json",
+      "url": "https://raw.githubusercontent.com/bambulab/BambuStudio/3f126b717ed1f10fee0f32f05ed9731808d0c8bb/resources/profiles/BBL/process/fdm_process_common.json",
+      "sha256": "d7981c4b92854f251b8697e1bb621c63fe393f263fb8024ab63c401525d543d7",
+      "localPath": "process/fdm_process_common.json"
+    },
+    {
+      "path": "resources/profiles/BBL/process/0.20mm Standard @BBL X1C.json",
+      "url": "https://raw.githubusercontent.com/bambulab/BambuStudio/3f126b717ed1f10fee0f32f05ed9731808d0c8bb/resources/profiles/BBL/process/0.20mm%20Standard%20%40BBL%20X1C.json",
+      "sha256": "e4d3f211b6ef87e9612c96f3ac2d18413e0610fff7eeb815a76420344a3b0a19",
+      "localPath": "process/0.20mm Standard @BBL X1C.json"
+    },
+    {
+      "path": "resources/profiles/BBL/process/fdm_process_single_0.20.json",
+      "url": "https://raw.githubusercontent.com/bambulab/BambuStudio/3f126b717ed1f10fee0f32f05ed9731808d0c8bb/resources/profiles/BBL/process/fdm_process_single_0.20.json",
+      "sha256": "cdda8d56d67f62a0faa892cb6efc605ebb5c745bf742f6ead4daaeb6627c182a",
+      "localPath": "process/fdm_process_single_0.20.json"
+    },
+    {
+      "path": "resources/profiles/BBL/process/fdm_process_single_common.json",
+      "url": "https://raw.githubusercontent.com/bambulab/BambuStudio/3f126b717ed1f10fee0f32f05ed9731808d0c8bb/resources/profiles/BBL/process/fdm_process_single_common.json",
+      "sha256": "05b38ac1318e465e817978b36da51754f928da0172738a20bb3a8d4a69eb4769",
+      "localPath": "process/fdm_process_single_common.json"
+    },
+    {
+      "path": "resources/profiles/BBL/process/0.20mm Standard @BBL A1.json",
+      "url": "https://raw.githubusercontent.com/bambulab/BambuStudio/3f126b717ed1f10fee0f32f05ed9731808d0c8bb/resources/profiles/BBL/process/0.20mm%20Standard%20%40BBL%20A1.json",
+      "sha256": "2bd33159b3ec659567a63b6ea6f5373af7431c68516e7d3e02693a4cef395079",
+      "localPath": "process/0.20mm Standard @BBL A1.json"
+    }
+  ]
+}
