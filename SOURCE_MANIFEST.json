@@ -15,8 +15,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 4619,
-      "sha256": "b1dc8ff458bf6f80e20dc2232e7dc1fabe7c0f9b2ef5685fa60729486e09c62a"
+      "bytes": 4654,
+      "sha256": "bf4b55d2cf69be54e856dc8f66f28de5005d7ff7a174c166ef7fd32011bc219a"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -75,8 +75,13 @@
     },
     {
       "path": "docs/VERIFICATION.md",
-      "bytes": 2386,
-      "sha256": "d6a1f6a244f320c8dae47313faa655599f4aeb2fa411418700ac3e4ebd66b807"
+      "bytes": 2532,
+      "sha256": "a1e8de83aa3b5801a658ab32a3201a16f086fa92a2682b3e1bef07da67897596"
+    },
+    {
+      "path": "docs/media/demo-model.gif",
+      "bytes": 397865,
+      "sha256": "6ba2869796d796d64d223fbd99b4ccd802d9576759b9e5220ac1c6a9cc880df3"
     },
     {
       "path": "docs/media/demo-model.mp4",
@@ -90,8 +95,8 @@
     },
     {
       "path": "examples/README.md",
-      "bytes": 877,
-      "sha256": "83e5d15a8a813e7aa91025ad5d4db6e74b098800d1554c88020852fb09ec0ffa"
+      "bytes": 941,
+      "sha256": "ec91e80b6ec73d5b26a8614f08eee45ac0cf3723157483f517d13892e85d293d"
     },
     {
       "path": "examples/SOURCE.json",

@@ -4,9 +4,9 @@
 
 作者：**张大山l**。这是模型模拟动画工具；输出不是实际打印过程的拍摄录像，也不控制打印机。
 
-![使用测试2.3mf制作多色生长动画](docs/media/workbench.png)
+![测试2.3mf 生长动画演示](docs/media/demo-model.gif)
 
-[查看 4 秒案例演示](docs/media/demo-model.mp4)：实时画质，3 秒生长 + 1 秒停留，演示隐藏支撑。
+[查看清晰 MP4](docs/media/demo-model.mp4) · [查看工作台截图](docs/media/workbench.png)。实时画质，3 秒生长 + 1 秒停留，演示隐藏支撑。
 
 ## 能做什么
 
