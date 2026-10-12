@@ -25,6 +25,7 @@ import {outputFormat} from './output-format.js';
 import {BACKGROUND_PRESETS} from './background-presets.js';
 import {selectPresetPlacementSnapshot,needsPresetPlacementUpgrade} from './preset-placement-state.js';
 import {backgroundAppearanceKey,normalizeBackgroundAppearance,normalizeBackgroundAppearances} from './background-appearance.js';
+import {ensureExportUnlocked} from './beta-access.js';
 
 const $ = id => document.getElementById(id);
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -37,6 +38,7 @@ let previewPlaybackActive = false;
 let lastTick = 0;
 const previewFrameIntervals=[];
 let exporting = false;
+let exportAuthorizing = false;
 let snapshotting = false;
 let loading = false;
 let importController = null, importSequence = 0, importProgressUI = null;
@@ -1214,30 +1216,36 @@ function downloadBlob(blob, filename) {
 }
 
 async function saveSnapshot() {
-  if (exporting || loading || snapshotting || alignBusy || !studio?.hasModel()) return;
-  if(studio.metadata.colorConfirmationRequired&&!await ensureModelSlice())return;
-  if(calibrationMode||cropEditing){say('先点击画面下方的“完成”，再保存画面。');return;}
-  setModelMode(null);
-  playing = false;
-  studio.endPreviewInteraction?.();previewPlaybackActive=false;
-  const config = settings();
-  const {width,height} = outputSize(config.ratio,config.resolution);
-  const plan=exportRenderPlan(width,height);
-  snapshotting=true;lockWorkspace(true);
-  const previousTransform=studio.transform.enabled;
-  studio.controls.enabled=false;studio.transform.enabled=false;
+  if (exporting || exportAuthorizing || loading || snapshotting || alignBusy || !studio?.hasModel()) return;
+  exportAuthorizing=true;
   try {
-    if(config.appearance==='photo'&&outputFormat(config.format).transparent)throw new Error('实拍外观包含完整背景，请选择 MP4 格式。');
-    const photo=config.appearance==='photo'?await preparePhotoFrames(width,height):null;
-    studio.startExport(plan.renderWidth,plan.renderHeight);
-    studio.setOptions({...renderOptions(),transparent:outputFormat(config.format).transparent});
-    const state = timelineState(time,config.duration,config.hold,config.motion);
-    let blob=await studio.captureFrame(state.progress,state.rotation,time,{outputPlan:plan});
-    if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo);
-    downloadBlob(blob,'模型生长-画面.png');
-    say('当前画面已保存。');
-  } catch(error) { say(error.message,true); }
-  finally { studio.endExport(); studio.setOptions(renderOptions());snapshotting=false;studio.lockPreviewCamera();studio.transform.enabled=previousTransform;lockWorkspace(false);showTime(); }
+    if(!await ensureExportUnlocked())return;
+    if (exporting || loading || snapshotting || alignBusy || !studio?.hasModel()) return;
+    if(studio.metadata.colorConfirmationRequired&&!await ensureModelSlice())return;
+    if(calibrationMode||cropEditing){say('先点击画面下方的“完成”，再保存画面。');return;}
+    setModelMode(null);
+    playing = false;
+    studio.endPreviewInteraction?.();previewPlaybackActive=false;
+    const config = settings();
+    const {width,height} = outputSize(config.ratio,config.resolution);
+    const plan=exportRenderPlan(width,height);
+    snapshotting=true;lockWorkspace(true);
+    const previousTransform=studio.transform.enabled;
+    studio.controls.enabled=false;studio.transform.enabled=false;
+    try {
+      if(config.appearance==='photo'&&outputFormat(config.format).transparent)throw new Error('实拍外观包含完整背景，请选择 MP4 格式。');
+      const photo=config.appearance==='photo'?await preparePhotoFrames(width,height):null;
+      studio.startExport(plan.renderWidth,plan.renderHeight);
+      studio.setOptions({...renderOptions(),transparent:outputFormat(config.format).transparent});
+      const state = timelineState(time,config.duration,config.hold,config.motion);
+      let blob=await studio.captureFrame(state.progress,state.rotation,time,{outputPlan:plan});
+      if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo);
+      if(!await ensureExportUnlocked()){say('画面未保存，可以继续调整。');return;}
+      downloadBlob(blob,'模型生长-画面.png');
+      say('当前画面已保存。');
+    } catch(error) { say(error.message,true); }
+    finally { studio.endExport(); studio.setOptions(renderOptions());snapshotting=false;studio.lockPreviewCamera();studio.transform.enabled=previousTransform;lockWorkspace(false);showTime(); }
+  } finally { exportAuthorizing=false; }
 }
 
 async function cancelExport() {
@@ -1322,82 +1330,87 @@ async function exportRealisticVideo(config) {
 }
 
 async function exportVideo() {
-  if (exporting || loading || alignBusy || !studio?.hasModel()) return;
-  if(calibrationMode||cropEditing){say('先点击画面下方的“完成”，再导出视频。');return;}
-  if(!await ensureModelSlice())return;
-  setModelMode(null);
-  studio.endPreviewInteraction?.();previewPlaybackActive=false;
-  const config = settings();
-  if (outputFormat(config.format).video && !ffmpegAvailable) {
-    say('本机缺少视频编码器。可在“导出格式”选择透明 PNG 序列，或按使用说明安装 FFmpeg。',true); return;
-  }
-  if(config.format==='mov-alpha'&&!alphaVideoAvailable){say('本机编码器不支持透明 MOV 视频，可先导出透明 PNG 序列。',true);return;}
-  if(config.quality==='realistic')return exportRealisticVideo(config);
-  exportBackend='realtime';exportCancellation=null;
-  exporting = true; playing = false; cancelled = false; exportId = null; controller = new AbortController();
-  const {width,height} = outputSize(config.ratio,config.resolution);
-  const plan=exportRenderPlan(width,height);
-  const frames = Math.round(config.duration*config.fps);
-  const signal = controller.signal;
-  lockWorkspace(true);
-  $('export-title').textContent = outputFormat(config.format).title;
-  $('export-detail').textContent = '准备渲染…';
-  $('export-progress').value = 0; $('export-percent').textContent = '0%';
-  $('export-frame-count').textContent = `0 / ${frames} 帧`;
-  $('export-result').replaceChildren(); $('export-result').hidden = true;
-  $('cancel-export').disabled = false; $('cancel-export').textContent = '取消导出';
-  $('export-dialog').showModal();
-  const started = performance.now();
+  if (exporting || exportAuthorizing || snapshotting || loading || alignBusy || !studio?.hasModel()) return;
+  exportAuthorizing=true;
   try {
-    if(config.appearance==='photo'&&outputFormat(config.format).transparent)throw new Error('实拍外观包含完整背景，请选择 MP4 格式。');
-    const photo=config.appearance==='photo'?await preparePhotoFrames(width,height):null;
-    // Keep creation uncancelled so its ID is always known and a cancelled job is cleaned up.
-    const job = await api('/api/exports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({width,height,fps:config.fps,frames,format:config.format,name:studio.metadata.name.replace(/\.[^.]+$/,'')+'-生长延时'})});
-    exportId = job.id;
-    if (cancelled) throw new DOMException('Aborted','AbortError');
-    if (config.format === 'mp4' && backgroundFile && studio.backgroundMetadata?.type === 'video' && $('background-audio').checked) {
-      $('export-detail').textContent = '正在准备实拍视频原声…';
-      await api(`/api/exports/${exportId}/background`,{method:'POST',headers:{'Content-Type':backgroundFile.type || 'video/mp4'},body:backgroundFile,signal});
+    if(!await ensureExportUnlocked())return;
+    if (exporting || snapshotting || loading || alignBusy || !studio?.hasModel()) return;
+    if(calibrationMode||cropEditing){say('先点击画面下方的“完成”，再导出视频。');return;}
+    if(!await ensureModelSlice())return;
+    setModelMode(null);
+    studio.endPreviewInteraction?.();previewPlaybackActive=false;
+    const config = settings();
+    if (outputFormat(config.format).video && !ffmpegAvailable) {
+      say('本机缺少视频编码器。可在“导出格式”选择透明 PNG 序列，或按使用说明安装 FFmpeg。',true); return;
     }
-    studio.startExport(plan.renderWidth,plan.renderHeight);
-    studio.setOptions({...renderOptions(),transparent:outputFormat(config.format).transparent});
-    for (let index = 0; index < frames; index++) {
+    if(config.format==='mov-alpha'&&!alphaVideoAvailable){say('本机编码器不支持透明 MOV 视频，可先导出透明 PNG 序列。',true);return;}
+    if(config.quality==='realistic')return await exportRealisticVideo(config);
+    exportBackend='realtime';exportCancellation=null;
+    exporting = true; playing = false; cancelled = false; exportId = null; controller = new AbortController();
+    const {width,height} = outputSize(config.ratio,config.resolution);
+    const plan=exportRenderPlan(width,height);
+    const frames = Math.round(config.duration*config.fps);
+    const signal = controller.signal;
+    lockWorkspace(true);
+    $('export-title').textContent = outputFormat(config.format).title;
+    $('export-detail').textContent = '准备渲染…';
+    $('export-progress').value = 0; $('export-percent').textContent = '0%';
+    $('export-frame-count').textContent = `0 / ${frames} 帧`;
+    $('export-result').replaceChildren(); $('export-result').hidden = true;
+    $('cancel-export').disabled = false; $('cancel-export').textContent = '取消导出';
+    $('export-dialog').showModal();
+    const started = performance.now();
+    try {
+      if(config.appearance==='photo'&&outputFormat(config.format).transparent)throw new Error('实拍外观包含完整背景，请选择 MP4 格式。');
+      const photo=config.appearance==='photo'?await preparePhotoFrames(width,height):null;
+      // Keep creation uncancelled so its ID is always known and a cancelled job is cleaned up.
+      const job = await api('/api/exports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({width,height,fps:config.fps,frames,format:config.format,name:studio.metadata.name.replace(/\.[^.]+$/,'')+'-生长延时'})});
+      exportId = job.id;
       if (cancelled) throw new DOMException('Aborted','AbortError');
-      const frameTime = index / Math.max(1,frames-1) * config.duration;
-      const state = timelineState(frameTime,config.duration,config.hold,config.motion);
-      let blob = await studio.captureFrame(state.progress,state.rotation,index/config.fps,{outputPlan:plan,signal});
-      if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo);
-      await api(`/api/exports/${exportId}/frames?index=${index}`,{method:'POST',headers:{'Content-Type':'image/png'},body:blob,signal});
-      const pct = Math.round((index+1)/frames*95);
-      $('export-progress').value = pct; $('export-percent').textContent = `${pct}%`;
-      $('export-frame-count').textContent = `${index+1} / ${frames} 帧`;
-      const elapsed = (performance.now()-started)/1000;
-      const remaining = (frames-index-1)*elapsed/(index+1);
-      $('export-detail').textContent = index < 3 ? '正在逐帧生成画面…' : `正在生成画面，预计还需 ${remaining >= 60 ? Math.ceil(remaining/60)+' 分钟' : Math.max(1,Math.ceil(remaining))+' 秒'}`;
+      if (config.format === 'mp4' && backgroundFile && studio.backgroundMetadata?.type === 'video' && $('background-audio').checked) {
+        $('export-detail').textContent = '正在准备实拍视频原声…';
+        await api(`/api/exports/${exportId}/background`,{method:'POST',headers:{'Content-Type':backgroundFile.type || 'video/mp4'},body:backgroundFile,signal});
+      }
+      studio.startExport(plan.renderWidth,plan.renderHeight);
+      studio.setOptions({...renderOptions(),transparent:outputFormat(config.format).transparent});
+      for (let index = 0; index < frames; index++) {
+        if (cancelled) throw new DOMException('Aborted','AbortError');
+        const frameTime = index / Math.max(1,frames-1) * config.duration;
+        const state = timelineState(frameTime,config.duration,config.hold,config.motion);
+        let blob = await studio.captureFrame(state.progress,state.rotation,index/config.fps,{outputPlan:plan,signal});
+        if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo);
+        await api(`/api/exports/${exportId}/frames?index=${index}`,{method:'POST',headers:{'Content-Type':'image/png'},body:blob,signal});
+        const pct = Math.round((index+1)/frames*95);
+        $('export-progress').value = pct; $('export-percent').textContent = `${pct}%`;
+        $('export-frame-count').textContent = `${index+1} / ${frames} 帧`;
+        const elapsed = (performance.now()-started)/1000;
+        const remaining = (frames-index-1)*elapsed/(index+1);
+        $('export-detail').textContent = index < 3 ? '正在逐帧生成画面…' : `正在生成画面，预计还需 ${remaining >= 60 ? Math.ceil(remaining/60)+' 分钟' : Math.max(1,Math.ceil(remaining))+' 秒'}`;
+      }
+      $('export-detail').textContent = outputFormat(config.format).video ? '画面已完成，正在保存视频…' : '画面已完成，正在打包图片…';
+      const result = await api(`/api/exports/${exportId}/finish`,{method:'POST',signal});
+      if (cancelled) throw new DOMException('Aborted','AbortError');
+      exportId = null;
+      $('export-title').textContent = '完成，可以下载了。';
+      $('export-detail').textContent = outputFormat(config.format).success;
+      $('export-progress').value = 100; $('export-percent').textContent = '100%';
+      const link = document.createElement('a'); link.href = result.url; link.download = result.filename; link.className = 'button primary';
+      link.textContent = outputFormat(config.format).download;
+      const info = document.createElement('small'); info.textContent = `${result.filename} · ${(result.bytes/1024/1024).toFixed(1)} MB`;
+      $('export-result').append(link,info); $('export-result').hidden = false;
+      $('cancel-export').textContent = '返回工作台';
+      say('导出完成。可以下载文件，也可以继续制作下一个视频。');
+    } catch (error) {
+      if (exportId) await api(`/api/exports/${exportId}`,{method:'DELETE'}).catch(() => {});
+      exportId = null;
+      if (cancelled || error.name === 'AbortError') { $('export-dialog').close(); say('已取消导出，可以继续调整。'); }
+      else { $('export-title').textContent = '这次导出没有完成'; $('export-detail').textContent = error.message; $('cancel-export').textContent = '返回工作台'; say(error.message,true); }
+    } finally {
+      studio.endExport(); exporting = false; controller = null;
+      studio.setOptions(renderOptions()); studio.lockPreviewCamera();updateStageBounds(); lockWorkspace(false); showTime();
+      $('cancel-export').disabled = false;updateReferenceView();
     }
-    $('export-detail').textContent = outputFormat(config.format).video ? '画面已完成，正在保存视频…' : '画面已完成，正在打包图片…';
-    const result = await api(`/api/exports/${exportId}/finish`,{method:'POST',signal});
-    if (cancelled) throw new DOMException('Aborted','AbortError');
-    exportId = null;
-    $('export-title').textContent = '完成，可以下载了。';
-    $('export-detail').textContent = outputFormat(config.format).success;
-    $('export-progress').value = 100; $('export-percent').textContent = '100%';
-    const link = document.createElement('a'); link.href = result.url; link.download = result.filename; link.className = 'button primary';
-    link.textContent = outputFormat(config.format).download;
-    const info = document.createElement('small'); info.textContent = `${result.filename} · ${(result.bytes/1024/1024).toFixed(1)} MB`;
-    $('export-result').append(link,info); $('export-result').hidden = false;
-    $('cancel-export').textContent = '返回工作台';
-    say('导出完成。可以下载文件，也可以继续制作下一个视频。');
-  } catch (error) {
-    if (exportId) await api(`/api/exports/${exportId}`,{method:'DELETE'}).catch(() => {});
-    exportId = null;
-    if (cancelled || error.name === 'AbortError') { $('export-dialog').close(); say('已取消导出，可以继续调整。'); }
-    else { $('export-title').textContent = '这次导出没有完成'; $('export-detail').textContent = error.message; $('cancel-export').textContent = '返回工作台'; say(error.message,true); }
-  } finally {
-    studio.endExport(); exporting = false; controller = null;
-    studio.setOptions(renderOptions()); studio.lockPreviewCamera();updateStageBounds(); lockWorkspace(false); showTime();
-    $('cancel-export').disabled = false;updateReferenceView();
-  }
+  } finally { exportAuthorizing=false; }
 }
 
 function tick(timestamp) {

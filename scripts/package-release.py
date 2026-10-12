@@ -13,10 +13,12 @@ FILES = (
     'server.mjs', 'runtime-paths.mjs', 'bambu-engine.mjs', 'slicer-engine.mjs',
     'slice-jobs.mjs', 'support-jobs.mjs', 'realistic-render.mjs',
     'photo-calibration.mjs', 'export-codecs.mjs',
+    'beta-activation.mjs', 'beta-config.json', 'INSTALL_AGENT.md', 'install-manifest.json', 'start.cmd',
+    'assets/shandi-logo.svg',
 )
 DIRECTORIES = ('src', 'scripts', 'tests', 'docs', 'examples', 'vendor')
 BACKGROUNDS = ('h2c.jpg', 'p1s.jpg', 'a1.jpg', 'pastel-rug.png', 'blue-grey.png', 'teal-room.png')
-EXCLUDED_PARTS = {'node_modules', 'research', 'exports', 'samples', 'candidates', '__pycache__', '.git', 'release', 'test-results', '.DS_Store', 'Thumbs.db', '.venv', 'venv', '.idea', '.vscode', '.codex', '.agents', '.aws'}
+EXCLUDED_PARTS = {'node_modules', 'research', 'exports', 'samples', 'candidates', '__pycache__', '.git', 'release', 'test-results', '.DS_Store', 'Thumbs.db', '.venv', 'venv', '.idea', '.vscode', '.codex', '.agents', '.aws', 'private-beta', 'integration-work'}
 
 
 def source_files():
@@ -31,7 +33,7 @@ def source_files():
         relative = filename.relative_to(ROOT)
         if any(part in EXCLUDED_PARTS or part.startswith('.slice-') or part.startswith('.support-') or part.startswith('.realistic-') for part in relative.parts):
             continue
-        if filename.name.startswith(('.env', '._')) or filename.suffix in ('.pyc', '.log', '.zip'):
+        if filename.name.startswith(('.env', '._')) or filename.suffix in ('.pyc', '.log', '.zip', '.pem', '.key', '.p12', '.pfx'):
             continue
         if filename.is_symlink():
             raise ValueError('A source release must not include symlinks: ' + str(relative))

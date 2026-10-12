@@ -1,7 +1,7 @@
 import { findBlenderPath, findFFmpegPath } from '../runtime-paths.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -98,6 +98,17 @@ test('finite output/camera, fixed paths, embedded GLB data and unsupported mater
   for (const update of [value => value.accessors[0].count = 15000000, value => value.accessors[0].componentType = 9000, value => value.accessors[0].byteOffset = 1000000, value => value.bufferViews[value.accessors[0].bufferView].byteStride = 1, value => value.buffers[0].uri = 'https://example.test/model.bin', value => value.extensionsUsed = ['KHR_materials_dispersion']]) {
     assert.throws(() => validateRenderGLB(changeGLBJSON(files['scene.glb'], update)));
   }
+});
+
+test('installed realistic renderer retains completed files in its configured shared export directory', async t => {
+  const exportDirectory = await mkdtemp(path.join(tmpdir(), 'growth-realistic-shared-'));
+  t.after(() => rm(exportDirectory, { recursive: true, force: true }));
+  const { service, root } = await fixture(t, { exportDirectory });
+  const job = await service.create(await packageBuffer(), { format: 'mp4' });
+  assert.equal((await terminal(service, job.id)).status, 'complete');
+  const file = await service.file(job.id);
+  assert.equal(path.dirname(file.path), await realpath(exportDirectory));
+  await assert.rejects(readdir(path.join(root, 'exports')), { code: 'ENOENT' });
 });
 
 test('successful MP4 preserves all ordered frames, finalizes only verified stats and uses private files', async t => {

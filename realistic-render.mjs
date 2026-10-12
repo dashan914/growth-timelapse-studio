@@ -330,11 +330,11 @@ function safeStats(stats, job) {
   return Object.fromEntries(['schemaVersion', 'originalTriangles', 'completeTriangles', 'sourceMeshes', 'materials', 'decimation', 'sourceGeometryUnchanged', 'frames', 'growthFrames', 'previewProgress', 'width', 'height', 'samples', 'seconds', 'projectionError', 'photoProtected', 'gradingScope', 'capMode', 'capOnlyTrianglesPeak', 'printSegments', 'printLayerCount', 'printWindowSegmentsPeak', 'printCrossSection', 'environmentMode', 'shadowMode'].map(key => [key, typeof stats[key] === 'string' ? stats[key].slice(0, 120) : stats[key]]));
 }
 
-export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath = findBlenderPath({ root }), ffmpegPath = findFFmpegPath(), timeoutMs = 6 * 60 * 60 * 1000, stallTimeoutMs = 15 * 60 * 1000, maxQueued = 1, killGraceMs = 1500, maxOutputBytes = REALISTIC_RENDER_LIMITS.maxOutputBytes, spawnImpl = spawn, renameImpl = rename, alphaEncoderProbe = probeMovAlphaEncoder } = {}) {
+export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath = findBlenderPath({ root }), ffmpegPath = findFFmpegPath(), timeoutMs = 6 * 60 * 60 * 1000, stallTimeoutMs = 15 * 60 * 1000, maxQueued = 1, killGraceMs = 1500, maxOutputBytes = REALISTIC_RENDER_LIMITS.maxOutputBytes, spawnImpl = spawn, renameImpl = rename, alphaEncoderProbe = probeMovAlphaEncoder, exportDirectory } = {}) {
   if (!Number.isInteger(maxQueued) || maxQueued < 0 || maxQueued > 1 || ![timeoutMs, stallTimeoutMs].every(value => Number.isFinite(value) && value >= 25 && value <= 86400000) || !Number.isFinite(killGraceMs) || killGraceMs < 10 || killGraceMs > 5000) throw new RealisticRenderError(500, 'INVALID_RENDER_SERVICE_LIMITS', '写实渲染服务的队列或时间范围配置无效。');
   if (!Number.isInteger(maxOutputBytes) || maxOutputBytes < 1 || maxOutputBytes > REALISTIC_RENDER_LIMITS.maxOutputBytes) throw new RealisticRenderError(500, 'INVALID_RENDER_SERVICE_LIMITS', '写实导出文件大小范围配置无效。');
   root = path.resolve(root);
-  let outputRoot = path.join(root, 'exports'), tempRoot = path.join(outputRoot, '.realistic-work');
+  let outputRoot = exportDirectory ? path.resolve(exportDirectory) : path.join(root, 'exports'), tempRoot = path.join(outputRoot, '.realistic-work');
   const jobs = new Map(), queue = []; let active = null, reservations = 0, closed = false;
   const preparations = new Set();
   const get = (id, { preview } = {}) => { const job = jobs.get(id); if (!job || typeof preview === 'boolean' && (job.format === 'preview') !== preview) throw new RealisticRenderError(404, 'REALISTIC_EXPORT_NOT_FOUND', '找不到这次写实任务。'); return job; };
@@ -347,7 +347,8 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
   async function ensureOutput() {
     await mkdir(root, { recursive: true }); await mkdir(outputRoot, { recursive: true });
     const [actualRoot, actualOutput] = await Promise.all([realpath(root), realpath(outputRoot)]);
-    if (actualOutput !== path.join(actualRoot, 'exports')) throw new RealisticRenderError(500, 'UNSAFE_EXPORT_DIRECTORY', '导出目录不能指向项目之外。');
+    const expectedOutput = exportDirectory ? path.join(await realpath(path.dirname(outputRoot)), path.basename(outputRoot)) : path.join(actualRoot, 'exports');
+    if (actualOutput !== expectedOutput) throw new RealisticRenderError(500, 'UNSAFE_EXPORT_DIRECTORY', '导出目录不能通过链接指向其他位置。');
     root = actualRoot; outputRoot = actualOutput; tempRoot = path.join(actualOutput, '.realistic-work');
     await mkdir(tempRoot, { recursive: true, mode: 0o700 });
     if (await realpath(tempRoot) !== path.join(actualOutput, '.realistic-work')) throw new RealisticRenderError(500, 'UNSAFE_WORK_DIRECTORY', '写实临时目录无效。');

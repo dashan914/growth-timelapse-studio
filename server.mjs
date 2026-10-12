@@ -13,6 +13,7 @@ import { createRealisticRenderService, REALISTIC_RENDER_LIMITS } from './realist
 import { createSliceService, validateSliceOptions } from './slice-jobs.mjs';
 import { movAlphaEncoderArguments, probeMovAlphaEncoder } from './export-codecs.mjs';
 import { findFFmpegPath, findPythonPath } from './runtime-paths.mjs';
+import { createBetaActivationService, APP_VERSION } from './beta-activation.mjs';
 
 const execFileAsync = promisify(execFile);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -240,13 +241,14 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
   supportsSlicerPath = SUPPORT_SLICER, supportsPythonPath = findPythonPath(),
   supportJobTimeoutMs = 15 * 60 * 1000, supportMaximumUploadBytes = 128 * 1024 * 1024,
   photoCalibrationService = { detect: detectPhotoUprights, capability: photoCalibrationCapability },
-  realisticRenderService, sliceService, blenderPath = process.env.BLENDER_PATH, alphaEncoderProbe = probeMovAlphaEncoder } = {}) {
+  realisticRenderService, sliceService, blenderPath = process.env.BLENDER_PATH, alphaEncoderProbe = probeMovAlphaEncoder,
+  betaService = createBetaActivationService(), exportDirectory = process.env.GROWTH_EXPORT_DIR } = {}) {
   const supports = createSupportManager({ root, slicerPath: supportsSlicerPath, pythonPath: supportsPythonPath,
     timeoutMs: supportJobTimeoutMs, maximumUploadBytes: supportMaximumUploadBytes });
-  const realistic = realisticRenderService || createRealisticRenderService({ root, ffmpegPath, alphaEncoderProbe, ...(blenderPath ? { blenderPath } : {}) });
+  const realistic = realisticRenderService || createRealisticRenderService({ root, ffmpegPath, alphaEncoderProbe, ...(exportDirectory ? { exportDirectory } : {}), ...(blenderPath ? { blenderPath } : {}) });
   const slices = sliceService || createSliceService({ root, pythonPath: supportsPythonPath });
   const jobs = new Map();
-  const outputDirectory = path.join(root, 'exports');
+  const outputDirectory = exportDirectory ? path.resolve(exportDirectory) : path.join(root, 'exports');
   let activeJob = null;
   let ffmpegInfoPromise;
   let ffmpegInfoTime = 0;
@@ -539,8 +541,26 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
       const url = new URL(request.url, `http://${request.headers.host}`);
       if (url.pathname === '/api/health' && request.method === 'GET') {
         const [ffmpeg, supportsSlicer, photoCalibration, realisticRender, slicing] = await Promise.all([ffmpegInfo(), supports.health(), photoCalibrationService.capability(), realistic.health(), slices.health()]);
-        json(response, 200, { ok: true, ffmpeg, supportsSlicer, photoCalibration, realisticRender, slicing, activeExport: !!activeJob || realisticRender.active });
+        json(response, 200, { ok: true, app: 'growth-timelapse-studio', version: APP_VERSION, pid: process.pid, instanceId: process.env.GROWTH_INSTANCE_ID || null, ffmpeg, supportsSlicer, photoCalibration, realisticRender, slicing, activeExport: !!activeJob || realisticRender.active });
         return;
+      }
+      if (url.pathname === '/api/beta/status' && request.method === 'GET') { json(response, 200, await betaService.status()); return; }
+      if (url.pathname === '/api/beta/activate' && request.method === 'POST') {
+        const contentType = (request.headers['content-type'] || '').split(';', 1)[0].trim();
+        if (contentType !== 'application/json') { request.resume(); throw new ApiError(415, 'INVALID_CONTENT_TYPE', '请使用兑换码输入框解锁导出。'); }
+        let body;
+        try { body = JSON.parse((await readBody(request, 4096)).toString('utf8')); }
+        catch (error) { if (error.status) throw error; throw new ApiError(400, 'INVALID_JSON', '兑换码请求无效。'); }
+        json(response, 200, await betaService.activate(body?.code)); return;
+      }
+      // Import, editing and previews remain free. Check every export request,
+      // including frame uploads and downloads, so callers cannot bypass the UI.
+      // Cancellation must remain available when a credential expires mid-task.
+      const exportRoute = /^\/api\/(?:exports|realistic-exports)(?:\/|$)/.test(url.pathname);
+      const cancelExport = request.method === 'DELETE' && /^\/api\/(?:exports|realistic-exports)\/[0-9a-f-]{36}$/.test(url.pathname);
+      if (exportRoute && !cancelExport) {
+        try { await betaService.requireActivation(); }
+        catch (error) { request.resume(); throw error; }
       }
       if (url.pathname === '/api/calibration/uprights' && request.method === 'POST') {
         const body = await readBody(request, PHOTO_CALIBRATION_MAX_BYTES);

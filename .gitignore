@@ -33,6 +33,9 @@ Thumbs.db
 .codex/
 .agents/
 .aws/
+private-beta/
+*.pem
+*.key
 
 # Archive and installer artifacts
 *.zip

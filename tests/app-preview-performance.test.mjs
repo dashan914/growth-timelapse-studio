@@ -48,10 +48,10 @@ function fixture(){
     startExport(){calls.push(['startExport',fast]);},async captureFrame(){calls.push(['capture',fast]);return new Blob(['png']);},
     endExport(){},lockPreviewCamera(){}};
   const context=vm.createContext({studio,$:get,window:new Target(),document,timelineState,outputSize,exportRenderPlan,outputFormat,alphaVideoAvailable:true,
-    playing:false,previewPlaybackActive:false,exporting:false,loading:false,snapshotting:false,alignBusy:false,calibrationMode:false,cropEditing:false,
+    playing:false,previewPlaybackActive:false,exporting:false,exportAuthorizing:false,loading:false,snapshotting:false,alignBusy:false,calibrationMode:false,cropEditing:false,
     perspectiveMode:false,dragPerspective:null,time:3,photoPreview:null,modelRevision:1,calibrationDragIndex:null,calibrationUprightDrag:null,gridDrag:null,cropDrag:null,
     settings:()=>({...config}),syncCameraFields(){},queueProjectState(){},syncDofStatus(){},syncRealisticPreview(){},lastRealisticPreviewCheck:0,say(){},lockWorkspace(){},
-    updateSettings(){calls.push('updateSettings');},settingIds:['lighting-exposure','dof-strength','floor','export-quality'],
+    updateSettings(){calls.push('updateSettings');},ensureExportUnlocked:async()=>true,settingIds:['lighting-exposure','dof-strength','floor','export-quality'],
     syncLightingControls(){},updateStageBounds(){},ensureModelSlice:async()=>true,ffmpegAvailable:true,
     setModelMode(){context.playing=false;},renderOptions:()=>({...studio.options}),downloadBlob(){calls.push('download');},
     exportRealisticVideo(){calls.push(['realisticPackage',fast]);},
@@ -153,6 +153,75 @@ test('single-frame and realistic exports explicitly restore complete quality bef
   assert.equal(frame.calls.includes('download'),true);
   const video=fixture();video.context.touchPreviewInteraction();video.calls.length=0;
   await video.context.exportVideo();assert.deepEqual(video.calls,['end',['realisticPackage',false]]);
+});
+
+test('locked exports cannot capture, download or submit a render job and retain model settings',async()=>{
+  for(const action of ['saveSnapshot','exportVideo']){
+    const f=fixture(),settings={...f.config},model=f.studio;
+    f.context.ensureExportUnlocked=async()=>false;
+    await f.context[action]();
+    assert.deepEqual(f.calls,[],action);
+    assert.equal(f.context.exportAuthorizing,false);
+    assert.equal(f.context.studio,model);assert.deepEqual(f.config,settings);
+    f.context.ensureExportUnlocked=async()=>true;
+    await f.context[action]();
+    assert.ok(f.calls.length>0,'closing an unlock window must allow a later export');
+  }
+});
+
+test('concurrent export clicks share one pending operation and do not perform parallel captures',async()=>{
+  const f=fixture();let resolve,checks=0;
+  f.context.ensureExportUnlocked=()=>{checks++;return checks===1?new Promise(done=>{resolve=done;}):Promise.resolve(true);};
+  const first=f.context.saveSnapshot();
+  await f.context.saveSnapshot();await f.context.exportVideo();
+  assert.equal(checks,1);assert.deepEqual(f.calls,[]);
+  resolve(true);await first;
+  assert.equal(checks,2,'a snapshot rechecks before downloading');
+  assert.equal(f.calls.filter(call=>Array.isArray(call)&&call[0]==='capture').length,1);
+  assert.equal(f.calls.filter(call=>Array.isArray(call)&&call[0]==='realisticPackage').length,0);
+  assert.equal(f.context.exportAuthorizing,false);
+});
+
+test('a snapshot rechecks permission after rendering and never downloads with expired permission',async()=>{
+  for(const allowedAtDownload of [false,true]){
+    const f=fixture(),locks=[],settings={...f.config};let checks=0,endExports=0;
+    f.studio.transform.enabled=true;
+    f.studio.endExport=()=>{endExports++;};
+    f.context.lockWorkspace=value=>{locks.push(value);};
+    f.context.ensureExportUnlocked=async()=>++checks===1||allowedAtDownload;
+    await f.context.saveSnapshot();
+    assert.equal(checks,2);
+    assert.equal(f.calls.filter(call=>Array.isArray(call)&&call[0]==='capture').length,1);
+    assert.equal(f.calls.includes('download'),allowedAtDownload);
+    assert.deepEqual(locks,[true,false]);assert.equal(endExports,1);
+    assert.equal(f.context.snapshotting,false);assert.equal(f.context.exportAuthorizing,false);
+    assert.equal(f.studio.transform.enabled,true);assert.deepEqual(f.config,settings);
+  }
+});
+
+test('canceling the post-render permission check restores the workspace without starting another export',async()=>{
+  const f=fixture(),locks=[];let checks=0,finishCheck;
+  f.context.lockWorkspace=value=>{locks.push(value);};
+  f.context.ensureExportUnlocked=()=>++checks===1?Promise.resolve(true):new Promise(done=>{finishCheck=done;});
+  const first=f.context.saveSnapshot();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.context.snapshotting,true);assert.equal(f.context.exportAuthorizing,true);
+  await f.context.exportVideo();await f.context.saveSnapshot();
+  assert.equal(checks,2);
+  finishCheck(false);await first;
+  assert.equal(f.calls.includes('download'),false);
+  assert.equal(f.calls.some(call=>Array.isArray(call)&&call[0]==='realisticPackage'),false);
+  assert.deepEqual(locks,[true,false]);assert.equal(f.context.snapshotting,false);
+  assert.equal(f.context.exporting,false);assert.equal(f.context.exportAuthorizing,false);
+});
+
+test('authorization remains exclusive through asynchronous realistic rendering',async()=>{
+  const f=fixture();let finishRender;
+  f.context.exportRealisticVideo=()=>new Promise(done=>{finishRender=done;});
+  const first=f.context.exportVideo();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.context.exportAuthorizing,true);
+  await f.context.saveSnapshot();assert.equal(f.calls.includes('download'),false);
+  finishRender();await first;assert.equal(f.context.exportAuthorizing,false);
 });
 
 test('transparent MOV captures every growth frame with alpha and restores the background preview',async()=>{

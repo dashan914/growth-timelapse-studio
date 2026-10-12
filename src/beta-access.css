@@ -1,0 +1,33 @@
+/* Export unlocking shares the workbench's surfaces, typography and controls. */
+#beta-gate {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0;
+  background: var(--panel);
+  color: var(--text);
+  overflow-y: auto;
+}
+.beta-card { padding: 24px 26px; }
+.beta-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.beta-top h2 { margin: 0; font-size: 19px; font-weight: 550; }
+.beta-card .beta-close { width: 36px; height: 36px; background: transparent; border: 0; flex-shrink: 0; }
+.beta-card .beta-close:hover { background: var(--hover); color: var(--text); }
+.beta-intro { margin: 16px 0 22px; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.beta-card label { display: block; font-size: 12px; margin-bottom: 8px; font-weight: 500; }
+.beta-card input { display: block; width: 100%; min-height: 44px; border: 1px solid var(--border); border-radius: 5px; padding: 10px 12px; background: var(--bg); color: var(--text); font: inherit; font-size: 14px; text-transform: uppercase; }
+.beta-card input[aria-invalid="true"] { border-color: var(--danger); }
+.beta-message { min-height: 42px; color: var(--muted); font-size: 11px; line-height: 1.8; margin: 10px 0 16px; overflow-wrap: anywhere; }
+.beta-message.error { color: var(--danger); }
+.beta-card .button { width: 100%; min-height: 44px; font-size: 12px; }
+.beta-card .button:disabled { opacity: .5; }
+.beta-secondary { display: flex; gap: 8px; margin-top: 10px; }
+.beta-redeem { display: flex; justify-content: center; align-items: center; min-height: 44px; margin-top: 10px; color: var(--accent); font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
+.beta-card :is(button, input, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.export-unlock-button { white-space: nowrap; font-size: 12px; }
+.export-unlock-button[data-export-state="unlocked"] { color: var(--accent); }
+@media (max-width: 700px) { .app-header .project-title { display: none; } .header-actions { gap: 6px; } .export-unlock-button { padding: 6px 8px; } }
+@media (max-width: 520px) { .app-header { height: auto; min-height: 56px; flex-wrap: wrap; padding-block: 8px; gap: 8px; } .app-header .header-actions { margin-left: auto; } }
+@media (max-width: 480px) { .beta-card { padding: 22px 20px; } .beta-card input { font-size: 16px; } }
+@media (prefers-reduced-motion: reduce) { .beta-card .button { transition: none; } }

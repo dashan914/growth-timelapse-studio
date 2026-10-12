@@ -1,12 +1,17 @@
 {
   "name": "growth-timelapse-studio",
-  "version": "1.0.0",
+  "version": "1.1.0-beta.1",
   "kind": "source",
   "files": [
     {
       "path": ".gitignore",
-      "bytes": 580,
-      "sha256": "727302954f885d7c8d69c158c48cbc37216633eb3ba0c4904e56bd613ede484a"
+      "bytes": 606,
+      "sha256": "70d7e639f1c43cf462abb7f54eb7affb16ddfef95ebed7d9e99514fa0da7c36b"
+    },
+    {
+      "path": "INSTALL_AGENT.md",
+      "bytes": 5731,
+      "sha256": "9ddcdcb2f6642035bb1798a5a724dce6bbac843dc44d42b4aae07303f1cb337d"
     },
     {
       "path": "LICENSE",
@@ -15,8 +20,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 4733,
-      "sha256": "7dcfb823da4fd8ae22c3a7b9a51b074291d13b7c854c6ea794e4b385d526a43a"
+      "bytes": 5287,
+      "sha256": "7b51d9f0b4468e9395a2b1d4541257d24079c053182aa1f9017da0b339f4a722"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -54,9 +59,24 @@
       "sha256": "9bdb3ad4aa38c26a9572bcf2c15caf655074f41ff2225868987b0af2602adf2c"
     },
     {
+      "path": "assets/shandi-logo.svg",
+      "bytes": 681,
+      "sha256": "e73684b523a761b6e86d068d9fae7474247a7491243fcb1ea092e16caf405f28"
+    },
+    {
       "path": "bambu-engine.mjs",
       "bytes": 8039,
       "sha256": "de7e3f02b83a5b682d127e17b3c311771db0c4109c588764fbca1d46125fe6be"
+    },
+    {
+      "path": "beta-activation.mjs",
+      "bytes": 8141,
+      "sha256": "31b9a2570cb31166de9b0b100168fffe10b84ccb820ffc42d6c0d223ca4fa9fe"
+    },
+    {
+      "path": "beta-config.json",
+      "bytes": 326,
+      "sha256": "c18298ad4082737d3d317b173a1e5e4d1766ea2e58be446230e505e0180e7936"
     },
     {
       "path": "docs/DEVELOPMENT.md",
@@ -65,23 +85,23 @@
     },
     {
       "path": "docs/QUICK_START.md",
-      "bytes": 3298,
-      "sha256": "e215c1aa0ef8dadcfcfcb2f4d6c49bcab251adff0ee20f1b44c0ff7cd5c9d8f2"
+      "bytes": 3765,
+      "sha256": "ed8935ce78c1402727bd1b54f1e0c6f766e173efc2989d61c1aeb3e455ad729c"
     },
     {
       "path": "docs/RELEASE.md",
-      "bytes": 844,
-      "sha256": "6911e0aa1e8cd10adac97cd96e4e330ed1849774b0b17d48011bd78eca297578"
+      "bytes": 1769,
+      "sha256": "b22e7a5e0a9ace8fdd753486c02977d0d561c0f94011857dc98855883c6825ba"
     },
     {
       "path": "docs/UI_GUIDE.md",
-      "bytes": 8419,
-      "sha256": "17c6d8ff15b29539e5110eabdcecb1411053a715a5588654de488baa63b69b98"
+      "bytes": 8840,
+      "sha256": "2164b0636cd16b0b8da18e8c70e1fb5e3451472809da92e351e9c1a04fe52f6a"
     },
     {
       "path": "docs/VERIFICATION.md",
-      "bytes": 2290,
-      "sha256": "cf5493bdf00be2f790f2ceb737bc701c1af6c41b6b8a8c2594bb81027d3a147c"
+      "bytes": 3592,
+      "sha256": "b8428e73b9460a14e86fa913601c6ac0a6799766d69d1cb7e1fc02d1f8120d3a"
     },
     {
       "path": "docs/media/demo-model.gif",
@@ -117,6 +137,11 @@
       "path": "docs/media/ui-colors.jpg",
       "bytes": 93336,
       "sha256": "f4cdc6ae91a3fe36fd61c71a40a9bf17cd25700cca46382a5a2772681c5c7bdb"
+    },
+    {
+      "path": "docs/media/ui-export-unlock.jpg",
+      "bytes": 38421,
+      "sha256": "71c607327a710245af045b6b6f81533acc989dbb18abbe6514b3329e4cdde64d"
     },
     {
       "path": "docs/media/ui-export.gif",
@@ -225,18 +250,23 @@
     },
     {
       "path": "index.html",
-      "bytes": 28484,
-      "sha256": "2538758fa5f3b5b082f65659505c3eed80c23d7bbfdcf0ebf42de2d4bb22d4b0"
+      "bytes": 30283,
+      "sha256": "c2c908922c769ac3a5180d354927752c233b10ac0dddf7ce56f6f3a936ad9364"
+    },
+    {
+      "path": "install-manifest.json",
+      "bytes": 2137,
+      "sha256": "a3f71817d242900511985b986e3c073c43b5b3c9459694479aa1b074dc770480"
     },
     {
       "path": "package-lock.json",
-      "bytes": 608,
-      "sha256": "97338388e31bdfc6838411dca90528f4d5e0a999df33eaa49c3375e70fa2b1b8"
+      "bytes": 622,
+      "sha256": "c882d4afc0749560abd63b19051b589b2b67655d0d2665993572448572602c52"
     },
     {
       "path": "package.json",
-      "bytes": 767,
-      "sha256": "bcd4e18f13eb35c1f5b3109e3c2e0c36525cc7f88c79d73b1b9ee56234c53a9f"
+      "bytes": 774,
+      "sha256": "bee6d06f98ccc047f776d85b25e242da0db87abb1ff88c111d905071c7081434"
     },
     {
       "path": "photo-calibration.mjs",
@@ -245,8 +275,8 @@
     },
     {
       "path": "realistic-render.mjs",
-      "bytes": 54552,
-      "sha256": "85aa6c5f996e04b4c3e95ffa7b70fd98d65e070a54b81dd1a2f8dc9c25d2ce19"
+      "bytes": 54773,
+      "sha256": "255e12a50bb4ffbc6b637b50ee67e35cec8ba702d5877359137dfaea74935a86"
     },
     {
       "path": "runtime-paths.mjs",
@@ -264,9 +294,34 @@
       "sha256": "1237657ab77a45c549962f04a381b1a434b4a554c01d85bd6e03da5dab589087"
     },
     {
+      "path": "scripts/finalize-install-manifest.mjs",
+      "bytes": 3090,
+      "sha256": "e761df0403ceb0a3b25623738e620650ad30a427e8dff5a1dedaa99e163e9005"
+    },
+    {
+      "path": "scripts/install.mjs",
+      "bytes": 24349,
+      "sha256": "e3b23e71bdf399f62aa77cf00ec323f9fff65702bc677cdd9536b627cdf9a703"
+    },
+    {
+      "path": "scripts/install.ps1",
+      "bytes": 3597,
+      "sha256": "ffd111c9395d140e6e6701be2170b833f516e9d1306736269f27a66a0361691b"
+    },
+    {
+      "path": "scripts/install.sh",
+      "bytes": 3405,
+      "sha256": "57547a4e271745ba08a6051ede4e0d4d15d78a9a089cc7305addf159ebcc333b"
+    },
+    {
+      "path": "scripts/launch.mjs",
+      "bytes": 5809,
+      "sha256": "6a16bb9492d7c4390e3ca833628fbca516728b6e29f11f1777fc8794b35a3483"
+    },
+    {
       "path": "scripts/package-release.py",
-      "bytes": 4554,
-      "sha256": "fa778ea981e4a7692a0800ddafef1b6110b17c4b0e66aad52cb09d23b0f35483"
+      "bytes": 4757,
+      "sha256": "2cbe86a7c40e6cbd4a505a79d544e135dc793f92fbbc2790b0ef4d546ece840e"
     },
     {
       "path": "scripts/prepare-slice-project.py",
@@ -285,8 +340,8 @@
     },
     {
       "path": "server.mjs",
-      "bytes": 37092,
-      "sha256": "440795cf7395c8e84b682019927e42e764a444ba43c1bd8d8f2aefc7365a8a1b"
+      "bytes": 38911,
+      "sha256": "3b1c9824564aed08cd2c46d3b97eee297cbc016d88e1d6246c8287f3d83a5edc"
     },
     {
       "path": "slice-jobs.mjs",
@@ -300,8 +355,8 @@
     },
     {
       "path": "src/app.js",
-      "bytes": 123136,
-      "sha256": "08e71045b4fb6d5b23ede036d2b4a78647b7e6d18325e766d966aa5050b32667"
+      "bytes": 123998,
+      "sha256": "7bfe11290aacbe4665849acb19db41e7a47d2ae42514f57ea50294d4ec620808"
     },
     {
       "path": "src/background-appearance.js",
@@ -317,6 +372,16 @@
       "path": "src/bed-detection.js",
       "bytes": 12168,
       "sha256": "b905529e651086c3344ed84cddc9fb10dbabb5bed6cb9c47d584faac4ee9e12a"
+    },
+    {
+      "path": "src/beta-access.css",
+      "bytes": 2522,
+      "sha256": "90bee9007a4e31c8321dcfa331af64494916cef96642fa75e0252a14e9197694"
+    },
+    {
+      "path": "src/beta-access.js",
+      "bytes": 9466,
+      "sha256": "2f15e9bfa0b0a903b37fdccd738041b9710586a4134545545d68f9df2cb96c53"
     },
     {
       "path": "src/cad-display-controller.js",
@@ -654,6 +719,11 @@
       "sha256": "593775504069f389ecd5c20b7e22095d99e69e5708e344cca71611104f4a6b2d"
     },
     {
+      "path": "start.cmd",
+      "bytes": 113,
+      "sha256": "f52bd84b2d23f13c4fa5d9281c9a50a842060335a1a23571aadda1fb1ec042c7"
+    },
+    {
       "path": "start.command",
       "bytes": 2422,
       "sha256": "84a5636e910508d03a9320723be71187060c7a7d59a6ef16d4cc05f1abb29172"
@@ -662,6 +732,11 @@
       "path": "support-jobs.mjs",
       "bytes": 19910,
       "sha256": "fc249be933a07d5371edaafcd8f4d8f3bc16aaef3984f0d6915c63da96a8d6a4"
+    },
+    {
+      "path": "tests/agent-installation.test.mjs",
+      "bytes": 13879,
+      "sha256": "2aed3e5be3f35a9949addfc6106b7fc08c4f9387b6647ab3ab4c42c84cfa4437"
     },
     {
       "path": "tests/app-background-appearance.test.mjs",
@@ -675,8 +750,8 @@
     },
     {
       "path": "tests/app-preview-performance.test.mjs",
-      "bytes": 13099,
-      "sha256": "b15ff7ee512508cedcf7187e78018fa962b7fe5e74cc6b874f6cb874cd189b6d"
+      "bytes": 17002,
+      "sha256": "15dfce2df06746c2405c867c38130058fe22d2467171227432f543d2ff3386d8"
     },
     {
       "path": "tests/app-render-quality.test.mjs",
@@ -690,8 +765,8 @@
     },
     {
       "path": "tests/backend.test.mjs",
-      "bytes": 32470,
-      "sha256": "69ba3ae2013457c3a2cedb8894708b95966e74910643391a3d6a89ee8e12cbbb"
+      "bytes": 33366,
+      "sha256": "b546de4ae9960a4a83c018d7272272b4381520ab1e80627e605d729fba337e90"
     },
     {
       "path": "tests/background-appearance.test.mjs",
@@ -717,6 +792,11 @@
       "path": "tests/bed-detection.test.mjs",
       "bytes": 4025,
       "sha256": "2fd2a20fe416a3a1d939fb1439a65fc644d09c0478b095a98dee368485071a9f"
+    },
+    {
+      "path": "tests/beta-activation.test.mjs",
+      "bytes": 17713,
+      "sha256": "2d7e6665f239e109cc9abe74cf4e4c3ccc065a79a007fe17bbbb004896144dc0"
     },
     {
       "path": "tests/cad-display-controller.test.mjs",
@@ -782,6 +862,11 @@
       "path": "tests/export-quality.test.mjs",
       "bytes": 6562,
       "sha256": "7bfb5870b76c6f13682d2cffcb72f707e6aca5e6ee47e392e183d6676ad7fe3d"
+    },
+    {
+      "path": "tests/export-unlock-ui.test.mjs",
+      "bytes": 11757,
+      "sha256": "62c4eacba46b64d8e56465cde851ec23a7925e3bbce12e2bbf78e66f0ed1d435"
     },
     {
       "path": "tests/fdm-surface.test.mjs",
@@ -1035,8 +1120,8 @@
     },
     {
       "path": "tests/realistic-render.test.mjs",
-      "bytes": 26044,
-      "sha256": "2d452d6e44ccd687d8f25eda0fb05cb06b1aa0510c50c11ef17d9dd635035c25"
+      "bytes": 26750,
+      "sha256": "6447cc04f582ec33669e06315f014b9f22729698600b4b9ec233e51106c27726"
     },
     {
       "path": "tests/runtime-portability.test.mjs",
@@ -1165,8 +1250,8 @@
     },
     {
       "path": "tests/supports-backend.test.mjs",
-      "bytes": 15395,
-      "sha256": "a3b8394001df90ebf6b046b557acd55b3a9a841952617993e1f0b81ac24aefd9"
+      "bytes": 15490,
+      "sha256": "2be51b9d25f808f4085d55816f59291e92d5aa30d81c2045d5debfaaf58fd68c"
     },
     {
       "path": "tests/surface-footprint.test.mjs",

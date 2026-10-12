@@ -1,0 +1,10 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title">
+  <title id="title">山地造物</title>
+  <rect width="96" height="96" rx="24" fill="#F6F7F9"/>
+  <path d="M20 47.5L37 29.5L43.5 35.8L56.5 20L76 40.5V65.5L49 80.8L20 64.5V47.5Z" fill="#075C50"/>
+  <path d="M49 35.6L76 50.9L49 66.2L20 50.9L49 35.6Z" fill="#0B7C6B"/>
+  <path d="M49 66.2V80.8L20 64.5V50.9L49 66.2Z" fill="#064A41"/>
+  <path d="M49 66.2L76 50.9V65.5L49 80.8V66.2Z" fill="#0E8C79"/>
+  <path d="M49 44.5L60 50.9L49 57.3L38 50.9L49 44.5Z" fill="#F6F7F9"/>
+  <path d="M49 47.6L54.7 50.9L49 54.2L43.3 50.9L49 47.6Z" fill="#315FBD"/>
+</svg>

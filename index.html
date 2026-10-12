@@ -1,5 +1,14 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#1e1f22"/><title>打印延时一键生成</title><link rel="stylesheet" href="/src/style.css"/><script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script></head><body>
+<html lang="zh-CN"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#1e1f22"/><title>打印延时一键生成</title><link rel="stylesheet" href="/src/style.css"/><link rel="stylesheet" href="/src/beta-access.css"/><script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script></head><body data-beta-state="ready">
+<dialog class="beta-gate" id="beta-gate" aria-labelledby="beta-title" aria-describedby="beta-intro" aria-modal="true">
+  <div class="beta-card">
+    <div class="beta-top"><h2 id="beta-title">解锁全部导出</h2><button id="beta-close" class="icon-button beta-close" type="button" aria-label="关闭导出解锁窗口"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <p id="beta-intro" class="beta-intro">导入、编辑和预览免费。兑换码解锁保存预览图片、视频和透明序列导出。</p>
+    <form id="beta-form"><label for="beta-code">兑换码</label><input id="beta-code" name="code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="80" aria-describedby="beta-message"/><p id="beta-message" class="beta-message" role="status" aria-live="polite" aria-atomic="true">首次解锁需联网，成功后有效期内可离线导出。</p><button id="beta-activate" class="button primary" type="submit">解锁全部导出</button></form>
+    <div class="beta-secondary"><button id="beta-retry" class="button" type="button">重新检查权限</button><button id="beta-dismiss" class="button" type="button">继续免费使用</button></div>
+    <a id="beta-redeem" class="beta-redeem" href="https://ai3dclass.cn/points" target="_blank" rel="noopener noreferrer">前往山地造物兑换导出码</a>
+  </div>
+</dialog>
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
     <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7Z"/></symbol>
@@ -18,7 +27,7 @@
 
 <header class="app-header">
 <a class="brand" href="/" aria-label="打印延时一键生成"><svg><use href="#i-cube"/></svg><strong>打印延时一键生成</strong><span>by 张大山l</span></a><span id="project-title" class="project-title">未命名项目</span>
-<div class="header-actions"><button class="icon-button" id="help-button" aria-label="使用指南" title="使用指南"><svg><use href="#i-help"/></svg></button><button class="button primary" id="export-button"><svg><use href="#i-download"/></svg>导出视频</button></div></header>
+<div class="header-actions"><button class="button export-unlock-button" id="export-unlock-button" type="button" data-export-state="locked" aria-haspopup="dialog" title="导入、编辑和预览免费；兑换码解锁全部导出。"><svg aria-hidden="true"><use href="#i-lock"/></svg><span id="export-unlock-label">导出解锁</span></button><button class="icon-button" id="help-button" aria-label="使用指南" title="使用指南"><svg><use href="#i-help"/></svg></button><button class="button primary" id="export-button"><svg><use href="#i-download"/></svg>导出视频</button></div></header>
 <main class="workspace">
 <aside class="left-panel panel">
 <div class="panel-heading">场景</div><button id="import-button" class="button file-import" aria-describedby="import-message"><svg><use href="#i-upload"/></svg>导入模型</button>
@@ -105,4 +114,4 @@
   <p id="calibration-status" class="calibration-fit-status" role="status" aria-live="polite"></p>
 </div><div id="crop-panel" class="crop-panel" hidden><span>拖动蓝框裁剪，拖四个角调整范围</span><div><button id="reset-crop" class="button quiet small">全画面</button><button id="apply-crop" class="button primary small">完成</button><button id="cancel-crop" class="button quiet small">取消</button></div></div><dialog id="export-dialog" aria-labelledby="export-title"><div class="export-dialog-content"><span class="dialog-icon"><svg><use href="#i-download"/></svg></span><h2 id="export-title">正在导出</h2><p id="export-detail" role="status" aria-live="polite">准备画面</p><progress id="export-progress" aria-label="视频生成进度" max="100" value="0"></progress><div class="export-progress-label"><span id="export-percent">0%</span><span id="export-frame-count"></span></div><div id="export-result" hidden></div><button class="button full-width" id="cancel-export">取消</button></div></dialog>
 <dialog id="help-dialog" aria-labelledby="help-title"><div class="help-content"><div class="help-top"><h2 id="help-title">使用指南</h2><button class="icon-button" id="close-help" aria-label="关闭"><svg><use href="#i-close"/></svg></button></div><ol><li><strong>导入模型</strong><p>选择包含原始模型网格的 3MF 或 STL。工具自动检测本机已安装的 Bambu Studio、OrcaSlicer 或 Flash Studio，生成真实打印路径；3MF 保留工程涂色、参数和原盘位。只有打印路径、没有模型网格的文件不能重新切片。</p></li><li><strong>摆放</strong><p>预览默认锁定；选中移动、旋转、缩放后拖动对应手柄。点锁定或按 Esc 结束调整。“透视”可调整机位与镜头焦段，“光影”调整灯光与模型颜色。右上角回正图标恢复默认位置与视角。</p></li><li><strong>合成与导出</strong><p>选择打印机或摄影背景预设会载入对应的机位、光影和景深。摄影背景可用“微调台面”调整比例。自定义照片先核对底板尺寸与四角，再把两条绿线贴住真实竖直立柱，确认后完成。播放预览后点右上角导出视频。在输出设置选择 MOV 透明通道视频，可移除背景并保留模型透明边缘；也可导出 PNG 透明图片序列。</p></li></ol><p class="help-note">对齐时蓝色虚框代表手动标记，实线网格是模型实际相机投影。照片没拍到的角只是估计；绿线须沿真实竖直立柱，不能简单拉成屏幕竖线。模型与支撑路径由自动检测的本机切片器生成，导入、取消或失败时保留此前的模型与场景。</p><button class="button primary full-width" id="help-done">关闭</button></div></dialog>
-<script type="module" src="/src/app.js"></script></body></html>
+<script type="module" src="/src/beta-access.js"></script></body></html>

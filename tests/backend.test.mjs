@@ -55,7 +55,7 @@ async function fixture(t, options = {}) {
   await mkdir(path.join(root, 'src'));
   await writeFile(path.join(root, 'index.html'), '<!doctype html><title>Growth</title>');
   await writeFile(path.join(root, 'src', 'test.js'), 'export const ready = true;');
-  const app = createApp({ root, ...options });
+  const app = createApp({ root, betaService: { requireActivation: async () => {}, status: async () => ({ activated: true }) }, ...options });
   await new Promise((resolve, reject) => {
     app.server.once('error', reject);
     app.server.listen(0, '127.0.0.1', resolve);
@@ -104,6 +104,19 @@ async function finish(base, id) {
 async function cancel(base, id) {
   return fetch(`${base}/api/exports/${id}`, { method: 'DELETE', headers: { Origin: base } });
 }
+
+test('installed app writes completed output to shared user data rather than its version directory', async t => {
+  const exportDirectory = await mkdtemp(path.join(tmpdir(), 'growth-shared-exports-'));
+  t.after(() => rm(exportDirectory, { recursive: true, force: true }));
+  const { base, root } = await fixture(t, { exportDirectory });
+  const created = await createExport(base, { format: 'png-sequence', frames: 1 });
+  assert.equal(created.response.status, 201);
+  assert.equal((await upload(base, created.body.id, 0)).status, 200);
+  const completed = await finish(base, created.body.id);
+  assert.equal(completed.status, 200);
+  assert.ok((await readdir(exportDirectory)).some(name => name.endsWith('.zip')));
+  await assert.rejects(readdir(path.join(root, 'exports')), { code: 'ENOENT' });
+});
 
 test('serves project files with MIME types and blocks hidden files, traversal, and external symlinks', async t => {
   const { base, root } = await fixture(t);
