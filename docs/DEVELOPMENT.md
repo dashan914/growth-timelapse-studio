@@ -10,12 +10,10 @@
 | `assets/backgrounds/` | 六套正式背景 |
 | `vendor/slicer-profiles/bambu-v02.07.01.57/` | 最小 Bambu 参数数据、原许可与来源清单 |
 | `vendor/test-dom/` | 仅测试使用的 LinkeDOM 与原 ISC 许可 |
-| `examples/测试2.3mf` | 用户指定的多色案例，保留模型原许可 |
-| `docs/media/` | 指定案例的工作台截图与短演示 |
-| `tests/` | 公开版中可独立执行的测试 |
+| `examples/测试2.3mf` | 多色演示案例 |
+| `docs/media/` | 界面截图、操作动图与案例演示 |
+| `tests/` | 自动测试与自行生成的小型几何数据 |
 | `exports/` | 运行时生成的作品，不提交到仓库 |
-
-公开版不带 `research/`、历史 `samples/`、非发布内容的私人素材、已有导出作品、`node_modules/` 或外部软件二进制。原有测试已迁移到公开版；需要模型的测试使用 `tests/fixtures/` 中自行生成的小型几何数据，不依赖历史研究样片。
 
 ## 安装与启动
 
@@ -31,7 +29,7 @@ npm start
 
 ## 外部程序配置
 
-默认尝试标准安装位置和适用的 `PATH` 命令。设置变量后重新运行服务与 `doctor`。程序路径由启动环境配置，不从网页请求接受。
+默认尝试标准安装位置和 `PATH` 命令。设置变量后重新运行服务与 `doctor`。
 
 | 环境变量 | 指向 |
 | --- | --- |
@@ -66,11 +64,9 @@ npm run doctor
 npm start
 ```
 
-此例使用原项目已验证的版本，安装产生的库不进入源码仓库。Windows 的虚拟环境路径与命令不同；完整流程尚未验证。
-
 ## 验证
 
-依赖安装后运行公开版自动测试：
+依赖安装后运行自动测试：
 
 ```sh
 npm test
@@ -82,9 +78,7 @@ npm test
 npm run test:native-slicing
 ```
 
-涉及 Blender / Metal 的测试或人工渲染应串行执行，避免争用 GPU。公开测试不包含历史研究目录；通过逻辑测试也不等于已通过整片画面审核。
-
-修改制作流程后，用有权使用的模型进行短视频检查：导入、取消与重试、背景切换、模型摆放、首帧与末帧、实际填充/支撑、颜色、输出尺寸与时长。修改透明导出时，还应在合成软件里核对透明边缘。新增平台支持需实际验证安装、切片和导出后再更新平台声明。
+涉及 Blender / Metal 的测试或人工渲染串行执行，避免争用 GPU。修改制作流程后检查导入、取消与重试、背景切换、模型摆放、首末帧、填充与支撑、颜色、输出尺寸与时长。修改透明导出时，在合成软件中核对透明边缘；新增平台支持时补充安装、切片与导出检查。
 
 ## 生成源码包
 
@@ -94,12 +88,10 @@ npm run test:native-slicing
 python3 scripts/package-release.py
 ```
 
-结果写到 `release/`。包内不包含依赖、外部二进制或制作成品，这是源码包，用户解压后仍需安装依赖。发布前在新目录重新检查，详见 [发布清单](RELEASE.md)。
-
-附带多色案例的清理范围、来源和许可见 [案例说明](../examples/README.md)，原文件与公开副本校验值见 `examples/SOURCE.json`。案例模型的许可独立于代码 MIT 许可。
+结果写到 `release/`。源码包包含运行代码、背景、案例、文档与测试；解压后执行 `npm ci` 安装依赖。发布维护步骤见 [发布说明](RELEASE.md)。
 
 ## 本机数据与贡献
 
-浏览器中的素材缓存与设置独立于源码，服务还可能生成 `exports/`、`.slice-jobs/`、`.slice-diagnostics/` 和 `.support-jobs/`。这些目录被 `.gitignore` 排除，但导出的模型、素材、日志仍需在分享前检查。
+浏览器保存素材缓存与设置。服务生成的 `exports/`、`.slice-jobs/`、`.slice-diagnostics/` 和 `.support-jobs/` 由 `.gitignore` 排除。
 
-提交修改时说明问题、复现输入和验证结果；新素材需同时提供来源与许可。原创代码的许可见 [LICENSE](../LICENSE)，第三方配置和依赖说明见 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)。
+提交修改时说明问题、复现步骤和验证结果；新增素材补充来源与许可。许可记录见 [LICENSE](../LICENSE) 与 [第三方声明](../THIRD_PARTY_NOTICES.md)。
