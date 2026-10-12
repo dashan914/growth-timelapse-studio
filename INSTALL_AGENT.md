@@ -6,10 +6,12 @@
 
 与这句话一起提供本文件的可访问链接或本地路径。安装 Agent 需要访问电脑的终端、文件和网络；纯对话 Agent 无法安装本机程序。
 
+固定版本入口：[v1.1.0-beta.1](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.1.0-beta.1) · [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.1.0-beta.1/install-manifest.json)。
+
 ## Agent 执行步骤
 
 1. 读取本文件与 [install-manifest.json](install-manifest.json)，检测操作系统和 CPU。入口支持 macOS Apple Silicon / Intel、Windows x64；Windows 和 Intel Mac 完整流程仍需实机验证。
-2. 从维护者明确提供的固定 tag 的 GitHub Release 资产下载**外部 `install-manifest.json`**，不要使用 ZIP 内或仓库内的模板。外部清单的 `release.published` 必须为 `true`；仓库必须为 `dashan914/growth-timelapse-studio-beta` 或 `dashan914/growth-timelapse-studio`；URL 必须固定到指定 `release.tag`，SHA256 必须完整。不要用 `main` 或 `latest` 源码替代发行包，不要自行猜测下载地址。目前公开内测 Release 尚未发布；维护者可以用下文的 `--source` 本地方式验证。
+2. 从维护者明确提供的固定 tag 的 GitHub Release 资产下载**外部 `install-manifest.json`**，不要使用 ZIP 内或仓库内的模板。外部清单的 `release.published` 必须为 `true`；仓库必须为 `dashan914/growth-timelapse-studio-beta` 或 `dashan914/growth-timelapse-studio`；URL 必须固定到指定 `release.tag`，SHA256 必须完整。不要用 `main` 或 `latest` 源码替代发行包，不要自行猜测下载地址。若指定版本尚未公开发布，维护者先完成发行；本地源码可按下文 `--source` 方式验证。
 3. 按外部清单下载源码 ZIP，核对 SHA256，再解压并阅读脚本。建议把校验通过的 ZIP 保存到用户数据根目录的 `cache/<release.tag>.zip`，安装器会复用同一文件。源码 ZIP 内的安装清单保持未发布模板，实际安装以外部清单为准。不要把下载脚本直接通过管道交给 shell。
 4. 在解压目录执行：macOS `bash scripts/install.sh --manifest "/外部清单完整路径/install-manifest.json"`；Windows `powershell -File .\scripts\install.ps1 -Manifest "C:\外部清单完整路径\install-manifest.json"`。脚本优先复用 Node.js 24+、Python 3、FFmpeg 和兼容的切片器；缺失 Node 使用官方固定版 24.19.0，缺失切片器使用官方 Bambu Studio 2.7.1.57。
 5. Python 与 FFmpeg 在 macOS 通过 Homebrew、Windows 通过 WinGet 安装。没有 Homebrew 时使用固定 commit 的官方安装脚本并验 SHA256；没有 WinGet 时请用户通过 Microsoft App Installer 安装。权限、许可、系统工具与首次打开提示由用户本人确认，不能代输入密码、关闭系统检查或忽略校验失败。
