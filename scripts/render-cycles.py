@@ -4,7 +4,7 @@ Original GLB mesh data is cached unchanged. Real sliced printer layers supply wa
 surfaces are clipped in the explicit printer plane. Missing cuts remain open.
 Area lights and environment are artistic proxies, not recovered photo radiance.
 """
-import json, math, pathlib, sys, time, traceback, struct, array, hashlib, shutil, re
+import json, math, pathlib, sys, time, traceback, struct, array, hashlib, shutil, re, os
 
 MAX_PIXELS = 8388608
 MAX_TRIANGLES = 5000000
@@ -215,11 +215,49 @@ def hex_linear(value, fallback):
     except ValueError: raise ValueError('Color must be a six-digit hexadecimal value')
     return tuple(channel/12.92 if channel<=.04045 else ((channel+.055)/1.055)**2.4 for channel in encoded)
 
+def compositor_tree(scene):
+    return scene.compositing_node_group if hasattr(scene, 'compositing_node_group') else scene.node_tree
+
+
+def compositor_node_type(scene, legacy):
+    if hasattr(scene, 'compositing_node_group'):
+        return {'CompositorNodeMath':'ShaderNodeMath', 'CompositorNodeMixRGB':'ShaderNodeMixRGB'}.get(legacy, legacy)
+    return legacy
+
+
+def set_alpha_conversion(node, mode):
+    if hasattr(node, 'mapping'): node.mapping=mode
+    else: node.inputs['Type'].default_value='To Straight' if mode=='PREMUL_TO_STRAIGHT' else 'To Premultiplied'
+
+
+def select_cycles_devices(scene, prefs, requested=None):
+    requested = (requested or os.environ.get('GROWTH_CYCLES_DEVICE', 'AUTO')).upper()
+    if requested not in ('AUTO', 'CPU', 'OPTIX', 'CUDA', 'METAL', 'HIP', 'ONEAPI'):
+        raise ValueError('Invalid GROWTH_CYCLES_DEVICE')
+    scene.cycles.device = 'CPU'
+    if requested == 'CPU': return []
+    backends = ('OPTIX', 'CUDA', 'METAL', 'HIP', 'ONEAPI') if requested == 'AUTO' else (requested,)
+    for backend in backends:
+        try:
+            prefs.compute_device_type = backend
+            prefs.get_devices()
+            devices = [device for device in prefs.devices if device.type == backend]
+            if not devices: continue
+            for device in prefs.devices: device.use = device.type == backend
+            scene.cycles.device = 'GPU'
+            return [{'name': device.name, 'type': device.type} for device in devices]
+        except (TypeError, ValueError, RuntimeError):
+            if requested != 'AUTO': raise
+    if requested != 'AUTO': raise RuntimeError('Requested Cycles device is unavailable: ' + requested)
+    return []
+
+
 def build_model_grade(scene, rendered_socket, grade, exposure):
     """Model RGBA only. Black shadow pixels and alpha remain untouched."""
-    nodes, links = scene.node_tree.nodes, scene.node_tree.links
+    tree = compositor_tree(scene)
+    nodes, links = tree.nodes, tree.links
     def math_node(operation, *inputs):
-        node = nodes.new('CompositorNodeMath'); node.operation = operation
+        node = nodes.new(compositor_node_type(scene,'CompositorNodeMath')); node.operation = operation
         for index,value in enumerate(inputs):
             if isinstance(value,(int,float)): node.inputs[index].default_value = value
             else: links.new(value,node.inputs[index])
@@ -228,7 +266,7 @@ def build_model_grade(scene, rendered_socket, grade, exposure):
     def smooth(low,high,value):
         x=clamp(math_node('DIVIDE',math_node('SUBTRACT',value,low),high-low))
         return math_node('MULTIPLY',math_node('MULTIPLY',x,x),math_node('SUBTRACT',3,math_node('MULTIPLY',2,x)))
-    unpremul=nodes.new('CompositorNodePremulKey'); unpremul.mapping='PREMUL_TO_STRAIGHT'
+    unpremul=nodes.new('CompositorNodePremulKey'); set_alpha_conversion(unpremul,'PREMUL_TO_STRAIGHT')
     links.new(rendered_socket,unpremul.inputs[0])
     separate=nodes.new('CompositorNodeSeparateColor'); separate.mode='RGB'; links.new(unpremul.outputs[0],separate.inputs[0])
     colors=[]
@@ -268,7 +306,7 @@ def build_model_grade(scene, rendered_socket, grade, exposure):
     combine=nodes.new('CompositorNodeCombineColor'); combine.mode='RGB'
     for index,value in enumerate(colors): links.new(value,combine.inputs[index])
     links.new(separate.outputs[3],combine.inputs[3])
-    premul=nodes.new('CompositorNodePremulKey'); premul.mapping='STRAIGHT_TO_PREMUL'; links.new(combine.outputs[0],premul.inputs[0])
+    premul=nodes.new('CompositorNodePremulKey'); set_alpha_conversion(premul,'STRAIGHT_TO_PREMUL'); links.new(combine.outputs[0],premul.inputs[0])
     return premul.outputs[0]
 
 def add_fdm(material, surface):
@@ -392,14 +430,7 @@ def render(config):
     scene.render.resolution_x=output['width']; scene.render.resolution_y=output['height']; scene.render.resolution_percentage=100
     scene.render.film_transparent=True; scene.render.dither_intensity=0; scene.render.image_settings.file_format='PNG'; scene.render.image_settings.color_mode='RGBA'
     scene.view_settings.view_transform='Standard'; scene.view_settings.look='None'; scene.view_settings.exposure=0; scene.view_settings.gamma=1
-    devices=[]
-    try:
-        prefs=bpy.context.preferences.addons['cycles'].preferences; prefs.compute_device_type='METAL'; prefs.get_devices()
-        for device in prefs.devices:
-            device.use=device.type=='METAL'
-            if device.use: devices.append({'name':device.name,'type':device.type})
-        if devices: scene.cycles.device='GPU'
-    except Exception: pass
+    devices=select_cycles_devices(scene,bpy.context.preferences.addons['cycles'].preferences)
     bpy.ops.import_scene.gltf(filepath=str(paths['scene']),import_pack_images=True,merge_vertices=False)
     source_objects=list(scene.objects); sources=[object for object in source_objects if object.type=='MESH']
     if not sources: raise ValueError('GLB has no mesh geometry')
@@ -481,23 +512,38 @@ def render(config):
     receiver.hide_render=not shadow_enabled
     model_layer=scene.view_layers[0]; model_layer.name='HQ Model'; model_layer.layer_collection.children[shadow_collection.name].exclude=True
     shadow_layer=scene.view_layers.new('HQ Shadow'); shadow_layer.layer_collection.children[bounce_collection.name].exclude=True; shadow_layer.cycles.use_pass_shadow_catcher=True; shadow_layer.use=shadow_enabled
-    scene.use_nodes=True; nodes,links=scene.node_tree.nodes,scene.node_tree.links; nodes.clear(); layers=nodes.new('CompositorNodeRLayers'); layers.layer=model_layer.name
+    if hasattr(scene, 'compositing_node_group'):
+        tree=bpy.data.node_groups.new('Growth compositor', 'CompositorNodeTree')
+        tree.interface.new_socket(name='Image', in_out='OUTPUT', socket_type='NodeSocketColor')
+        scene.compositing_node_group=tree
+        output_node='NodeGroupOutput'
+    else:
+        scene.use_nodes=True; tree=scene.node_tree; output_node='CompositorNodeComposite'
+    nodes,links=tree.nodes,tree.links; nodes.clear(); layers=nodes.new('CompositorNodeRLayers'); layers.layer=model_layer.name
     grade=config.get('grading',{}); rendered=build_model_grade(scene,layers.outputs['Image'],grade,setting(grade,'exposure',lighting.get('exposure',1),.25,2.5))
     backdrop=None
     if paths['photo'] and has_backdrop:
         photo=nodes.new('CompositorNodeImage'); photo.image=bpy.data.images.load(str(paths['photo'])); photo.image.colorspace_settings.name='sRGB'
-        scale=nodes.new('CompositorNodeScale'); scale.space='RENDER_SIZE'; links.new(photo.outputs['Image'],scale.inputs[0])
+        scale=nodes.new('CompositorNodeScale')
+        if hasattr(scale,'space'): scale.space='RENDER_SIZE'
+        else: scale.inputs['Type'].default_value='Render Size'
+        links.new(photo.outputs['Image'],scale.inputs[0])
         backdrop=scale.outputs[0]
     elif has_backdrop:
-        solid=nodes.new('CompositorNodeRGB'); solid.outputs[0].default_value=(*hex_linear(background.get('color'),'#30333a'),1); backdrop=solid.outputs[0]
+        solid=nodes.new(compositor_node_type(scene,'CompositorNodeRGB')); solid.outputs[0].default_value=(*hex_linear(background.get('color'),'#30333a'),1); backdrop=solid.outputs[0]
     shadow_mix=None
     if backdrop is not None:
         if shadow_enabled:
             shadow=nodes.new('CompositorNodeRLayers'); shadow.layer=shadow_layer.name
-            intensity=nodes.new('CompositorNodeMixRGB'); shadow_mix=intensity; intensity.blend_type='MIX'; intensity.inputs[0].default_value=setting(lighting,'shadowOpacity',.28,0,.7); intensity.inputs[1].default_value=(1,1,1,1); links.new(shadow.outputs['Shadow Catcher'],intensity.inputs[2])
-            multiply=nodes.new('CompositorNodeMixRGB'); multiply.blend_type='MULTIPLY'; multiply.inputs[0].default_value=1; links.new(backdrop,multiply.inputs[1]); links.new(intensity.outputs[0],multiply.inputs[2]); backdrop=multiply.outputs[0]
-        over=nodes.new('CompositorNodeAlphaOver'); over.inputs[0].default_value=1; links.new(backdrop,over.inputs[1]); links.new(rendered,over.inputs[2]); rendered=over.outputs[0]
-    composite=nodes.new('CompositorNodeComposite'); links.new(rendered,composite.inputs[0])
+            intensity=nodes.new(compositor_node_type(scene,'CompositorNodeMixRGB')); shadow_mix=intensity; intensity.blend_type='MIX'; intensity.inputs[0].default_value=setting(lighting,'shadowOpacity',.28,0,.7); intensity.inputs[1].default_value=(1,1,1,1); links.new(shadow.outputs['Shadow Catcher'],intensity.inputs[2])
+            multiply=nodes.new(compositor_node_type(scene,'CompositorNodeMixRGB')); multiply.blend_type='MULTIPLY'; multiply.inputs[0].default_value=1; links.new(backdrop,multiply.inputs[1]); links.new(intensity.outputs[0],multiply.inputs[2]); backdrop=multiply.outputs[0]
+        over=nodes.new('CompositorNodeAlphaOver')
+        if hasattr(scene,'compositing_node_group'):
+            over.inputs['Factor'].default_value=1; links.new(backdrop,over.inputs['Background']); links.new(rendered,over.inputs['Foreground'])
+        else:
+            over.inputs[0].default_value=1; links.new(backdrop,over.inputs[1]); links.new(rendered,over.inputs[2])
+        rendered=over.outputs[0]
+    composite=nodes.new(output_node); links.new(rendered,composite.inputs[0])
     # Source surfaces remain untouched. Real slice beads supply the exposed
     # walls/infill; a missing slice stays open, never a fake full-solid cap.
     print_materials={}

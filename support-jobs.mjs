@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { findPythonPath } from './runtime-paths.mjs';
 
 export const SUPPORT_SLICER = '/Applications/Flash Studio.app/Contents/MacOS/Flash Studio';
 const PREPARE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scripts', 'prepare-support-project.py');
@@ -222,8 +223,8 @@ export async function extractSupportPreview(source, destination, { report = {}, 
   } finally { lines.close(); input.destroy(); await output.close(); }
 }
 
-export function createSupportManager({ root, slicerPath = SUPPORT_SLICER, pythonPath = '/usr/bin/python3',
-  timeoutMs = 15 * 60 * 1000, maximumUploadBytes = MAX_UPLOAD, prepareScript = PREPARE } = {}) {
+export function createSupportManager({ root, slicerPath = SUPPORT_SLICER, pythonPath = findPythonPath(),
+  timeoutMs = 15 * 60 * 1000, maximumUploadBytes = MAX_UPLOAD, prepareScript = PREPARE, spawnImpl = spawn } = {}) {
   const jobs = new Map();
   const directory = path.join(root, '.support-jobs');
   let active = null, closed = false;
@@ -245,7 +246,7 @@ export function createSupportManager({ root, slicerPath = SUPPORT_SLICER, python
   };
   const process = (job, executable, args) => new Promise((resolve, reject) => {
     if (job.cancelled) { reject(new Error('支撑生成已取消。')); return; }
-    const child = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    const child = spawnImpl(executable, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, shell: false });
     job.child = child;
     let stderr = '';
     const remember = chunk => { stderr = (stderr + chunk.toString()).slice(-8000); };

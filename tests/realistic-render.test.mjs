@@ -69,7 +69,7 @@ process.stdin.on('data',chunk=>{count+=chunk.length; output.write(chunk);}); pro
   const spawns = [];
   const spawnImpl = (executable, args, opts) => {
     const render = args.includes('--python'); spawns.push({ render, executable, args });
-    if (render) { assert.ok(args.includes('--disable-autoexec')); assert.ok(args.includes('--factory-startup')); assert.ok(args.includes('--python-exit-code')); assert.equal(args[args.indexOf('--python') + 1].endsWith('/scripts/render-cycles.py'), true); }
+    if (render) { assert.ok(args.includes('--disable-autoexec')); assert.ok(args.includes('--factory-startup')); assert.ok(args.includes('--python-exit-code')); assert.equal(args[args.indexOf('--python') + 1].endsWith(path.join('scripts', 'render-cycles.py')), true); }
     return spawn(process.execPath, [render ? renderScript : encoderScript, args.at(-1)], { ...opts, env: { ...opts.env, RENDER_TEST_MODE: renderMode, RENDER_TEST_DELAY: String(frameDelay), ENCODER_TEST_MODE: encoderMode } });
   };
   const service = createRealisticRenderService({ root, blenderPath: process.execPath, ffmpegPath: process.execPath, spawnImpl, killGraceMs: 80, ...options });
@@ -115,8 +115,8 @@ test('successful MP4 preserves all ordered frames, finalizes only verified stats
   const { service, root, spawns } = await fixture(t);
   const started = await service.create(await packageBuffer(), { name: '测试模型', format: 'mp4' }); assert.equal(started.status, 'rendering');
   const result = await terminal(service, started.id); assert.equal(result.status, 'complete'); assert.equal(result.encoded, 3); assert.equal(result.rendered, 3); assert.equal(result.stats.originalTriangles, 12); assert.equal(result.stats.completeTriangles, 12);
-  const file = await service.file(started.id); assert.equal(file.mime, 'video/mp4'); assert.match(file.name, /^测试模型-/); assert.ok(file.size > 0); assert.equal((await stat(file.path)).mode & 0o777, 0o600);
-  assert.equal((await stat(path.join(root, 'exports', '.realistic-work'))).mode & 0o777, 0o700); assert.deepEqual(await readdir(path.join(root, 'exports', '.realistic-work')), []);
+  const file = await service.file(started.id); assert.equal(file.mime, 'video/mp4'); assert.match(file.name, /^测试模型-/); assert.ok(file.size > 0); if (process.platform !== 'win32') assert.equal((await stat(file.path)).mode & 0o777, 0o600);
+  if (process.platform !== 'win32') assert.equal((await stat(path.join(root, 'exports', '.realistic-work'))).mode & 0o777, 0o700); assert.deepEqual(await readdir(path.join(root, 'exports', '.realistic-work')), []);
   assert.equal(JSON.stringify(result).includes(root), false); assert.equal(JSON.stringify(result).includes('material'), true); assert.equal(spawns.filter(item => item.render).length, 1);
   await service.cancel(started.id); assert.ok((await stat(file.path)).size > 0); await service.close(); assert.ok((await stat(file.path)).size > 0);
 });
@@ -134,7 +134,7 @@ test('transparent realistic MOV requires transparent scene configuration and pre
   for (const [flag, value] of [['-c:v','prores_ks'],['-profile:v','4'],['-pix_fmt','yuva444p10le'],['-alpha_bits','16'],['-f','mov']]) {
     const index = flag === '-f' ? args.lastIndexOf(flag) : args.indexOf(flag); assert.equal(args[index + 1], value);
   }
-  assert.equal((await stat(file.path)).mode & 0o777, 0o600);
+  if (process.platform !== 'win32') assert.equal((await stat(file.path)).mode & 0o777, 0o600);
   assert.deepEqual(await readdir(path.join(root, 'exports', '.realistic-work')), []);
 });
 
@@ -165,8 +165,8 @@ test('single Cycles preview returns the requested growth PNG without encoder and
   assert.equal(result.previewProgress, .35); assert.equal(result.stats.previewProgress, .35); assert.equal(result.stats.originalTriangles, 12); assert.equal(result.stats.completeTriangles, 12);
   assert.equal(result.url, `/api/realistic-previews/${started.id}/file`);
   const file = await service.file(started.id, { preview: true });
-  assert.equal(file.mime, 'image/png'); assert.match(file.path, /exports\/\.realistic-work\/[^/]+\.png$/); assert.deepEqual(await readFile(file.path), png());
-  assert.equal((await stat(file.path)).mode & 0o777, 0o600); assert.equal(spawns.length, 1); assert.equal(spawns[0].render, true);
+  assert.equal(file.mime, 'image/png'); assert.equal(await realpath(path.dirname(file.path)), await realpath(path.join(root, 'exports', '.realistic-work'))); assert.equal(path.extname(file.path), '.png'); assert.deepEqual(await readFile(file.path), png());
+  if (process.platform !== 'win32') assert.equal((await stat(file.path)).mode & 0o777, 0o600); assert.equal(spawns.length, 1); assert.equal(spawns[0].render, true);
   assert.deepEqual(await readdir(path.join(root, 'exports')), ['.realistic-work']);
   const deleted = await service.cancel(started.id, { preview: true }); assert.equal(deleted.status, 'cancelled'); assert.equal(deleted.url, null); assert.equal(deleted.filename, null);
   await assert.rejects(stat(file.path), { code: 'ENOENT' }); await assert.rejects(service.file(started.id), { code: 'REALISTIC_FILE_NOT_READY' });
@@ -267,9 +267,13 @@ for (const [title, options, code] of [
 test('actual Blender three-frame cube reaches verified MP4 with no dropped frame', { skip: !process.env.GROWTH_HQ_SMOKE, timeout: 180000 }, async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'growth-hq-smoke-'));
   let logs = '';
-  const debugSpawn = (exe, args, options) => { const child = spawn(exe, args, options); child.stderr?.on('data', value => { logs = (logs + value.toString()).slice(-16000); }); child.stdout?.on('data', value => { logs = (logs + value.toString()).slice(-16000); }); return child; };
+  const debugSpawn = (exe, args, options) => { const child = spawn(exe, args, options); child.stderr?.on('data', value => { logs = (logs + value.toString()).slice(-160000); }); child.stdout?.on('data', value => { logs = (logs + value.toString()).slice(-160000); }); return child; };
   const service = createRealisticRenderService({ root, blenderPath: process.env.GROWTH_TEST_BLENDER || findBlenderPath(), ffmpegPath: findFFmpegPath(), timeoutMs: 120000, stallTimeoutMs: 60000, spawnImpl: debugSpawn });
   t.after(async () => { await service.close(); await rm(root, { recursive: true, force: true }); });
   const started = await service.create(await packageBuffer()); const result = await terminal(service, started.id, 150000); assert.equal(result.status, 'complete', JSON.stringify(result) + '\n' + logs); assert.equal(result.encoded, 3); assert.equal(result.stats.decimation, false);
   const file = await service.file(started.id); assert.ok(file.size > 1000);
+  const events = logs.split(/\r?\n/).flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
+  const devices = events.find(event => event.type === 'ready')?.devices || [];
+  if (process.env.GROWTH_TEST_CYCLES_GPU) assert.ok(devices.some(device => ['OPTIX', 'CUDA', 'METAL', 'HIP', 'ONEAPI'].includes(device.type)));
+  t.diagnostic(JSON.stringify({ devices, rendered: result.rendered, encoded: result.encoded, sourceGeometryUnchanged: result.stats.sourceGeometryUnchanged, bytes: file.size }));
 });

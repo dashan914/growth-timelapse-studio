@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { chmod, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createApp } from '../server.mjs';
 import { extractSupportPreview } from '../support-jobs.mjs';
@@ -30,7 +30,9 @@ async function fixture(t, { delay = 50, ...options } = {}) {
   const proof = path.join(root, 'arguments.json');
   await writeFile(mock, `#!${process.execPath}\nimport {mkdir,writeFile} from 'node:fs/promises';\nimport path from 'node:path';\nconst args=process.argv.slice(2);\nawait writeFile(${JSON.stringify(proof)}, JSON.stringify(args));\nawait new Promise(r=>setTimeout(r,${delay}));\nconst out=args[args.indexOf('--outputdir')+1];\nawait mkdir(out,{recursive:true});\nawait writeFile(path.join(out,'plate_1.gcode'),${JSON.stringify(supportCode)});\n`);
   await chmod(mock, 0o700);
-  const app = createApp({ root, betaService: { requireActivation: async () => {}, status: async () => ({ activated: true }) }, ffmpegPath: '/missing-ffmpeg', supportsSlicerPath: mock, ...options });
+  const app = createApp({ root, betaService: { requireActivation: async () => {}, status: async () => ({ activated: true }) }, ffmpegPath: '/missing-ffmpeg', supportsSlicerPath: mock,
+    supportSpawnImpl: (filename, args, settings) => filename === mock
+      ? spawn(process.execPath, [mock, ...args], settings) : spawn(filename, args, settings), ...options });
   await new Promise((resolve, reject) => { app.server.once('error', reject); app.server.listen(0, '127.0.0.1', resolve); });
   const base = `http://127.0.0.1:${app.server.address().port}`;
   t.after(async () => { await app.close(); await rm(root, { recursive: true, force: true }); });

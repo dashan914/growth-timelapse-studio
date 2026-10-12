@@ -1,3 +1,4 @@
+import { findPythonPath } from '../runtime-paths.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -8,10 +9,29 @@ import {deflateSync,inflateSync} from 'node:zlib';
 
 const script=path.resolve('scripts/render-cycles.py');
 const fixture=path.resolve('tests/fixtures/cycles');
-const python=process.env.GROWTH_TEST_PYTHON||'python3';
+const python=process.env.GROWTH_TEST_PYTHON||findPythonPath();
 const validate=(filename)=>spawnSync(python,['-B','-c',`import runpy,sys\nf=runpy.run_path(sys.argv[1])\nf['validate_config'](sys.argv[2])\nprint('valid')`,script,filename],{encoding:'utf8'});
 function simpleGlb(json={asset:{version:'2.0'}}){let content=Buffer.from(JSON.stringify(json));const size=Math.ceil(content.length/4)*4;content=Buffer.concat([content,Buffer.alloc(size-content.length,32)]);const header=Buffer.alloc(20);header.write('glTF');header.writeUInt32LE(2,4);header.writeUInt32LE(20+content.length,8);header.writeUInt32LE(content.length,12);header.write('JSON',16);return Buffer.concat([header,content]);}
 const basic=()=>({schemaVersion:1,scene:'scene.glb',coordinateSystem:'three-y-up',output:{directory:'frames',width:320,height:240,fps:24,frames:3,growthFrames:3,samples:64},camera:{position:[.2,.15,.3],quaternion:[0,0,0,1],fov:46},plane:{widthM:.33,depthM:.32,yM:-.00001},bounds:{minY:0,maxY:.1},background:{transparent:true}});
+
+test('Cycles device selection honors explicit choices, reports CPU fallback and keeps legacy compositor routing',()=>{
+  const code=`import runpy,sys,types
+f=runpy.run_path(sys.argv[1]);scene=types.SimpleNamespace(cycles=types.SimpleNamespace(device='CPU'),node_tree='legacy')
+gpu=types.SimpleNamespace(name='Test NVIDIA',type='OPTIX',use=False);cpu=types.SimpleNamespace(name='Test CPU',type='CPU',use=True)
+prefs=types.SimpleNamespace(devices=[gpu,cpu],get_devices=lambda:None)
+assert f['select_cycles_devices'](scene,prefs,'AUTO')==[{'name':'Test NVIDIA','type':'OPTIX'}]
+assert scene.cycles.device=='GPU' and gpu.use and not cpu.use
+assert f['select_cycles_devices'](scene,prefs,'CPU')==[] and scene.cycles.device=='CPU'
+prefs.devices=[];assert f['select_cycles_devices'](scene,prefs,'AUTO')==[] and scene.cycles.device=='CPU'
+try:f['select_cycles_devices'](scene,prefs,'CUDA');raise AssertionError('Explicit GPU must fail when absent')
+except RuntimeError:pass
+assert f['compositor_tree'](scene)=='legacy' and f['compositor_node_type'](scene,'CompositorNodeMath')=='CompositorNodeMath'
+scene.compositing_node_group='modern';assert f['compositor_tree'](scene)=='modern'
+assert f['compositor_node_type'](scene,'CompositorNodeMath')=='ShaderNodeMath'
+assert f['compositor_node_type'](scene,'CompositorNodeMixRGB')=='ShaderNodeMixRGB'
+print('valid')`;
+  const result=spawnSync(python,['-B','-c',code,script],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);
+});
 
 test('Cycles package validation accepts canonical schema and rejects escaped paths, nonfinite pose and resource limits',async()=>{
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'growth-cycles-validate-'));try{

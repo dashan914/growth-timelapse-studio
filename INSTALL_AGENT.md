@@ -8,6 +8,8 @@
 
 固定版本入口：[v1.1.0-beta.1](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.1.0-beta.1) · [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.1.0-beta.1/install-manifest.json)。
 
+Windows 用户的依赖分类、手动路径配置和本机验收步骤见 [Windows 配置说明](docs/WINDOWS_SETUP.md)。本地兼容修改属于派生源码，仍须保留固定发行包与外部清单；安装修改后的源码使用 `-Source`，不能把派生包冒充原始 Release。
+
 ## Agent 执行步骤
 
 1. 读取本文件与 [install-manifest.json](install-manifest.json)，检测操作系统和 CPU。入口支持 macOS Apple Silicon / Intel、Windows x64；Windows 和 Intel Mac 完整流程仍需实机验证。

@@ -9,9 +9,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createApp } from '../server.mjs';
 import { probeMovAlphaEncoder } from '../export-codecs.mjs';
+import { findPythonPath, findFFmpegPath } from '../runtime-paths.mjs';
 
 const execFileAsync = promisify(execFile);
-const FFMPEG = process.env.FFMPEG_PATH || '/usr/local/bin/ffmpeg';
+const FFMPEG = findFFmpegPath();
 
 function crc32(buffer) {
   let crc = 0xffffffff;
@@ -308,10 +309,10 @@ test('PNG sequence ZIP preserves exact RGBA images and filenames without ffmpeg'
   assert.match(result.filename, /透明-测试.*\.zip$/);
   assert.equal(result.filename.includes('/'), false);
   const file = path.join(root, 'exports', result.filename);
-  const { stdout: entries } = await execFileAsync('/usr/bin/unzip', ['-Z1', file]);
-  assert.deepEqual(entries.trim().split('\n'), ['frame_000000.png', 'frame_000001.png']);
+  const { stdout: entries } = await execFileAsync(findPythonPath(), ['-B', '-c', 'import sys,zipfile; print("\\n".join(zipfile.ZipFile(sys.argv[1]).namelist()))', file]);
+  assert.deepEqual(entries.trim().split(/\r?\n/), ['frame_000000.png', 'frame_000001.png']);
   for (const [index, expected] of images.entries()) {
-    const { stdout: actual } = await execFileAsync('/usr/bin/unzip', ['-p', file, `frame_${String(index).padStart(6, '0')}.png`], { encoding: 'buffer' });
+    const { stdout: actual } = await execFileAsync(findPythonPath(), ['-B', '-c', 'import sys,zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]))', file, `frame_${String(index).padStart(6, '0')}.png`], { encoding: 'buffer' });
     assert.deepEqual(actual, expected);
   }
   const download = await fetch(base + result.url);

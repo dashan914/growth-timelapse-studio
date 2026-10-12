@@ -1,3 +1,4 @@
+import { findPythonPath } from '../runtime-paths.mjs';
 import { findBlenderPath, findFFmpegPath } from '../runtime-paths.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -96,7 +97,7 @@ test('Python worker independently validates the same binary and rejects corrupt 
   try {
     for (const [name, bytes] of Object.entries(entries)) await fs.writeFile(path.join(dir, name), bytes);
     const script = path.resolve('scripts/render-cycles.py');
-    const verify = () => spawnSync('python3', ['-B', '-c', "import runpy,sys,json\nf=runpy.run_path(sys.argv[1]);c=f['validate_config'](sys.argv[2]);print(json.dumps({'segments':c['_print']['count'],'layers':c['_print']['layers']}))", script, path.join(dir, 'config.json')], { encoding: 'utf8' });
+    const verify = () => spawnSync(findPythonPath(), ['-B', '-c', "import runpy,sys,json\nf=runpy.run_path(sys.argv[1]);c=f['validate_config'](sys.argv[2]);print(json.dumps({'segments':c['_print']['count'],'layers':c['_print']['layers']}))", script, path.join(dir, 'config.json')], { encoding: 'utf8' });
     const passed = verify(); assert.equal(passed.status, 0, passed.stderr); assert.deepEqual(JSON.parse(passed.stdout), { segments: 50, layers: 5 });
     const corrupt = Buffer.from(entries['print-layer.bin']); corrupt.writeUInt32LE(0, config.printLayer.arrays.layerSegments.byteOffset + 4); await fs.writeFile(path.join(dir, 'print-layer.bin'), corrupt);
     assert.notEqual(verify().status, 0);
@@ -105,7 +106,7 @@ test('Python worker independently validates the same binary and rejects corrupt 
 
 test('stadium profile has exact W/H and broad inter-layer contact; bridge/too-narrow roads and legacy packages use explicit ellipses', async () => {
   const script = path.resolve('scripts/render-cycles.py');
-  const run = spawnSync('python3', ['-B', '-c', "import runpy,sys,json\nf=runpy.run_path(sys.argv[1])['print_bead_profile'];print(json.dumps([f(.42,.12,1),f(.42,.12,7),f(.1,.12,1),f(.42,.12,1,'elliptical-bead-12-sides')]))", script], { encoding: 'utf8' });
+  const run = spawnSync(findPythonPath(), ['-B', '-c', "import runpy,sys,json\nf=runpy.run_path(sys.argv[1])['print_bead_profile'];print(json.dumps([f(.42,.12,1),f(.42,.12,7),f(.1,.12,1),f(.42,.12,1,'elliptical-bead-12-sides')]))", script], { encoding: 'utf8' });
   assert.equal(run.status, 0, run.stderr); const [stadium, bridge, narrow, legacy] = JSON.parse(run.stdout);
   assert.equal(stadium[1], 'stadium'); assert.equal(stadium[0].length, 14);
   const xs = stadium[0].map(point => point[0]), zs = stadium[0].map(point => point[1]);

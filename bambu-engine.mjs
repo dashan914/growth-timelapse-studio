@@ -1,8 +1,9 @@
-import { execFile } from 'node:child_process';
+import { execFileWithConsoleCapture, windowsInstalledExecutables } from './scripts/windows-runtime.mjs';
 import { constants } from 'node:fs';
 import { access, realpath, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { resolveExecutablePath } from './runtime-paths.mjs';
 
 export const BAMBU_ENGINE_NAME = 'Bambu Studio CLI';
 export const BAMBU_REQUIRED_CLI_FLAGS = Object.freeze([
@@ -22,6 +23,7 @@ export function bambuStudioCandidates({ platform = process.platform, env = proce
     const roots = [env.ProgramFiles, env.ProgramW6432, env['ProgramFiles(x86)'], 'C:\\Program Files'].filter(Boolean);
     candidates = roots.flatMap(root => ['bambu-studio.exe', 'BambuStudio.exe'].map(name => path.win32.join(root, 'Bambu Studio', name)));
     if (env.LOCALAPPDATA) candidates.push(path.win32.join(env.LOCALAPPDATA, 'Programs', 'Bambu Studio', 'bambu-studio.exe'));
+    candidates.push(...windowsInstalledExecutables('bambu', { env, platform }));
   } else {
     candidates = ['bambu-studio', 'BambuStudio', '/usr/bin/bambu-studio', '/usr/local/bin/bambu-studio',
       '/opt/BambuStudio/bin/bambu-studio'];
@@ -29,7 +31,7 @@ export function bambuStudioCandidates({ platform = process.platform, env = proce
   return [...new Set(candidates)];
 }
 
-export const BAMBU_STUDIO_DEFAULT_PATH = bambuStudioCandidates()[0];
+export const BAMBU_STUDIO_DEFAULT_PATH = bambuStudioCandidates().find(candidate => resolveExecutablePath(candidate)) || bambuStudioCandidates()[0];
 
 async function resolveExecutable(candidate, env, platform) {
   const isCommand = !/[\\/]/.test(candidate);
@@ -98,7 +100,7 @@ async function locateResources(executable, env, platform) {
 /** Read-only --help probe. No slicing, GUI launch, install or shell is involved.
  * execFileImpl may use Node's callback convention or return {stdout, stderr}.
  * An absent/incompatible installation is a capability result, not an exception. */
-export async function probeBambuEngine({ slicerPath, execFileImpl = execFile, timeoutMs = 10000,
+export async function probeBambuEngine({ slicerPath, execFileImpl = execFileWithConsoleCapture, timeoutMs = 10000,
   platform = process.platform, env = process.env } = {}) {
   const explicit = slicerPath !== undefined;
   const candidates = explicit ? [slicerPath] : bambuStudioCandidates({ platform, env });

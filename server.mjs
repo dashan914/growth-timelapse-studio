@@ -238,13 +238,13 @@ function contentDisposition(filename) {
 /** Create a local server. Importing this module never starts a listener. */
 export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
   idleTimeoutMs = IDLE_TIMEOUT_MS, finishTimeoutMs = FINISH_TIMEOUT_MS,
-  supportsSlicerPath = SUPPORT_SLICER, supportsPythonPath = findPythonPath(),
+  supportsSlicerPath = SUPPORT_SLICER, supportsPythonPath = findPythonPath(), supportSpawnImpl = spawn,
   supportJobTimeoutMs = 15 * 60 * 1000, supportMaximumUploadBytes = 128 * 1024 * 1024,
   photoCalibrationService = { detect: detectPhotoUprights, capability: photoCalibrationCapability },
   realisticRenderService, sliceService, blenderPath = process.env.BLENDER_PATH, alphaEncoderProbe = probeMovAlphaEncoder,
   betaService = createBetaActivationService(), exportDirectory = process.env.GROWTH_EXPORT_DIR } = {}) {
   const supports = createSupportManager({ root, slicerPath: supportsSlicerPath, pythonPath: supportsPythonPath,
-    timeoutMs: supportJobTimeoutMs, maximumUploadBytes: supportMaximumUploadBytes });
+    timeoutMs: supportJobTimeoutMs, maximumUploadBytes: supportMaximumUploadBytes, spawnImpl: supportSpawnImpl });
   const realistic = realisticRenderService || createRealisticRenderService({ root, ffmpegPath, alphaEncoderProbe, ...(exportDirectory ? { exportDirectory } : {}), ...(blenderPath ? { blenderPath } : {}) });
   const slices = sliceService || createSliceService({ root, pythonPath: supportsPythonPath });
   const jobs = new Map();
@@ -462,7 +462,7 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
     job.status = 'finishing';
     job.touchedAt = Date.now();
     if (job.options.format === 'png-sequence') {
-      startEncoder(job, '/usr/bin/zip', ['-q', job.partialPath, '-@'], job.frameDirectory);
+      startEncoder(job, findPythonPath(), ['-B', path.join(ROOT, 'scripts', 'zip-png-sequence.py'), job.partialPath], job.frameDirectory);
       job.child.stdin.end(Array.from({ length: job.options.frames }, (_, index) => `frame_${String(index).padStart(6, '0')}.png`).join('\n') + '\n');
     } else {
       job.child.stdin.end();

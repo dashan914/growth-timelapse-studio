@@ -11,14 +11,15 @@ import { fileURLToPath } from 'node:url';
 import { applicationId, install, validateManifest, downloadVerified, dataDirectory, parseArguments } from '../scripts/install.mjs';
 import { launch } from '../scripts/launch.mjs';
 import { finalizeInstallManifest } from '../scripts/finalize-install-manifest.mjs';
+import { findPythonPath } from '../runtime-paths.mjs';
 
 const executeFile = promisify(execFile);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await fs.readFile(path.join(projectRoot, 'install-manifest.json'), 'utf8'));
 
-async function fixture(t) {
+async function fixture(t, { beforeRemove = async () => {} } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'growth installer 空格 '));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  t.after(async () => { await beforeRemove(); await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
   const source = path.join(root, '源码 with spaces');
   await fs.mkdir(path.join(source, 'scripts'), { recursive: true });
   await fs.writeFile(path.join(source, 'package.json'), JSON.stringify({ name: applicationId, version: manifest.release.version }));
@@ -89,6 +90,18 @@ test('changing local source creates a new release and keeps the previous usable 
   assert.equal(await fs.readFile(path.join(first.releaseDirectory, 'server.mjs'), 'utf8'), '// fixture server');
 });
 
+test('installer preserves optional rendering and photo runtime settings for later launcher processes', async t => {
+  const { data, source } = await fixture(t);
+  const deps = mockedInstall(), original = deps.ensureRuntime;
+  deps.ensureRuntime = async options => {
+    Object.assign(options.env, { BLENDER_PATH: '/fixture/blender', PHOTO_CALIBRATION_PYTHON: '/fixture/cv-python', OPENCV_PYTHONPATH: '/fixture/cv-modules', GROWTH_CYCLES_DEVICE: 'CUDA' });
+    return original(options);
+  };
+  await install({ source, installRoot: data, noLaunch: true }, deps);
+  const config = JSON.parse(await fs.readFile(path.join(data, 'installation.json'), 'utf8'));
+  for (const [key, expected] of Object.entries({ BLENDER_PATH: '/fixture/blender', PHOTO_CALIBRATION_PYTHON: '/fixture/cv-python', OPENCV_PYTHONPATH: '/fixture/cv-modules', GROWTH_CYCLES_DEVICE: 'CUDA' })) assert.equal(config.env[key], expected);
+});
+
 test('failed npm installation does not replace the selected version or touch user data', async t => {
   const { source, data } = await fixture(t);
   await install({ source, installRoot: data, noLaunch: true }, mockedInstall());
@@ -137,7 +150,8 @@ test('installer rejects writing its data root inside source and rejects symlinks
   await assert.rejects(install({ source, installRoot: path.join(source, 'userdata'), dryRun: true }, mockedInstall()), /源码内部/);
   await fs.mkdir(path.join(source, 'src'));
   await fs.symlink(path.join(source, 'server.mjs'), path.join(source, 'src', 'shortcut.mjs'));
-  await assert.rejects(install({ source, installRoot: data, noLaunch: true }, mockedInstall()), /符号链接/);
+  try { await assert.rejects(install({ source, installRoot: data, noLaunch: true }, mockedInstall()), /符号链接/); }
+  finally { await fs.unlink(path.join(source, 'src', 'shortcut.mjs')); }
 });
 
 test('macOS bootstrap handles a space-containing source and remains read-only in dry run', async t => {
@@ -148,8 +162,20 @@ test('macOS bootstrap handles a space-containing source and remains read-only in
   await assert.rejects(fs.stat(data), { code: 'ENOENT' });
 });
 
-test('launcher skips a foreign occupied port, persists after its caller, and reuses only its own instance', async t => {
+test('Windows PowerShell 5.1 bootstrap accepts existing Node and space-containing source without inline JS quoting', async t => {
+  if (process.platform !== 'win32') { t.skip('Windows PowerShell bootstrap'); return; }
   const { source, data } = await fixture(t);
+  const result = await executeFile('powershell.exe', ['-NoProfile', '-File', path.join(projectRoot, 'scripts', 'install.ps1'), '-Source', source, '-InstallRoot', data, '-DryRun', '-NoRuntimeInstall']);
+  assert.ok(result.stdout.includes('DRY RUN'));
+  await assert.rejects(fs.stat(data), { code: 'ENOENT' });
+});
+
+test('launcher skips a foreign occupied port, persists after its caller, and reuses only its own instance', async t => {
+  const processes = new Set();
+  const { source, data } = await fixture(t, { beforeRemove: async () => {
+    for (const pid of processes) { try { process.kill(pid); } catch {} }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } });
   const foreign = net.createServer();
   const sockets = new Set();
   foreign.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
@@ -161,15 +187,16 @@ const server=http.createServer((req,res)=>{res.setHeader('content-type','applica
 server.listen(Number(process.env.PORT),'127.0.0.1');
 process.on('SIGTERM',()=>server.close(()=>process.exit(0)));\n`);
   const result = await launch({ source, installRoot: data, port, noOpen: true }, { platform: 'darwin', log: () => {} });
-  t.after(() => { try { process.kill(result.pid); } catch {} });
+  processes.add(result.pid);
   assert.equal(result.reused, false);
-  assert.ok(result.url.endsWith(`:${port + 1}`));
+  const selectedPort = Number(new URL(result.url).port);
+  assert.ok(selectedPort > port && selectedPort <= port + 9);
   const reuse = await launch({ source, installRoot: data, port, noOpen: true }, { platform: 'darwin', log: () => {} });
   assert.equal(reuse.reused, true);
   assert.equal(reuse.pid, result.pid);
   const anotherRoot = path.join(path.dirname(data), 'other data');
   const other = await launch({ source, installRoot: anotherRoot, port, noOpen: true }, { platform: 'darwin', log: () => {} });
-  t.after(() => { try { process.kill(other.pid); } catch {} });
+  processes.add(other.pid);
   assert.equal(other.reused, false);
   assert.notEqual(other.url, result.url);
 });
@@ -177,8 +204,8 @@ process.on('SIGTERM',()=>server.close(()=>process.exit(0)));\n`);
 test('data roots use OS application storage and accept isolated overrides', () => {
   assert.equal(dataDirectory({ platform: 'darwin', env: {}, home: '/Users/student' }), '/Users/student/Library/Application Support/GrowthTimelapseStudio');
   assert.equal(dataDirectory({ platform: 'win32', env: { LOCALAPPDATA: 'C:\\Users\\student\\AppData\\Local' }, home: 'C:\\Users\\student' }), 'C:\\Users\\student\\AppData\\Local\\GrowthTimelapseStudio');
-  assert.equal(dataDirectory({ env: { GROWTH_DATA_DIR: '/private/tmp/isolated growth' } }), '/private/tmp/isolated growth');
-  assert.deepEqual(parseArguments(['--manifest', '/private/tmp/external manifest.json', '--no-runtime-install']), { manifestFile: '/private/tmp/external manifest.json', noRuntimeInstall: true });
+  assert.equal(dataDirectory({ env: { GROWTH_DATA_DIR: '/private/tmp/isolated growth' } }), path.resolve('/private/tmp/isolated growth'));
+  assert.deepEqual(parseArguments(['--manifest', '/private/tmp/external manifest.json', '--no-runtime-install']), { manifestFile: path.resolve('/private/tmp/external manifest.json'), noRuntimeInstall: true });
 });
 
 test('external manifest hashes an already-built ZIP without modifying either the ZIP or repository template', async t => {
@@ -188,7 +215,7 @@ test('external manifest hashes an already-built ZIP without modifying either the
   const before = await fs.readFile(template, 'utf8');
   const archive = path.join(root, `${applicationId}-${manifest.release.version}-source.zip`);
   // A real small ZIP made locally; this never accesses download URLs.
-  await executeFile('python3', ['-c', 'import sys,zipfile\nwith zipfile.ZipFile(sys.argv[1], "w") as z:z.writestr("growth-timelapse-studio/fixture.txt", "fixture")', archive]);
+  await executeFile(findPythonPath(), ['-c', 'import sys,zipfile\nwith zipfile.ZipFile(sys.argv[1], "w") as z:z.writestr("growth-timelapse-studio/fixture.txt", "fixture")', archive]);
   const bytes = await fs.readFile(archive);
   const result = await finalizeInstallManifest({ archive, template });
   assert.equal(result.manifest.release.sha256, createHash('sha256').update(bytes).digest('hex'));
