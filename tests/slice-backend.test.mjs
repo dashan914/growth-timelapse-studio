@@ -4,19 +4,20 @@ import assert from 'node:assert/strict';
 import { access, chmod, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { PassThrough } from 'node:stream';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createSliceService, friendlyNativeFailure, indexSliceGCode, SLICE_SLICER, validateSliceOptions } from '../slice-jobs.mjs';
 import { parsePrintLayerGCode } from '../src/print-layer.js';
+import { createSlicerProfiles } from './helpers/slicer-profiles.mjs';
 
 const execFileAsync = promisify(execFile);
 const axis = [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1];
 const gcode = '; generated mock visualization\r\n; filament_colour = #F0E8D6;#23599C\r\n; layer_height = 0.12\r\nG21\r\nG90\r\nM83\r\n;LAYER_CHANGE\r\n;Z:0.25\r\n;HEIGHT:0.25\r\nG0 X110 Y120 Z0.25\r\n;TYPE:Outer wall\r\n;WIDTH:0.42\r\nG1 X120 Y120 E1\r\n;TYPE:Inner wall\r\nG1 X120 Y130 E1\r\n;TYPE:Bottom surface\r\nT1\r\nG1 X110 Y130 E1\r\n;LAYER_CHANGE\r\n;Z:0.37\r\n;HEIGHT:0.12\r\nG0 X110 Y120 Z0.37\r\n;TYPE:Sparse infill\r\nG1 X120 Y130 E1\r\n;TYPE:Support\r\nG1 X120 Y140 E1\r\nM104 S220\r\n';
 const hash = buffer => createHash('sha256').update(buffer).digest('hex');
-const mockEngineProbe = async ({slicerPath}) => ({available:true,engine:'Bambu Studio CLI',version:'02.07.01.57',engineRevision:'bambu-test',executablePath:slicerPath,profileDirectory:'/Applications/BambuStudio.app/Contents/Resources/profiles'});
+const mockEngineProbe = async ({slicerPath}) => ({available:true,engine:'Bambu Studio CLI',version:'02.07.01.57',engineRevision:'bambu-test',executablePath:slicerPath,profileDirectory:path.join(path.dirname(slicerPath),'mock-bambu-resources','profiles')});
 
 async function project(root, overrides = {}, metadata = '<config><object id="1"><metadata key="wall_loops" value="4"/><part id="1" subtype="normal_part"><metadata key="sparse_infill_density" value="20%"/></part></object></config>') {
   const filename = path.join(root, 'original.3mf');
@@ -43,12 +44,15 @@ function cubeStl(size = 10) {
 
 async function fixture(t, { delay = 15, output = gcode, engineError = null, ...options } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'full-slice-backend-'));
+  await createSlicerProfiles(root);
   const mock = path.join(root, 'mock-slicer.mjs'), proof = path.join(root, 'arguments.json');
   await writeFile(mock, `#!${process.execPath}\nimport { mkdir, writeFile } from 'node:fs/promises';\nimport path from 'node:path';\nconst args = process.argv.slice(2);\nawait writeFile(${JSON.stringify(proof)},JSON.stringify(args));\nawait new Promise(resolve=>setTimeout(resolve,${delay}));\n${engineError ? `process.stderr.write(${JSON.stringify(engineError)});process.exit(156);` : ''}\nconst directory=args[args.indexOf('--outputdir')+1];\nawait mkdir(directory,{recursive:true});\nawait writeFile(path.join(directory,'plate_1.gcode'),${JSON.stringify(output)});\n`);
   await chmod(mock, 0o700);
-  const service = createSliceService({ root, slicerPath: mock, engineProbe: mockEngineProbe, ...options });
+  const spawnImpl = (filename, args, settings) => filename === mock
+    ? spawn(process.execPath, [mock, ...args], settings) : spawn(filename, args, settings);
+  const service = createSliceService({ root, slicerPath: mock, engineProbe: mockEngineProbe, spawnImpl, ...options });
   t.after(async () => { await service.close(); await rm(root, { recursive: true, force: true }); });
-  return { root, service, proof };
+  return { root, service, proof, spawnImpl };
 }
 
 async function waitFor(service, id) {
@@ -97,8 +101,8 @@ test('full slicing retains every source G-code byte, project geometry/paint/plac
   assert.equal(manifest.completeFileRetained, true);
   assert.equal(manifest.segmentsSimplified, false);
   assert.deepEqual(await readdir(path.join(root, '.slice-jobs', created.id)), ['full.gcode', 'manifest.json', 'source.json']);
-  assert.equal((await stat(path.join(root, '.slice-jobs', created.id))).mode & 0o777, 0o700);
-  for (const name of ['full.gcode', 'manifest.json', 'source.json']) assert.equal((await stat(path.join(root, '.slice-jobs', created.id, name))).mode & 0o777, 0o600);
+  if (process.platform !== 'win32') assert.equal((await stat(path.join(root, '.slice-jobs', created.id))).mode & 0o777, 0o700);
+  if (process.platform !== 'win32') for (const name of ['full.gcode', 'manifest.json', 'source.json']) assert.equal((await stat(path.join(root, '.slice-jobs', created.id, name))).mode & 0o777, 0o600);
   const args = JSON.parse(await readFile(proof, 'utf8'));
   assert.equal(args[args.indexOf('--arrange') + 1], '0');
   assert.equal(args[args.indexOf('--orient') + 1], '0');
@@ -331,16 +335,16 @@ test('native failures show short actionable Chinese messages while complete orig
   assert.ok(result.message.length < 150); assert.doesNotMatch(result.message, /private|tmp|diagnostics|detected/);
   const filename = path.join(root, '.slice-diagnostics', created.id, 'engine.log');
   assert.equal(await readFile(filename, 'utf8'), raw);
-  assert.equal((await stat(filename)).mode & 0o777, 0o600);
-  assert.equal((await stat(path.dirname(filename))).mode & 0o777, 0o700);
+  if (process.platform !== 'win32') assert.equal((await stat(filename)).mode & 0o777, 0o600);
+  if (process.platform !== 'win32') assert.equal((await stat(path.dirname(filename))).mode & 0o777, 0o700);
   assert.deepEqual(await readdir(path.join(root, '.slice-jobs')), [], 'temporary source/models and partial paths were removed');
   assert.match(friendlyNativeFailure('0 printable instances; Nothing to be sliced'), /超出底板/);
   assert.match(friendlyNativeFailure('Param values in 3mf/config error: unsupported pattern'), /参数.*不兼容/);
 });
 
 test('closing one service never removes a different service instance private running or complete results', async t => {
-  const { root, service } = await fixture(t);
-  const second = createSliceService({ root, slicerPath: path.join(root, 'mock-slicer.mjs'),engineProbe:mockEngineProbe });
+  const { root, service, spawnImpl } = await fixture(t);
+  const second = createSliceService({ root, slicerPath: path.join(root, 'mock-slicer.mjs'),engineProbe:mockEngineProbe, spawnImpl });
   t.after(() => second.close());
   const source = await project(root);
   const owned = await service.create(source.bytes);

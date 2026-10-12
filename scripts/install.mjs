@@ -19,9 +19,9 @@ export const applicationId = 'growth-timelapse-studio';
 
 export function dataDirectory({ platform = process.platform, env = process.env, home = os.homedir() } = {}) {
   if (env.GROWTH_DATA_DIR) return path.resolve(env.GROWTH_DATA_DIR);
-  if (platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'GrowthTimelapseStudio');
+  if (platform === 'darwin') return path.posix.join(home, 'Library', 'Application Support', 'GrowthTimelapseStudio');
   if (platform === 'win32') return path.win32.join(env.LOCALAPPDATA || path.win32.join(home, 'AppData', 'Local'), 'GrowthTimelapseStudio');
-  return path.join(home, '.local', 'share', 'GrowthTimelapseStudio');
+  return path.posix.join(home, '.local', 'share', 'GrowthTimelapseStudio');
 }
 
 export function parseArguments(args) {
@@ -297,6 +297,7 @@ export async function install(options = {}, dependencies = {}) {
     env.FFMPEG_PATH = runtime.ffmpeg;
     if (runtime.slicer?.executablePath) {
       env[{ bambu: 'BAMBU_STUDIO_PATH', orca: 'ORCA_SLICER_PATH', flash: 'FLASH_STUDIO_PATH' }[runtime.slicer.id]] = runtime.slicer.executablePath;
+      if (runtime.slicer.resourceDirectory) env[{ bambu: 'BAMBU_STUDIO_RESOURCES', orca: 'ORCA_SLICER_RESOURCES', flash: 'FLASH_STUDIO_RESOURCES' }[runtime.slicer.id]] = runtime.slicer.resourceDirectory;
     }
     const releases = path.join(root, 'releases');
     await fs.mkdir(releases, { recursive: true });
@@ -336,7 +337,7 @@ export async function install(options = {}, dependencies = {}) {
       await run(runtime.node, [path.join(releaseDirectory, 'scripts', 'check-runtime.mjs')], { cwd: releaseDirectory, env });
     }
     await fs.mkdir(path.join(root, 'exports'), { recursive: true });
-    const executableVariables = ['PYTHON_PATH', 'FFMPEG_PATH', 'BAMBU_STUDIO_PATH', 'BAMBU_STUDIO_RESOURCES', 'ORCA_SLICER_PATH', 'ORCA_SLICER_RESOURCES', 'FLASH_STUDIO_PATH', 'FLASH_STUDIO_RESOURCES'];
+    const executableVariables = ['PYTHON_PATH', 'FFMPEG_PATH', 'BAMBU_STUDIO_PATH', 'BAMBU_STUDIO_RESOURCES', 'ORCA_SLICER_PATH', 'ORCA_SLICER_RESOURCES', 'FLASH_STUDIO_PATH', 'FLASH_STUDIO_RESOURCES', 'BLENDER_PATH', 'PHOTO_CALIBRATION_PYTHON', 'OPENCV_PYTHONPATH', 'GROWTH_CYCLES_DEVICE'];
     const config = { application: applicationId, version: manifest.release.version, sourceHash, releaseDirectory, node: runtime.node, env: Object.fromEntries(executableVariables.filter(key => typeof env[key] === 'string' && env[key]).map(key => [key, env[key]])), installedAt: new Date().toISOString() };
     const configFile = path.join(root, 'installation.json');
     const nextConfig = `${configFile}.next-${randomUUID()}`;

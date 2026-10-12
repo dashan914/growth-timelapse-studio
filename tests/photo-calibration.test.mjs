@@ -76,7 +76,7 @@ test('uses fixed trusted script/no shell/private temporary photo and cleans afte
     assert.equal(result.lines.length, 2); assert.equal(inspected.command, '/trusted/python');
     assert.equal(path.basename(inspected.args[0]), 'calibration-uprights.py'); assert.equal(inspected.args.length, 2);
     assert.equal(inspected.options.shell, false); assert.equal(inspected.options.env.PYTHONPATH, '/trusted/runtime');
-    assert.equal(inspected.mode, 0o600); assert.deepEqual(inspected.bytes, pngHeader());
+    if (process.platform !== 'win32') assert.equal(inspected.mode, 0o600); assert.deepEqual(inspected.bytes, pngHeader());
     assert.deepEqual(await readdir(temporaryRoot), []);
   } finally { await rm(temporaryRoot, { recursive: true, force: true }); }
 });

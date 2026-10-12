@@ -1,3 +1,4 @@
+import { findPythonPath } from '../runtime-paths.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -9,6 +10,7 @@ import { unzipSync, zipSync, strFromU8, strToU8 } from 'three/addons/libs/fflate
 import { defaultSliceSettings, normalizeSliceSettings, DEFAULT_LAYER_HEIGHT_MM, DEFAULT_FIRST_LAYER_HEIGHT_MM } from '../src/slice-settings.js';
 import { parseFDMSlicerSettings, createFDMSurfaceUniforms } from '../src/fdm-surface.js';
 import { parsePrintLayerGCode } from '../src/print-layer.js';
+import { createSlicerProfiles } from './helpers/slicer-profiles.mjs';
 
 const run = promisify(execFile);
 
@@ -72,8 +74,8 @@ test('actual native preparation emits missing0.16 for all three beds without inv
   for (const preset of ['h2c','p1s','a1']) {
     const stage=path.join(directory,preset);await fs.mkdir(stage);
     const options=path.join(stage,'options.json'),prepared=path.join(stage,'prepared.3mf'),reportPath=path.join(stage,'report.json');
-    await fs.writeFile(options,JSON.stringify({format:'stl',preset,toolColors:['#123456']}));
-    await run('python3',['scripts/prepare-slice-project.py',source,prepared,reportPath,options]);
+    await fs.writeFile(options,JSON.stringify({format:'stl',preset,toolColors:['#123456'],slicerResources:await createSlicerProfiles(directory)}));
+    await run(findPythonPath(),['scripts/prepare-slice-project.py',source,prepared,reportPath,options]);
     const report=JSON.parse(await fs.readFile(reportPath,'utf8'));
     const files=unzipSync(new Uint8Array(await fs.readFile(prepared)));
     const raw=JSON.parse(strFromU8(files['Metadata/project_settings.config']));
@@ -100,8 +102,8 @@ test('saved0.12/0.25 and object/part heights survive actual staging byte-for-byt
   const bytes=zipSync({'3D/3dmodel.model':strToU8(model),'Metadata/model_settings.config':strToU8(override),
     'Metadata/project_settings.config':strToU8(JSON.stringify({layer_height:'0.12',initial_layer_print_height:'0.25',filament_colour:['#123456']}))});
   const source=path.join(directory,'source.3mf'),prepared=path.join(directory,'prepared.3mf'),reportPath=path.join(directory,'report.json'),options=path.join(directory,'options.json');
-  await fs.writeFile(source,bytes);await fs.writeFile(options,JSON.stringify({format:'3mf',preset:'a1'}));
-  await run('python3',['scripts/prepare-slice-project.py',source,prepared,reportPath,options]);
+  await fs.writeFile(source,bytes);await fs.writeFile(options,JSON.stringify({format:'3mf',preset:'a1',slicerResources:await createSlicerProfiles(directory)}));
+  await run(findPythonPath(),['scripts/prepare-slice-project.py',source,prepared,reportPath,options]);
   const report=JSON.parse(await fs.readFile(reportPath,'utf8'));
   const files=unzipSync(new Uint8Array(await fs.readFile(prepared)));
   const raw=JSON.parse(strFromU8(files['Metadata/project_settings.config']));

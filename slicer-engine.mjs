@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFileWithConsoleCapture, windowsInstalledExecutables } from './scripts/windows-runtime.mjs';
 import { constants } from 'node:fs';
 import { access, realpath, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -40,6 +40,7 @@ export function localSlicerCandidates(engineId, { platform = process.platform, e
     if (env.LOCALAPPDATA) candidates.push(engineId === 'flash'
       ? path.win32.join(env.LOCALAPPDATA, 'Programs', 'Flash Studio', 'Flash Studio.exe')
       : path.win32.join(env.LOCALAPPDATA, 'Programs', 'OrcaSlicer', 'orca-slicer.exe'));
+    candidates.push(...windowsInstalledExecutables(engineId, { env, platform }));
   } else {
     candidates = engineId === 'flash'
       ? ['orca-flashforge', 'flash-studio', '/usr/bin/orca-flashforge', '/usr/local/bin/orca-flashforge']
@@ -111,7 +112,7 @@ async function findResources(executable, descriptor, platform, env) {
 
 /** Read-only identity and CLI capability detection, with no cross-engine
  * fallback. Missing/incompatible selected installations return unavailable. */
-export async function probeSlicerEngine({ engineId = 'auto', slicerPath, slicerPaths = {}, execFileImpl = execFile, timeoutMs = 10000,
+export async function probeSlicerEngine({ engineId = 'auto', slicerPath, slicerPaths = {}, execFileImpl = execFileWithConsoleCapture, timeoutMs = 10000,
   platform = process.platform, env = process.env } = {}) {
   if (engineId === 'auto') {
     if (slicerPath !== undefined) {

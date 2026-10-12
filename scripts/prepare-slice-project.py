@@ -19,9 +19,14 @@ import zipfile
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, 'reconfigure'):
+        _stream.reconfigure(encoding='utf-8')
+
 ROOT = Path(__file__).resolve().parent.parent
 VENDOR = ROOT / 'vendor/slicer-profiles/bambu-v02.07.01.57'
-NATIVE = Path('/Applications/BambuStudio.app/Contents/Resources/profiles')
+_resources = os.environ.get('BAMBU_STUDIO_RESOURCES')
+NATIVE = (Path(_resources) if Path(_resources).name.lower() == 'profiles' else Path(_resources) / 'profiles') if _resources else Path('/Applications/BambuStudio.app/Contents/Resources/profiles')
 VERSION = 'v02.07.01.57'
 COMMIT = '3f126b717ed1f10fee0f32f05ed9731808d0c8bb'
 PROFILE = {'h2c': '0.20mm Standard @BBL H2C', 'p1s': '0.20mm Standard @BBL X1C', 'a1': '0.20mm Standard @BBL A1'}

@@ -20,8 +20,8 @@ $growthArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitectur
 if ($growthArch -ne 'X64') { throw 'Windows 安装器目前仅提供 x64 方案。' }
 $growthNode = (Get-Command node -ErrorAction SilentlyContinue).Source
 if ($growthNode) {
-  & $growthNode -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)'
-  if ($LASTEXITCODE -ne 0) { $growthNode = $null }
+  $growthNodeVersion = & $growthNode --version
+  if ($LASTEXITCODE -ne 0 -or $growthNodeVersion -notmatch '^v(\d+)\.' -or [int]$Matches[1] -lt 24) { $growthNode = $null }
 }
 if (-not $growthNode) {
   if ($DryRun) { Write-Output 'DRY RUN: 将校验并下载官方 Node.js 24.19.0 到用户数据目录。'; exit 0 }

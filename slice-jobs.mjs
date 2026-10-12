@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { normalizeSliceSettings } from './src/slice-settings.js';
 import { BAMBU_STUDIO_DEFAULT_PATH } from './bambu-engine.mjs';
 import { probeSlicerEngine, probeLocalSlicers, LOCAL_SLICER_IDS } from './slicer-engine.mjs';
+import { findPythonPath } from './runtime-paths.mjs';
 
 export const SLICE_SLICER = BAMBU_STUDIO_DEFAULT_PATH;
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -173,11 +174,11 @@ export async function indexSliceGCode(filename, { maximumBytes = SLICE_LIMITS.gc
   } finally { input.destroy(); }
 }
 
-export function createSliceService({ root = HERE, slicerPath, slicerPaths = {}, engineProbe = probeSlicerEngine, forceReslice = true, pythonPath = '/usr/bin/python3', prepareScript = PREPARE,
+export function createSliceService({ root = HERE, slicerPath, slicerPaths = {}, engineProbe = probeSlicerEngine, forceReslice = true, pythonPath = findPythonPath(), prepareScript = PREPARE,
   timeoutMs = 15 * 60 * 1000, uploadTimeoutMs = 60 * 1000, maximumProjectBytes = SLICE_LIMITS.projectBytes,
   maximumStlBytes = SLICE_LIMITS.stlBytes, maximumGcodeBytes = SLICE_LIMITS.gcodeBytes,
   maximumRetainedBytes = SLICE_LIMITS.retainedBytes, maximumRetainedJobs = SLICE_LIMITS.retainedJobs,
-  processRunner = null } = {}) {
+  processRunner = null, spawnImpl = spawn } = {}) {
   root = path.resolve(root);
   const jobs = new Map(), directory = path.join(root, '.slice-jobs'), diagnosticsRoot = path.join(root, '.slice-diagnostics');
   const diagnostics = new Map();
@@ -227,7 +228,7 @@ export function createSliceService({ root = HERE, slicerPath, slicerPaths = {}, 
     const logPath = path.join(job.diagnosticsDirectory, preparing ? 'prepare.log' : 'engine.log');
     return new Promise((resolve, reject) => {
       const log = createWriteStream(logPath, { flags: 'wx', mode: 0o600 });
-      const child = spawn(executable, args, { cwd: job.directory, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      const child = spawnImpl(executable, args, { cwd: job.directory, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, shell: false });
       job.child = child;
       let output = '', bytes = 0, processError = null, logFailure = null;
       const remember = chunk => {

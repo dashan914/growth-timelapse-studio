@@ -13,7 +13,7 @@
     "check:runtime": "node scripts/check-runtime.mjs",
     "package": "python3 scripts/package-release.py",
     "test": "node --test tests/*.test.mjs",
-    "test:native-slicing": "GROWTH_NATIVE_SLICER_TESTS=1 node --test --test-concurrency=1 tests/slice-backend.test.mjs tests/slice-source-worker.test.mjs tests/slice-loader-assembly.test.mjs tests/slice-vertex-colors.test.mjs"
+    "test:native-slicing": "node scripts/test-native-slicing.mjs"
   },
   "dependencies": {
     "three": "0.186.1"

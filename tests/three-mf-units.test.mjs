@@ -1,3 +1,4 @@
+import { findPythonPath } from '../runtime-paths.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -27,7 +28,7 @@ class XmlElement {
   getElementsByTagNameNS(uri,name) { return this.descendants().filter(node=>node.namespaceURI===uri&&node.localName===name); }
 }
 globalThis.DOMParser ||= class {
-  parseFromString(text) { const parsed=spawnSync('python3',['-B','-c',XML],{input:text,encoding:'utf8'});if(parsed.status!==0)throw new Error(parsed.stderr);const root=new XmlElement(JSON.parse(parsed.stdout));return{documentElement:root,querySelector:selector=>root.localName===selector?root:root.querySelector(selector),querySelectorAll:selector=>root.localName===selector?[root,...root.querySelectorAll(selector)]:root.querySelectorAll(selector)}; }
+  parseFromString(text) { const parsed=spawnSync(findPythonPath(),['-B','-c',XML],{input:text,encoding:'utf8'});if(parsed.status!==0)throw new Error(parsed.stderr);const root=new XmlElement(JSON.parse(parsed.stdout));return{documentElement:root,querySelector:selector=>root.localName===selector?root:root.querySelector(selector),querySelectorAll:selector=>root.localName===selector?[root,...root.querySelectorAll(selector)]:root.querySelectorAll(selector)}; }
 };
 
 const ns='xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02"';

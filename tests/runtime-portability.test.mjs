@@ -23,8 +23,18 @@ test('external executables are discovered from PATH without bundled research run
   const { directory, env, executable } = await fixture(t);
   const ffmpeg = await executable('ffmpeg'), python = await executable('python3'), blender = await executable('blender');
   assert.equal(findFFmpegPath({ env }), ffmpeg);
-  assert.equal(findPythonPath({ env }), python);
+  assert.equal(findPythonPath({ root: directory, env }), python);
   assert.equal(findBlenderPath({ root: directory, env }), blender);
+});
+
+test('Windows project virtualenv takes precedence over an unconfigured PATH Python', async t => {
+  if (process.platform !== 'win32') { t.skip('Windows virtualenv layout'); return; }
+  const { directory, env, executable } = await fixture(t);
+  await executable('python3');
+  const python = path.join(directory, '.venv', 'Scripts', 'python.exe');
+  await mkdir(path.dirname(python), { recursive: true });
+  await writeFile(python, 'fixture python');
+  assert.equal(findPythonPath({ root: directory, env }), await realpath(python));
 });
 
 test('explicit missing runtime overrides stay missing instead of silently changing installs', async t => {
