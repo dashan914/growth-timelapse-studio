@@ -1,10 +1,26 @@
 # 验证记录
 
-## 2026-10-14：1.2.0-beta.3 预览、背景与镜头设置更新（待发行）
+## 2026-10-14：1.2.0-beta.4 官方运行包（本地验证通过）
 
-本轮目标为固定 [v1.2.0-beta.3](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.3)，源码资产文件名为 `growth-timelapse-studio-1.2.0-beta.3-source.zip`。软件 beta.2 已公开预发布，其 888 项测试（870 通过、18 环境跳过、0 失败）为上一版结果；beta.3 尚待新测试、实际 UI 验收和固定资产校验，不沿用上一版计数宣称通过。
+本轮固定目标为 [v1.2.0-beta.4](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.4)，官方资产名为 `growth-timelapse-studio-1.2.0-beta.4-runtime.zip`。公开仓库继续提供 MIT 源码，源码开发命令 `python3 scripts/package-release.py` 与旧 `-source.zip` 安装兼容保留。本轮构建命令为 `node scripts/build-runtime-release.mjs --output <发行目录>`；新增 `RUNTIME_MANIFEST.json` 记录实际运行文件哈希。
 
-本轮待验收项目：
+本轮自动测试 **897 项：879 通过、18 环境检查跳过、0 失败**；其中 5 项直接构建、解压并执行混淆运行包。已完成：
+
+- 官方运行包对本项目原创 JavaScript 做轻量压缩与混淆，不附 source map、测试或开发构建脚本；第三方 vendor 文件与许可原样保留。
+- 核对固定 ZIP 的外部 SHA256、包内实际运行文件哈希与构建来源；确认运行路径、参数、资源、Python 工程准备和依赖发现功能保留。
+- 在独立用户目录安装、doctor、启动和导入案例；对照源码运行结果检查所有用户的无水印实时预览、免费 MP4 成片水印和已解锁成片无水印。
+- 原兑换码、签名公钥、购买价格、星光兑换、设备绑定和有效离线凭证保持兼容；升级保留作品、订单及激活记录。
+- 新官方运行 ZIP 和旧源码 ZIP 分别按各自清单安装，不将两种资产的 SHA256 混用。源码开发仍可运行测试和生成开发包。
+
+运行包共 164 个实际文件（不含清单自身），88 个原创 JS 模块轻量处理；导入、导出及相对模块依赖保持一致，全部 Markdown 本地链接可访问。独立 macOS 数据目录真实安装仅安装生产依赖 Three.js，doctor、启动健康检查通过；浏览器导入 cube.stl 并完成 Bambu Studio 本机切片。合成签名激活、离线重启、订单恢复及真实 FFmpeg 免费/已解锁输出回归通过。
+
+README 恢复 4 个功能演示 GIF 与文字介绍，移除付费导出介绍。Git 提交身份纠正为 dashan914；不重写已发布历史。新版公开下载、SHA256 与旧安装 ZIP 删除结果在发布完成后单独记录。源码继续公开，这只是有限的阅读与修改门槛，不是闭源、加密安全或防破解验证；不采用重度反调试。Windows 与 Intel Mac 完整安装仍待实机验收。
+
+## 2026-10-14：1.2.0-beta.3 预览、背景与镜头设置更新（已公开预发布）
+
+固定 [v1.2.0-beta.3](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.3) 已公开预发布，源码资产文件名为 `growth-timelapse-studio-1.2.0-beta.3-source.zip`；公开 ZIP 已核对 SHA256，发行提交为 `ccb956209ffefebf8294ce88816bc3f9750d6141`，网站安装指南已指向 beta.3。该版本最终完整测试为 892 项：874 通过、18 环境检查跳过、0 失败；beta.2 的 888 项结果继续保留为更早的历史记录。
+
+该版本验收范围（最终结果见下方历史记录）：
 
 - 未激活、已激活以及购买状态变化时，所有用户的工作台实时预览均无品牌水印叠层。只有免费 MP4 导出成片烙入动态水印，已解锁的成片仍无水印；分别检查实时和写实编码输出与完整帧数。
 - 背景名称与 × 信息行移除，预设标题为“或直接使用背景预设”，自定义背景导入和各背景预设仍可切换。

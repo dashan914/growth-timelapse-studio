@@ -2,7 +2,9 @@
 
 ## 1. 安装并启动
 
-本轮固定版本为 [v1.2.0-beta.3](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.3)，待发行；发行资产验证后，自动安装使用同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.3/install-manifest.json)。上一版 1.2.0-beta.2 已公开预发布。
+固定版本为 [v1.2.0-beta.4](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.4)。自动安装使用官方 `growth-timelapse-studio-1.2.0-beta.4-runtime.zip` 与同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.4/install-manifest.json)。旧 `-source.zip` 安装兼容保留，源码开发流程继续可用。
+
+官方运行包轻量压缩与混淆运行文件，省略 source map、测试和开发构建脚本。公开仓库仍为 MIT 源码，所以这只是有限的阅读、修改门槛；授权、套餐价格、星光兑换和离线功能不变。
 
 准备 Node.js 24 LTS（最低 22）、Python 3，以及 Bambu Studio、OrcaSlicer 或 Flash Studio 中的一种切片器。导出 MP4 / MOV 还需要 FFmpeg。
 
@@ -70,4 +72,4 @@ npm start
 
 反馈问题时附上系统与依赖版本、文件类型、操作步骤和错误截图。逐个按钮的图文说明见 [界面操作指南](UI_GUIDE.md)。
 
-已发布 beta.2 记录 888 项自动测试（870 通过、18 跳过、0 失败），56 项拓竹真实切片/解析矩阵继续作为历史兼容性记录；后者为小模型软件验证，未逐台实体打印。beta.3 的新增交互与无水印预览验收结果待补录，详见 [验证记录](VERIFICATION.md)。
+beta.3 已记录 892 项自动测试（874 通过、18 跳过、0 失败），56 项拓竹真实切片/解析矩阵继续作为历史兼容性记录；后者为小模型软件验证，未逐台实体打印。beta.4 运行包已完成 897 项自动测试（879 通过、18 环境检查跳过、0 失败）及独立目录安装、doctor 和启动验证，详见 [验证记录](VERIFICATION.md)。

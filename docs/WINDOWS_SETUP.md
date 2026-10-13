@@ -2,7 +2,7 @@
 
 适用 Windows x64。基础实时模式使用 Node.js、Python 和本机切片器；写实渲染和照片立柱检测是可选扩展。普通 Windows 用户要完成依赖检查与首次验收，只有自动发现失败或程序安装在特殊位置时才需要手动配置路径。
 
-本轮固定版本为 [v1.2.0-beta.3](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.3)，待发行；发行资产验证后，安装器使用同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.3/install-manifest.json)。上一版 1.2.0-beta.2 已公开预发布，Windows 兼容 PR 已纳入并继续保留。
+固定版本为 [v1.2.0-beta.4](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.4)。官方安装资产为 `growth-timelapse-studio-1.2.0-beta.4-runtime.zip`，安装器使用同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.4/install-manifest.json)。Windows 兼容 PR 继续保留，旧 `-source.zip` 与本地源码安装仍支持。
 
 ## 1. 必须、条件必需与可选依赖
 
@@ -16,11 +16,11 @@
 | Blender | 上游使用 4.5 LTS；本次兼容分支在 Windows 5.2.2 LTS 做过小模型实测 | 写实模式可选 |
 | OpenCV / NumPy | 可在独立 Python 环境使用 opencv-python-headless 4.12.0.88 与 numpy 2.2.6 | 自动找照片立柱可选，手动标记无需安装 |
 
-使用 Windows 原生程序即可。源码下载不会自动包含 node_modules、切片器、FFmpeg 或 Blender。
+使用 Windows 原生程序即可。运行包和源码包均不会自动包含 node_modules、切片器、FFmpeg 或 Blender。官方运行包对运行文件做轻量压缩与混淆，不附 source map、测试及开发构建脚本；公开 MIT 源码仍可用于开发，这只是有限的阅读和修改门槛。
 
 ## 2. 首次下载后必做
 
-1. 选择明确版本，优先使用固定 Release 的源码 ZIP 和外部安装清单，并核对 SHA256。仓库内 `published:false` 是发行模板，不表示已经发布的外部清单不可用。
+1. 选择明确版本，优先使用固定 Release 的官方运行 ZIP 和外部安装清单，并核对 SHA256。旧 `-source.zip` 使用该资产对应的外部清单和校验值，仍可安装。仓库内 `published:false` 是发行模板，不表示已经发布的外部清单不可用。
 2. 解压到独立目录，先阅读 INSTALL_AGENT.md；让环境检查确认真实解释器、切片器 CLI 和资源目录。
 3. 安装 npm 锁定依赖，运行 doctor，启动本机工作台。保留终端错误与 doctor 输出供排查。
 4. 导入仓库示例或一个单盘工程，确认真实切片完成、多色与时间线正常。再检查一次关闭、重启和项目恢复。
@@ -30,7 +30,7 @@
 
 扫码时学员入口仍保留。未付款可以返回套餐选择，切换一年（YEAR）或永久（LIFETIME）；原二维码在有效期内仍可付款，不要两笔都支付。原订单凭证保存在本机用户数据目录，升级时保留；付款结果未知时先查询原订单。
 
-已安装依赖时，在源码目录用 PowerShell：
+已安装依赖时，在解压的运行包或源码目录用 PowerShell：
 
 ```powershell
 npm.cmd ci
@@ -87,6 +87,6 @@ $env:PHOTO_CALIBRATION_PYTHON = "$PWD\.venv\Scripts\python.exe"
 
 本分支分别处理 Blender 4.x 的场景合成器和 5.x 的合成器节点组、输出节点、alpha 转换、数学/混色节点与照片缩放接口。保留原几何、材质区域与完整帧数检查。
 
-PR 作者报告已完成 Windows / Blender 5.2.2 / RTX 5060 OptiX 三帧小立方体检查。已发布 beta.2 在 macOS 完成软件 888 项自动测试（870 通过、18 跳过、0 失败），14 个拓竹机型 × 4 种喷嘴共 56 项真实切片与路径解析继续作为历史兼容性记录；未重新执行 Windows 实机或逐台实体打印。beta.3 的无水印实时预览、背景信息行精简与镜头设置迁移仍待新验收，复杂模型长视频和最终视觉效果仍应由对应设备验收。驱动和 GPU 偏好不由本项目全局修改。
+PR 作者报告已完成 Windows / Blender 5.2.2 / RTX 5060 OptiX 三帧小立方体检查。beta.3 在 macOS 已记录软件 892 项自动测试（874 通过、18 跳过、0 失败），14 个拓竹机型 × 4 种喷嘴共 56 项真实切片与路径解析继续作为历史兼容性记录；未重新执行 Windows 实机或逐台实体打印。beta.4 运行包已完成 897 项自动测试（879 通过、18 环境检查跳过、0 失败）及 macOS 独立目录安装、doctor 和启动验证，复杂模型长视频和最终视觉效果仍应由对应设备验收。驱动和 GPU 偏好不由本项目全局修改。
 
 参考：[Blender 5.0 合成器迁移](https://developer.blender.org/docs/release_notes/5.0/migration/compositor_migration/) · [Cycles 设备](https://developer.blender.org/docs/features/cycles/devices/)。

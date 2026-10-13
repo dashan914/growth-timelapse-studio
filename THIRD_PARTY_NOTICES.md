@@ -12,6 +12,10 @@
 
 依赖版本锁定在 `package-lock.json`，使用 `npm ci` 安装。
 
+## 仅发行构建使用的依赖
+
+`javascript-obfuscator` 固定为 5.9.0，来源为 [官方项目](https://github.com/javascript-obfuscator/javascript-obfuscator)，采用 BSD-2-Clause。仅在维护者构建官方运行包时执行，不安装到用户运行版，不调用在线混淆服务。许可原文保留在 `vendor/licenses/javascript-obfuscator.LICENSE.txt`。原创代码与第三方组件原许可不因轻量处理改变。
+
 ## 仅测试使用的依赖
 
 `vendor/test-dom/worker.mjs` 来自 [LinkeDOM](https://github.com/WebReflection/linkedom/tree/3fcf145cd95ac9a2f0a1b7db62dbf7c5737b410e)，commit `3fcf145cd95ac9a2f0a1b7db62dbf7c5737b410e`。采用 ISC 许可，© 2021 Andrea Giammarchi, @WebReflection，用于 Node 测试中的 DOMParser。原许可见 `vendor/test-dom/LICENSE`，URL 与 SHA256 见同目录 `manifest.json`。
