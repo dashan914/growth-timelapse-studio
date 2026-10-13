@@ -1,0 +1,45 @@
+name: Publish verified source release
+on:
+  push:
+    tags:
+      - 'v1.2.0-beta.1'
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check fixed release version
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          const pkg = JSON.parse(fs.readFileSync('package.json'));
+          const manifest = JSON.parse(fs.readFileSync('install-manifest.json'));
+          if (process.env.GITHUB_REF_NAME !== `v${pkg.version}` || manifest.release.version !== pkg.version || manifest.release.tag !== process.env.GITHUB_REF_NAME || manifest.release.published) throw new Error('Release version mismatch');
+          JS
+      - name: Build source archive and external checksum manifest
+        run: |
+          python3 scripts/package-release.py --output release
+          node scripts/finalize-install-manifest.mjs --archive release/growth-timelapse-studio-1.2.0-beta.1-source.zip --repository dashan914/growth-timelapse-studio
+          cp INSTALL_AGENT.md release/INSTALL_AGENT.md
+          cd release
+          sha256sum -c SHA256SUMS.txt
+      - name: Publish complete prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cat > release-notes.md <<'NOTES'
+          免费用户可以导出带动态“山地造物 · 免费版”水印的 MP4；无水印与图片、透明视频/序列导出需要授权。
+
+          软件内支持支付宝、微信扫码购买：19.90 元 / 365 天，39.90 元永久。购买授权绑定一台设备，首次激活后可离线；换机先解绑。学员保留原星光兑换规则。
+
+          整合 PR #1 的 Windows 与 Blender/NVIDIA 兼容修复，并验证拓竹 14 型号 × 4 喷嘴 = 56 个切片组合。软件自动测试 869 项：851 通过、18 环境检查跳过、0 失败；Windows 完整流程仍需实机验证。
+
+          请阅读 INSTALL_AGENT.md，使用固定版本源码 ZIP 与外部 install-manifest.json，核对 SHA256 后安装。升级保留旧授权与作品。
+          NOTES
+          gh release create "$GITHUB_REF_NAME" release/growth-timelapse-studio-1.2.0-beta.1-source.zip release/SHA256SUMS.txt release/install-manifest.json release/INSTALL_AGENT.md --verify-tag --draft --prerelease --title '打印延时一键生成 1.2.0-beta.1' --notes-file release-notes.md
+          gh release edit "$GITHUB_REF_NAME" --draft=false

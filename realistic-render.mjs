@@ -1,3 +1,4 @@
+import { freeWatermarkArguments } from './free-watermark.mjs';
 import { constants, createWriteStream } from 'node:fs';
 import { access, chmod, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
@@ -414,7 +415,7 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
     }, Math.max(25, Math.min(1000, stallTimeoutMs / 4))); stalled.unref();
     try {
       if (job.format === 'mp4' || job.format === 'mov-alpha') {
-        job.encoderProcess = childProcess(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(job.config.output.fps), '-i', 'pipe:0', '-frames:v', String(job.config.output.frames), '-an', ...(job.format === 'mov-alpha' ? movAlphaEncoderArguments() : ['-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-f', 'mp4']), job.partialPath], job, 'encoder');
+        job.encoderProcess = childProcess(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(job.config.output.fps), '-i', 'pipe:0', ...(job.watermarked ? freeWatermarkArguments(job.config.output.width, job.config.output.height) : []), '-frames:v', String(job.config.output.frames), '-an', ...(job.format === 'mov-alpha' ? movAlphaEncoderArguments() : ['-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-f', 'mp4']), job.partialPath], job, 'encoder');
         job.encoderProcess.completion.then(result => { if (!TERMINAL.has(job.status) && (result.code !== 0 || result.signal || job.encoded < job.config.output.frames)) abort(job, 'ENCODER_FAILED', 'FFmpeg 编码失败，未保存不完整视频。'); });
       } else if (job.format === 'png-sequence') startArchive(job);
       const userConfig = path.join(job.directory, 'user-config'), userScripts = path.join(job.directory, 'user-scripts'), userData = path.join(job.directory, 'user-data');
@@ -508,7 +509,7 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
       for (const [name, bytes] of Object.entries(files)) if (name !== 'config.json') await writeFile(path.join(directory, name), bytes, { flag: 'wx', mode: 0o600 });
       await writeFile(path.join(directory, 'config.json'), JSON.stringify(config), { flag: 'wx', mode: 0o600 });
       if (closed) throw new RealisticRenderError(503, 'REALISTIC_SERVICE_CLOSED', '写实渲染服务正在关闭。');
-      const job = { id, config, geometry, printGeometry, format, directory, filename, partialPath: path.join(directory, `result.partial.${suffix}`), finalPath: path.join(format === 'preview' ? tempRoot : outputRoot, filename), status: 'queued', reported: 0, encoded: 0, sequenceBytes: 0, logs: '', createdAt: new Date().toISOString() };
+      const job = { id, config, geometry, printGeometry, format, watermarked: options.watermarked === true, directory, filename, partialPath: path.join(directory, `result.partial.${suffix}`), finalPath: path.join(format === 'preview' ? tempRoot : outputRoot, filename), status: 'queued', reported: 0, encoded: 0, sequenceBytes: 0, logs: '', createdAt: new Date().toISOString() };
       jobs.set(id, job); queue.push(job); dispatch(); return publicJob(job);
     } catch (error) {
       if (directory) await rm(directory, { recursive: true, force: true }).catch(() => {});

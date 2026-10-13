@@ -13,8 +13,8 @@ FILES = (
     'server.mjs', 'runtime-paths.mjs', 'bambu-engine.mjs', 'slicer-engine.mjs',
     'slice-jobs.mjs', 'support-jobs.mjs', 'realistic-render.mjs',
     'photo-calibration.mjs', 'export-codecs.mjs',
-    'beta-activation.mjs', 'beta-config.json', 'INSTALL_AGENT.md', 'install-manifest.json', 'start.cmd',
-    'assets/shandi-logo.svg',
+    'beta-activation.mjs', 'software-purchase.mjs', 'free-watermark.mjs', 'beta-config.json', 'INSTALL_AGENT.md', 'install-manifest.json', 'start.cmd',
+    'assets/shandi-logo.svg', 'assets/free-watermark.png',
 )
 DIRECTORIES = ('src', 'scripts', 'tests', 'docs', 'examples', 'vendor')
 BACKGROUNDS = ('h2c.jpg', 'p1s.jpg', 'a1.jpg', 'pastel-rug.png', 'blue-grey.png', 'teal-room.png')

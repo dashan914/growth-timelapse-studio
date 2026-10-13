@@ -14,6 +14,8 @@ import { createSliceService, validateSliceOptions } from './slice-jobs.mjs';
 import { movAlphaEncoderArguments, probeMovAlphaEncoder } from './export-codecs.mjs';
 import { findFFmpegPath, findPythonPath } from './runtime-paths.mjs';
 import { createBetaActivationService, APP_VERSION } from './beta-activation.mjs';
+import { freeWatermarkArguments } from './free-watermark.mjs';
+import { createSoftwarePurchaseService } from './software-purchase.mjs';
 
 const execFileAsync = promisify(execFile);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -73,7 +75,8 @@ function validateExport(options) {
   }
   if (!Number.isInteger(fps) || fps < 1 || fps > 60) throw new ApiError(400, 'INVALID_FPS', '帧率须为 1–60 之间的整数。');
   if (!Number.isInteger(frames) || frames < 1 || frames > 72000) throw new ApiError(400, 'INVALID_FRAMES', '总帧数须为 1–72000 之间的整数。');
-  return { width, height, fps, frames, format, name: safeName(options.name) };
+  if (options.exportMode !== undefined && !['watermarked', 'unlocked'].includes(options.exportMode)) throw new ApiError(400, 'INVALID_EXPORT_MODE', '请选择免费水印导出或无水印导出。');
+  return { width, height, fps, frames, format, exportMode: options.exportMode, name: safeName(options.name) };
 }
 
 async function readBody(request, maximum) {
@@ -242,12 +245,14 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
   supportJobTimeoutMs = 15 * 60 * 1000, supportMaximumUploadBytes = 128 * 1024 * 1024,
   photoCalibrationService = { detect: detectPhotoUprights, capability: photoCalibrationCapability },
   realisticRenderService, sliceService, blenderPath = process.env.BLENDER_PATH, alphaEncoderProbe = probeMovAlphaEncoder,
-  betaService = createBetaActivationService(), exportDirectory = process.env.GROWTH_EXPORT_DIR } = {}) {
+  betaService = createBetaActivationService(), paymentService, exportDirectory = process.env.GROWTH_EXPORT_DIR } = {}) {
+  const payments = paymentService || createSoftwarePurchaseService({ betaService });
   const supports = createSupportManager({ root, slicerPath: supportsSlicerPath, pythonPath: supportsPythonPath,
     timeoutMs: supportJobTimeoutMs, maximumUploadBytes: supportMaximumUploadBytes, spawnImpl: supportSpawnImpl });
   const realistic = realisticRenderService || createRealisticRenderService({ root, ffmpegPath, alphaEncoderProbe, ...(exportDirectory ? { exportDirectory } : {}), ...(blenderPath ? { blenderPath } : {}) });
   const slices = sliceService || createSliceService({ root, pythonPath: supportsPythonPath });
   const jobs = new Map();
+  const freeRealisticJobs = new Set();
   const outputDirectory = exportDirectory ? path.resolve(exportDirectory) : path.join(root, 'exports');
   let activeJob = null;
   let ffmpegInfoPromise;
@@ -302,6 +307,9 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
 
   async function createExport(request, response) {
     const options = validateExport(await readJson(request));
+    const watermarked = options.exportMode === 'watermarked';
+    if (watermarked && options.format !== 'mp4') throw new ApiError(403, 'FREE_EXPORT_FORMAT', '免费导出支持带动态水印的 MP4 视频；透明导出请先解锁。');
+    if (!watermarked) await betaService.requireActivation();
     if (activeJob) throw new ApiError(409, 'EXPORT_BUSY', '已有视频正在导出，请完成或取消后再试。');
     if (options.format !== 'png-sequence' && !(await ffmpegInfo()).available) throw new ApiError(503, 'FFMPEG_UNAVAILABLE', '未找到 FFmpeg。请安装 FFmpeg、设置 FFMPEG_PATH，或导出 PNG 序列。');
     if (options.format === 'mov-alpha' && !(await ffmpegInfo()).alphaAvailable) throw new ApiError(503, 'ALPHA_ENCODER_UNAVAILABLE', '本机 FFmpeg 不支持透明 ProRes MOV，请安装支持 prores_ks 的 FFmpeg 或导出透明 PNG 序列。');
@@ -314,7 +322,7 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
     const partialPath = path.join(outputDirectory, `${id}.partial.${extension}`);
     const job = {
       id, options, filename, partialPath, finalPath: path.join(outputDirectory, filename),
-      status: 'encoding', received: 0, busy: false, touchedAt: Date.now(), stderr: '', failure: null,
+      status: 'encoding', watermarked, received: 0, busy: false, touchedAt: Date.now(), stderr: '', failure: null,
     };
     // Reserve the slot before directory creation so concurrent requests cannot both start.
     activeJob = job;
@@ -328,12 +336,13 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
         startEncoder(job, ffmpegPath, [
           '-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-f', 'image2pipe',
           '-vcodec', 'png', '-framerate', String(options.fps), '-i', 'pipe:0',
+          ...(watermarked ? freeWatermarkArguments(options.width, options.height) : []),
           '-frames:v', String(options.frames), '-an',
           ...(options.format === 'mov-alpha' ? movAlphaEncoderArguments() : ['-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-f', 'mp4']), partialPath,
         ]);
       }
       jobs.set(id, job);
-      json(response, 201, { id });
+      json(response, 201, { id, watermarked });
     } catch (error) {
       if (activeJob === job) activeJob = null;
       throw error;
@@ -545,6 +554,13 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
         return;
       }
       if (url.pathname === '/api/beta/status' && request.method === 'GET') { json(response, 200, await betaService.status()); return; }
+      if (url.pathname === '/api/beta/payment/product' && request.method === 'GET') { json(response, 200, await payments.products()); return; }
+      if (url.pathname === '/api/beta/payment/order' && request.method === 'POST') {
+        const body = await readJson(request);
+        json(response, 201, await payments.create(body.plan, body.payMethod)); return;
+      }
+      if (url.pathname === '/api/beta/payment/order' && request.method === 'GET') { json(response, 200, await payments.status()); return; }
+      if (url.pathname === '/api/beta/payment/unbind' && request.method === 'POST') { request.resume(); json(response, 200, await payments.unbind()); return; }
       if (url.pathname === '/api/beta/activate' && request.method === 'POST') {
         const contentType = (request.headers['content-type'] || '').split(';', 1)[0].trim();
         if (contentType !== 'application/json') { request.resume(); throw new ApiError(415, 'INVALID_CONTENT_TYPE', '请使用兑换码输入框解锁导出。'); }
@@ -559,8 +575,13 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
       const exportRoute = /^\/api\/(?:exports|realistic-exports)(?:\/|$)/.test(url.pathname);
       const cancelExport = request.method === 'DELETE' && /^\/api\/(?:exports|realistic-exports)\/[0-9a-f-]{36}$/.test(url.pathname);
       if (exportRoute && !cancelExport) {
-        try { await betaService.requireActivation(); }
-        catch (error) { request.resume(); throw error; }
+        const creation = request.method === 'POST' && ['/api/exports', '/api/realistic-exports'].includes(url.pathname);
+        const id = /^\/api\/(?:exports|realistic-exports)\/([0-9a-f-]{36})/.exec(url.pathname)?.[1];
+        const free = id && (jobs.get(id)?.watermarked || freeRealisticJobs.has(id));
+        if (!creation && !free) {
+          try { await betaService.requireActivation(); }
+          catch (error) { request.resume(); throw error; }
+        }
       }
       if (url.pathname === '/api/calibration/uprights' && request.method === 'POST') {
         const body = await readBody(request, PHOTO_CALIBRATION_MAX_BYTES);
@@ -595,9 +616,14 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
         const contentType = (request.headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
         if (!['application/zip', 'application/octet-stream'].includes(contentType)) { request.resume(); throw new ApiError(415, 'INVALID_CONTENT_TYPE', '写实渲染需要完整场景包。'); }
         const preview = url.pathname === '/api/realistic-previews', format = preview ? 'preview' : url.searchParams.get('format') || 'mp4';
+        const watermarked = !preview && url.searchParams.get('exportMode') === 'watermarked';
+        if (watermarked && format !== 'mp4') { request.resume(); throw new ApiError(403, 'FREE_EXPORT_FORMAT', '免费导出仅支持动态水印 MP4。'); }
+        if (!preview && !watermarked) await betaService.requireActivation();
         if (!preview && !['mp4', 'mov-alpha', 'png-sequence'].includes(format)) { request.resume(); throw new ApiError(400, 'INVALID_FORMAT', '写实导出格式须为 mp4、mov-alpha 或 png-sequence。'); }
         const body = await readBody(request, REALISTIC_RENDER_LIMITS.maxUploadBytes);
-        json(response, 201, await realistic.create(body, { name: url.searchParams.get('name') || undefined, format }));
+        const created = await realistic.create(body, { name: url.searchParams.get('name') || undefined, format, watermarked });
+        if (watermarked) freeRealisticJobs.add(created.id);
+        json(response, 201, { ...created, watermarked });
         return;
       }
       const realisticMatch = /^\/api\/realistic-(exports|previews)\/([0-9a-f-]{36})(?:\/(file))?$/.exec(url.pathname);

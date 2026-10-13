@@ -24,8 +24,8 @@ const identity = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
 // G387 has conditional clamped travel, not the commanded G1 endpoint.
 const MACHINE_G_CODES = new Map([
   ...['29.1','29.2','29.20','29.7','29.9','29.99','392'].map(code => [code, '']),
-  ...['28.14','28.140','39.1','150','150.1','150.2','150.3','151','383','383.3','383.7'].map(code => [code, 'XYZ']),
-  ...['380','3811','387'].map(code => [code, 'specified']),
+  ...['28.14','28.140','29.4','39','39.1','39.3','39.4','150','150.1','150.2','150.3','151','383','383.3','383.4','383.7','390.7'].map(code => [code, 'XYZ']),
+  ...['380','3811','387','2814'].map(code => [code, 'specified']),
 ]);
 const SERVICE_TOOLS = new Set([255, 1000, 1001, 1100, 65279, 65535]);
 
@@ -133,6 +133,7 @@ export function parsePrintLayerGCode(text, {
   let featureLabel = '';
   let allExtrusionMoves = 0, sampledArcMoves = 0, unknownExtrusionMoves = 0, inferredWidthSegments = 0, inferredHeightSegments = 0;
   let point = [0, 0, 0], offset = [0, 0, 0], e = 0, unit = 1, absolute = true, absoluteE = true, centerAbsolute = false;
+  let extrusionPositionKnown = true;
   const positionKnown = [true, true, true];
   let motion = null, tool = 0, feature = PRINT_FEATURE.unknown, width = defaultWidthMm, height = defaultHeightMm;
   let widthExplicit = false, heightExplicit = false, plane = 17, stroke = 0, connected = false;
@@ -164,6 +165,15 @@ export function parsePrintLayerGCode(text, {
     if (command?.letter === 'M') { if (command.value === 82) absoluteE = true; if (command.value === 83) absoluteE = false; return; }
     if (command?.letter === 'G') {
       const code = command.code ?? String(command.value);
+      // Bambu P2S's startup nozzle-load-line macro has firmware-defined
+      // extrusion and motion. It is not a model bead. Its final XYZ/E state
+      // must not be guessed or inherited by subsequent model deposition.
+      if (code === '130' && !includeAuxiliary && count === 0
+          && [PRINT_FEATURE.unknown, PRINT_FEATURE.custom].includes(feature)) {
+        positionKnown.fill(false);
+        extrusionPositionKnown = false;
+        connected = false; motion = null; return;
+      }
       if (MACHINE_G_CODES.has(code)) {
         if (values.E !== undefined) throw new Error(`不支持的 G${code} 运动，无法完整还原真实切片；不会静默遗漏墙线或填充。`);
         const unknownAxes = MACHINE_G_CODES.get(code);
@@ -192,7 +202,7 @@ export function parsePrintLayerGCode(text, {
             if (!positionKnown[axis]) throw new Error('机器动作后的位置未知，无法可靠还原 G92 坐标偏移。');
             offset[axis] = point[axis] - values['XYZ'[axis]] * unit;
           }
-          if (values.E !== undefined) e = values.E * unit;
+          if (values.E !== undefined) { e = values.E * unit; extrusionPositionKnown = true; }
           return;
         case 0: case 1: case 2: case 3: motion = command.value; break;
         default:
@@ -218,6 +228,9 @@ export function parsePrintLayerGCode(text, {
       }
     }
     const previousE = e;
+    if (values.E !== undefined && absoluteE && !extrusionPositionKnown) {
+      throw new Error('启动预挤出后缺少明确的 G92 E 挤出坐标重置，无法可靠还原绝对挤出路径。');
+    }
     if (values.E !== undefined) e = absoluteE ? values.E * unit : e + values.E * unit;
     const arc = motion === 2 || motion === 3;
     const xyMoved = Math.hypot(point[0] - start[0], point[1] - start[1]) > 1e-9 || (arc && (values.I !== undefined || values.J !== undefined));
@@ -289,6 +302,15 @@ export function parsePrintLayerGCode(text, {
     }
     line = line.split('*')[0].replace(/\([^)]*\)/g, '').toUpperCase();
     if (!line.trim()) continue;
+    // A2L's official startup macro uses M/G as numeric parameters. They are
+    // not independent M6/G6 commands (and must never become spline paths).
+    const macro = line.match(/^\s*(?:N\d+\s*)?G390\.7(?=\s|[A-Z]|$)/);
+    if (macro) {
+      const values = Object.create(null);
+      for (const word of line.slice(macro[0].length).matchAll(wordPattern)) values[word[1]] = Number(word[2]);
+      execute({ letter: 'G', value: 390.7, code: '390.7' }, values);
+      continue;
+    }
     // In Bambu's SYNC command T is waiting time, not a filament selector.
     // Its parameters must not be reparsed as T or inherited axis movements.
     if (/^\s*(?:N\d+\s*)?SYNC(?:\s|$)/.test(line)) continue;

@@ -1299,7 +1299,7 @@ async function exportRealisticVideo(config) {
     const packageResult=await studio.createRenderPackage({output:{width,height,fps:config.fps,...plan,samples:64},backgroundFile,bedWidthMm:Number($('bed-width').value),bedDepthMm:Number($('bed-depth').value),cameraMode:'fixed'});
     if(cancelled)throw new DOMException('Aborted','AbortError');
     $('export-detail').textContent='正在提交完整写实任务…';
-    const parameters=new URLSearchParams({name:studio.metadata.name.replace(/\.[^.]+$/,'')+'-写实生长',format:config.format});
+    const parameters=new URLSearchParams({name:studio.metadata.name.replace(/\.[^.]+$/,'')+'-写实生长',format:config.format,exportMode:config.watermarked?'watermarked':'unlocked'});
     // Keep POST un-aborted so a cancellation can always receive and clean its ID.
     const job=await api(`/api/realistic-exports?${parameters}`,{method:'POST',headers:{'Content-Type':'application/zip'},body:packageResult.blob});
     exportId=job.id;
@@ -1333,13 +1333,14 @@ async function exportVideo() {
   if (exporting || exportAuthorizing || snapshotting || loading || alignBusy || !studio?.hasModel()) return;
   exportAuthorizing=true;
   try {
-    if(!await ensureExportUnlocked())return;
+    const exportPermission=await ensureExportUnlocked({allowWatermarked:settings().format==='mp4'});
+    if(!exportPermission)return;
     if (exporting || snapshotting || loading || alignBusy || !studio?.hasModel()) return;
     if(calibrationMode||cropEditing){say('先点击画面下方的“完成”，再导出视频。');return;}
     if(!await ensureModelSlice())return;
     setModelMode(null);
     studio.endPreviewInteraction?.();previewPlaybackActive=false;
-    const config = settings();
+    const config = {...settings(),watermarked:exportPermission==='watermarked'};
     if (outputFormat(config.format).video && !ffmpegAvailable) {
       say('本机缺少视频编码器。可在“导出格式”选择透明 PNG 序列，或按使用说明安装 FFmpeg。',true); return;
     }
@@ -1364,7 +1365,7 @@ async function exportVideo() {
       if(config.appearance==='photo'&&outputFormat(config.format).transparent)throw new Error('实拍外观包含完整背景，请选择 MP4 格式。');
       const photo=config.appearance==='photo'?await preparePhotoFrames(width,height):null;
       // Keep creation uncancelled so its ID is always known and a cancelled job is cleaned up.
-      const job = await api('/api/exports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({width,height,fps:config.fps,frames,format:config.format,name:studio.metadata.name.replace(/\.[^.]+$/,'')+'-生长延时'})});
+      const job = await api('/api/exports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({width,height,fps:config.fps,frames,format:config.format,exportMode:config.watermarked?'watermarked':'unlocked',name:studio.metadata.name.replace(/\.[^.]+$/,'')+'-生长延时'})});
       exportId = job.id;
       if (cancelled) throw new DOMException('Aborted','AbortError');
       if (config.format === 'mp4' && backgroundFile && studio.backgroundMetadata?.type === 'video' && $('background-audio').checked) {

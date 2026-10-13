@@ -64,6 +64,42 @@ test('Bambu Z-trim and ABL setup preserve actual path coordinates, extrusion, di
   assert.ok(candidate.strokes[1] > candidate.strokes[0], 'machine calibration interrupts a connected stroke');
 });
 
+test('P2S G130 startup purge preserves model geometry after XYZ and extrusion resynchronization', () => {
+  const startup = 'G90\nM83\nG0 X100 Y0\nG130 O0 X100 Y-0.2 Z0.6 F300 L40 E12 D4\nG90\nM83\nG1 Z1\nG29.99\n';
+  const original = parsePrintLayerGCode(fixture);
+  const result = parsePrintLayerGCode(startup + fixture.replace('M82\n', 'M82\nG92 E0\n'));
+  for (const name of ['positions', 'tools', 'features', 'widths', 'heights', 'layerHeights']) {
+    assert.deepEqual(result[name], original[name], name);
+  }
+  assert.equal(result.segmentCount, original.segmentCount);
+  assert.equal(result.exactLinearPaths, true);
+  const relative = startup + 'G1 X0 Y0 Z0.2\n;TYPE:Outer wall\nG1 X10 Y0 E1\n';
+  assert.equal(parsePrintLayerGCode(relative).segmentCount, 1);
+});
+
+test('G130 cannot hide model or auxiliary geometry or invent subsequent coordinates', () => {
+  const purge = 'G130 O0 X100 Y-0.2 Z0.6 F300 L40 E12 D4\n';
+  assert.throws(() => parsePrintLayerGCode(fixture + purge), /不支持的/);
+  assert.throws(() => parsePrintLayerGCode(';TYPE:Outer wall\n' + purge), /不支持的/);
+  assert.throws(() => parsePrintLayerGCode(purge + fixture, { includeAuxiliary: true }), /不支持的/);
+  assert.throws(() => parsePrintLayerGCode(purge + fixture), /G92 E/);
+  assert.throws(() => parsePrintLayerGCode(purge + 'M83\nG1 X0 Y0\n;TYPE:Outer wall\nG1 X10 Y0 E1\n'), /缺少明确的绝对定位/);
+  assert.throws(() => parsePrintLayerGCode('G130.1 X100 E12\n' + fixture), /不支持的/);
+});
+
+test('A1, A1 mini, A2L and X2D machine macros retain model paths after explicit positioning', () => {
+  const original = parsePrintLayerGCode(fixture);
+  for (const macro of ['G2814 Z0.32', 'G29.4', 'G39 S1 X187 Y178', 'G39.3 S1', 'G39.4', 'G383.4', 'G390.7 M6 G6 C3']) {
+    const result = parsePrintLayerGCode(macro + '\n' + fixture);
+    assert.deepEqual(result.positions, original.positions, macro);
+    assert.deepEqual(result.tools, original.tools, macro);
+    assert.equal(result.exactLinearPaths, true, macro);
+    assert.throws(() => parsePrintLayerGCode(fixture + macro + ' E7\n'), /不支持的/);
+  }
+  assert.throws(() => parsePrintLayerGCode(fixture + 'G6 X1 Y1 E7\n'), /不支持的/);
+  assert.throws(() => parsePrintLayerGCode(fixture + 'G390.7 M6 G6 C3\nG1 X1 Y1 E7\n'), /缺少明确的绝对定位/);
+});
+
 test('machine calibration parameters cannot become modal extrusion or permit unknown G29 variants', () => {
   for (const command of ['G29.1 Z-0.04 E7','G29.2 S1 E7','G29.3 Z0','G29.3 S1','G29.3 X5 Y5 E7','G29.10 Z0','G383.70 J0']) {
     assert.throws(() => parsePrintLayerGCode(fixture + command + '\n'), /不支持的/);

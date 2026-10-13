@@ -3,10 +3,19 @@
 <dialog class="beta-gate" id="beta-gate" aria-labelledby="beta-title" aria-describedby="beta-intro" aria-modal="true">
   <div class="beta-card">
     <div class="beta-top"><h2 id="beta-title">解锁全部导出</h2><button id="beta-close" class="icon-button beta-close" type="button" aria-label="关闭导出解锁窗口"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div>
-    <p id="beta-intro" class="beta-intro">导入、编辑和预览免费。兑换码解锁保存预览图片、视频和透明序列导出。</p>
-    <form id="beta-form"><label for="beta-code">兑换码</label><input id="beta-code" name="code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="80" aria-describedby="beta-message"/><p id="beta-message" class="beta-message" role="status" aria-live="polite" aria-atomic="true">首次解锁需联网，成功后有效期内可离线导出。</p><button id="beta-activate" class="button primary" type="submit">解锁全部导出</button></form>
-    <div class="beta-secondary"><button id="beta-retry" class="button" type="button">重新检查权限</button><button id="beta-dismiss" class="button" type="button">继续免费使用</button></div>
-    <a id="beta-redeem" class="beta-redeem" href="https://ai3dclass.cn/points" target="_blank" rel="noopener noreferrer">前往山地造物兑换导出码</a>
+    <p id="beta-intro" class="beta-intro">导入、编辑和预览免费。MP4 可免费导出动态水印视频；兑换码解锁无水印视频、预览图片和透明序列。</p>
+    <div class="beta-acquire"><div id="beta-acquire-options">
+      <a id="beta-student" class="beta-student" href="https://ai3dclass.cn/points" target="_blank" rel="noopener noreferrer">山地造物学员<span>跳转课程页面免费兑换</span></a>
+      <fieldset class="beta-payment-method" id="beta-pay-method"><legend>支付方式</legend><label><input id="beta-pay-alipay" type="radio" name="beta-payment-method" value="alipay" checked/>支付宝</label><label><input id="beta-pay-wx" type="radio" name="beta-payment-method" value="wx"/>微信支付</label></fieldset>
+      <div class="beta-plans"><button id="beta-buy-year" class="beta-plan" type="button"><span>一年授权</span><strong>¥19.90</strong><small>有效期一年 · 绑定一台设备</small></button><button id="beta-buy-lifetime" class="beta-plan" type="button"><span>永久授权</span><strong>¥39.90</strong><small>永久解锁 · 绑定一台设备</small></button></div>
+      <p class="beta-purchase-note">扫码支付成功后自动解锁，可离线导出；换机前先解除旧设备绑定。</p>
+      </div><section id="beta-checkout" class="beta-checkout" hidden aria-live="polite"><p id="beta-order-title"></p><img id="beta-order-qr" alt="当前订单支付二维码"/><p id="beta-order-state"></p><button id="beta-payment-refresh" class="button" type="button">查询支付结果</button><div id="beta-paid-receipt" hidden><label for="beta-paid-code">购买兑换码（请保留，换机时使用）</label><input id="beta-paid-code" readonly/><button id="beta-copy-code" class="button" type="button">复制兑换码</button></div><button id="beta-unbind" class="button" type="button" hidden>解除当前设备绑定</button></section>
+    </div>
+    <details id="beta-code-entry" class="beta-code-entry"><summary>已有兑换码 · 直接激活</summary>
+    <form id="beta-form"><label for="beta-code">兑换码</label><input id="beta-code" name="code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="80" aria-describedby="beta-message"/><p id="beta-message" class="beta-message" role="status" aria-live="polite" aria-atomic="true">首次解锁需联网，成功后有效期内可离线导出。</p><button id="beta-activate" class="button primary" type="submit">解锁全部导出</button></form></details>
+    <button id="beta-free-export" class="button beta-free-export" type="button" hidden>免费导出 · 带动态水印</button>
+    <div class="beta-secondary"><button id="beta-retry" class="button" type="button" hidden>重新检查权限</button><button id="beta-dismiss" class="button" type="button">继续免费使用</button></div>
+    <a id="beta-redeem" class="beta-redeem" href="https://ai3dclass.cn/points" target="_blank" rel="noopener noreferrer">前往山地造物查看兑换记录</a>
   </div>
 </dialog>
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -27,7 +36,7 @@
 
 <header class="app-header">
 <a class="brand" href="/" aria-label="打印延时一键生成"><svg><use href="#i-cube"/></svg><strong>打印延时一键生成</strong><span>by 张大山l</span></a><span id="project-title" class="project-title">未命名项目</span>
-<div class="header-actions"><button class="button export-unlock-button" id="export-unlock-button" type="button" data-export-state="locked" aria-haspopup="dialog" title="导入、编辑和预览免费；兑换码解锁全部导出。"><svg aria-hidden="true"><use href="#i-lock"/></svg><span id="export-unlock-label">导出解锁</span></button><button class="icon-button" id="help-button" aria-label="使用指南" title="使用指南"><svg><use href="#i-help"/></svg></button><button class="button primary" id="export-button"><svg><use href="#i-download"/></svg>导出视频</button></div></header>
+<div class="header-actions"><button class="button export-unlock-button" id="export-unlock-button" type="button" data-export-state="locked" aria-haspopup="dialog" title="免费可导出水印视频；兑换码解锁无水印图片与视频。"><svg aria-hidden="true"><use href="#i-lock"/></svg><span id="export-unlock-label">导出解锁</span></button><button class="icon-button" id="help-button" aria-label="使用指南" title="使用指南"><svg><use href="#i-help"/></svg></button><button class="button primary" id="export-button"><svg><use href="#i-download"/></svg>导出视频</button></div></header>
 <main class="workspace">
 <aside class="left-panel panel">
 <div class="panel-heading">场景</div><button id="import-button" class="button file-import" aria-describedby="import-message"><svg><use href="#i-upload"/></svg>导入模型</button>
@@ -57,7 +66,7 @@
 </aside>
 <section class="center-panel" aria-label="模型预览">
 <div class="viewport-toolbar"><span>预览</span><div class="view-controls" id="view-controls"><div class="segmented" role="group" aria-label="观察方向"><button class="active" data-view="perspective" aria-pressed="true">透视</button><button data-view="front" aria-pressed="false">正面</button><button data-view="side" aria-pressed="false">侧面</button><button data-view="top" aria-pressed="false">俯视</button></div><button class="icon-button" id="snapshot-button" aria-label="保存当前预览" title="保存当前预览"><svg><use href="#i-camera"/></svg></button></div></div>
-<div class="viewport" id="viewport"><div id="stage"></div><img id="realistic-preview-layer" class="reference-layer realistic-preview-layer" hidden alt="当前模型的写实光影预览"/>
+<div class="viewport" id="viewport"><img class="free-watermark-preview" src="/assets/free-watermark.png" alt="" aria-hidden="true"/><div id="stage"></div><img id="realistic-preview-layer" class="reference-layer realistic-preview-layer" hidden alt="当前模型的写实光影预览"/>
 <svg id="crop-overlay" class="crop-overlay" hidden aria-label="自定义裁剪"><path id="crop-shade"/><rect id="crop-rectangle"/><g id="crop-handles"/></svg><canvas id="photo-growth-layer" class="reference-layer" hidden aria-label="实拍生长预览"></canvas><canvas id="reference-layer" class="reference-layer" hidden></canvas><svg id="calibration-overlay" class="calibration-overlay" hidden aria-label="打印底板四点校准"><polygon id="calibration-polygon"/><g id="calibration-grid"/><g id="calibration-points"/><g id="calibration-uprights"/></svg>
 <div class="viewport-topline"><span class="preview-tag" id="preview-mode" role="status">预览</span><div class="viewport-top-actions"><span id="frame-ratio" class="frame-ratio">16:9</span><button class="icon-button canvas-reset" id="reset-camera" aria-label="回正模型与视角" title="回正模型与视角 · Home"><svg><use href="#i-reset"/></svg></button></div></div>
 <div class="growth-badge"><span>生长</span><strong id="growth-percentage">100<span>%</span></strong></div><div class="viewport-bottom"><span id="gesture-hint">预览已锁定 · 选择下方工具开始调整</span><span class="axis-legend">Y ↑</span></div>

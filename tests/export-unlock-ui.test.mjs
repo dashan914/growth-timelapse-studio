@@ -66,11 +66,11 @@ test('each export checks fresh local status and accepts verified offline permiss
 
 test('repeated clicks share one pending permission check; closing cancels and restores focus', async () => {
   let calls = 0;
-  const f = fixture(async () => { calls++; return response(locked); });
+  const f = fixture(async url => { if (url === "/api/beta/status") calls++; return response(url === "/api/beta/payment/order" ? { order: null, ...locked } : locked); });
   const first = f.controller.ensureExportUnlocked(), second = f.controller.ensureExportUnlocked();
   assert.equal(first, second); await turn();
   assert.equal(calls, 1); assert.equal(f.get('beta-gate').open, true);
-  assert.equal(f.doc.activeElement, f.get('beta-code'));
+  assert.equal(f.doc.activeElement, f.get('beta-buy-year'));
   await f.get('beta-dismiss').dispatch('click');
   assert.equal(await first, false); assert.equal(await second, false);
   assert.equal(f.get('beta-gate').open, false);
@@ -198,7 +198,7 @@ test('markup keeps the initial workbench visible and the native dialog shares it
   assert.match(html, /<dialog class="beta-gate"/);
   assert.doesNotMatch(html, /<dialog class="beta-gate"[^>]*\sopen(?:\s|>)/);
   assert.match(html, /导入、编辑和预览免费/);
-  assert.match(html, /保存预览图片、视频和透明序列导出/);
+  assert.match(html, /兑换码解锁无水印视频、预览图片和透明序列/);
   assert.match(html, /aria-label="关闭导出解锁窗口"/);
   assert.doesNotMatch(html, /内测码|激活并打开/);
   assert.doesNotMatch(css, /body:not\(\[data-beta-state/);

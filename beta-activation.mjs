@@ -1,11 +1,11 @@
 import { createPublicKey, randomUUID, verify } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
 export const BETA_PRODUCT_ID = 'growth-timelapse-beta';
-export const APP_VERSION = '1.1.0-beta.1';
+export const APP_VERSION = '1.2.0-beta.1';
 const DEFAULT_CONFIG = JSON.parse(readFileSync(process.env.GROWTH_BETA_CONFIG || new URL('./beta-config.json', import.meta.url), 'utf8'));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -118,5 +118,11 @@ export function createBetaActivationService({ config = DEFAULT_CONFIG, dataDirec
     const current = await status();
     if (!current.activated) throw new BetaActivationError(current.reason, current.message, 403);
   }
-  return { status, activate, requireActivation };
+  async function clearActivation() {
+    await initialize();
+    await rm(licenseFile, { force: true });
+    license = null;
+    return status();
+  }
+  return { status, activate, requireActivation, clearActivation };
 }
