@@ -32,50 +32,10 @@
 @media (max-width: 480px) { .beta-card { padding: 22px 20px; } .beta-card input { font-size: 16px; } }
 @media (prefers-reduced-motion: reduce) { .beta-card .button { transition: none; } }
 
-.beta-acquire{margin:18px 0}.beta-student{display:block;padding:12px 14px;border:1px solid var(--border);border-radius:7px;color:var(--text);text-decoration:none;font-size:14px}.beta-student span{display:block;margin-top:5px;color:var(--muted);font-size:12px}.beta-payment-method{display:flex;align-items:center;justify-content:space-between;margin:15px 0 10px;gap:12px;font-size:13px}.beta-payment-method select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:8px;min-height:44px}.beta-plans{display:grid;grid-template-columns:1fr 1fr;gap:10px}.beta-plan{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:14px 8px;cursor:pointer}.beta-plan:hover{border-color:var(--accent)}.beta-plan:disabled{opacity:.5;cursor:wait}.beta-plan span,.beta-plan strong,.beta-plan small{display:block}.beta-plan span{font-size:14px}.beta-plan strong{font-size:25px;font-weight:600;margin:7px 0}.beta-plan small{font-size:12px;color:var(--muted)}.beta-purchase-note{font-size:12px;color:var(--muted);line-height:1.7;margin:10px 0}.beta-form-divider{border-top:1px solid var(--border);padding-top:16px;font-size:13px}.beta-free-export{margin-top:12px;background:var(--bg)}.beta-checkout{text-align:center;padding:14px;border:1px solid var(--border);border-radius:7px}.beta-checkout img{width:200px;max-width:100%;height:auto;background:white;border-radius:6px}.beta-checkout p{font-size:13px;line-height:1.7}.beta-checkout .button{margin-top:8px}.free-watermark-preview{--free-watermark-x:34.19%;--free-watermark-y:60.07%;position:absolute;z-index:2;left:var(--free-watermark-x);top:var(--free-watermark-y);width:min(16%,170px);transform:translate(calc(0% - var(--free-watermark-x)),calc(0% - var(--free-watermark-y)));pointer-events:none;animation:free-watermark-x 53s linear infinite,free-watermark-y 67s linear infinite;opacity:.38}body[data-export-state="unlocked"] .free-watermark-preview{display:none}@media(prefers-reduced-motion:reduce){.free-watermark-preview{animation:none}}.beta-card [hidden]{display:none!important}
+.beta-acquire{margin:18px 0}.beta-student{display:block;padding:12px 14px;border:1px solid var(--border);border-radius:7px;color:var(--text);text-decoration:none;font-size:14px}.beta-student span{display:block;margin-top:5px;color:var(--muted);font-size:12px}.beta-payment-method{display:flex;align-items:center;justify-content:space-between;margin:15px 0 10px;gap:12px;font-size:13px}.beta-payment-method select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:8px;min-height:44px}.beta-plans{display:grid;grid-template-columns:1fr 1fr;gap:10px}.beta-plan{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:14px 8px;cursor:pointer}.beta-plan:hover{border-color:var(--accent)}.beta-plan:disabled{opacity:.5;cursor:wait}.beta-plan span,.beta-plan strong,.beta-plan small{display:block}.beta-plan span{font-size:14px}.beta-plan strong{font-size:25px;font-weight:600;margin:7px 0}.beta-plan small{font-size:12px;color:var(--muted)}.beta-purchase-note{font-size:12px;color:var(--muted);line-height:1.7;margin:10px 0}.beta-form-divider{border-top:1px solid var(--border);padding-top:16px;font-size:13px}.beta-free-export{margin-top:12px;background:var(--bg)}.beta-checkout{text-align:center;padding:14px;border:1px solid var(--border);border-radius:7px}.beta-checkout img{width:200px;max-width:100%;height:auto;background:white;border-radius:6px}.beta-checkout p{font-size:13px;line-height:1.7}.beta-checkout .button{margin-top:8px}.beta-card [hidden]{display:none!important}
 
 .beta-payment-method{border:0;padding:0;margin:15px 0 12px;justify-content:flex-start;gap:20px}.beta-payment-method legend{font-size:13px;margin-bottom:8px}.beta-card .beta-payment-method label{display:flex;align-items:center;gap:8px;min-height:44px;margin:0;font-size:13px;cursor:pointer}.beta-card .beta-payment-method input[type=radio]{width:16px;height:16px;min-height:0;padding:0;accent-color:var(--accent)}.beta-intro{font-size:13px}.beta-message{font-size:12px}
 
 .beta-card{padding:20px 24px}.beta-acquire{margin:14px 0}.beta-intro{margin:10px 0 14px;line-height:1.65}.beta-code-entry{border-top:1px solid var(--border);padding-top:10px}.beta-code-entry summary{min-height:44px;display:flex;align-items:center;cursor:pointer;color:var(--accent);font-size:13px}.beta-code-entry form{margin-top:8px}.beta-plan{padding:12px 8px}.beta-redeem{min-height:36px;margin-top:6px}.beta-message{min-height:32px;margin:8px 0 12px}.beta-close:focus-visible{outline:2px solid var(--accent)}
 
 .beta-student{margin-bottom:12px}.beta-checkout-actions{display:flex;gap:8px}.beta-checkout-actions .button{flex:1}.background-preset-title{margin:14px 0 8px;color:var(--muted);font-size:12px}
-
-/* Percentages plus the matching self-translation keep motion within the available frame area. */
-@property --free-watermark-x{syntax:"<percentage>";inherits:false;initial-value:34.19%;}
-@keyframes free-watermark-x{
-  0%,100%{--free-watermark-x:34.19%;}
-  6.25%{--free-watermark-x:44.24%;}
-  12.5%{--free-watermark-x:55.16%;}
-  18.75%{--free-watermark-x:65.30%;}
-  25%{--free-watermark-x:73.11%;}
-  31.25%{--free-watermark-x:77.40%;}
-  37.5%{--free-watermark-x:77.52%;}
-  43.75%{--free-watermark-x:73.45%;}
-  50%{--free-watermark-x:65.81%;}
-  56.25%{--free-watermark-x:55.76%;}
-  62.5%{--free-watermark-x:44.84%;}
-  68.75%{--free-watermark-x:34.70%;}
-  75%{--free-watermark-x:26.89%;}
-  81.25%{--free-watermark-x:22.60%;}
-  87.5%{--free-watermark-x:22.48%;}
-  93.75%{--free-watermark-x:26.55%;}
-}
-@property --free-watermark-y{syntax:"<percentage>";inherits:false;initial-value:60.07%;}
-@keyframes free-watermark-y{
-  0%,100%{--free-watermark-y:60.07%;}
-  6.25%{--free-watermark-y:66.35%;}
-  12.5%{--free-watermark-y:70.15%;}
-  18.75%{--free-watermark-y:70.88%;}
-  25%{--free-watermark-y:68.43%;}
-  31.25%{--free-watermark-y:63.17%;}
-  37.5%{--free-watermark-y:55.91%;}
-  43.75%{--free-watermark-y:47.75%;}
-  50%{--free-watermark-y:39.93%;}
-  56.25%{--free-watermark-y:33.65%;}
-  62.5%{--free-watermark-y:29.85%;}
-  68.75%{--free-watermark-y:29.12%;}
-  75%{--free-watermark-y:31.57%;}
-  81.25%{--free-watermark-y:36.83%;}
-  87.5%{--free-watermark-y:44.09%;}
-  93.75%{--free-watermark-y:52.25%;}
-}

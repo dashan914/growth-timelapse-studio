@@ -2,7 +2,7 @@ name: Publish verified source release
 on:
   push:
     tags:
-      - 'v1.2.0-beta.2'
+      - 'v1.2.0-beta.3'
 permissions:
   contents: read
 jobs:
@@ -23,7 +23,7 @@ jobs:
       - name: Build source archive and external checksum manifest
         run: |
           python3 scripts/package-release.py --output release
-          node scripts/finalize-install-manifest.mjs --archive release/growth-timelapse-studio-1.2.0-beta.2-source.zip --repository dashan914/growth-timelapse-studio
+          node scripts/finalize-install-manifest.mjs --archive release/growth-timelapse-studio-1.2.0-beta.3-source.zip --repository dashan914/growth-timelapse-studio
           cp INSTALL_AGENT.md release/INSTALL_AGENT.md
           cd release
           sha256sum -c SHA256SUMS.txt
@@ -33,15 +33,15 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           cat > release-notes.md <<'NOTES'
-          免费用户可以导出带小号、半透明“山地造物 · 免费版”水印的 MP4；底框贴合文字，水印在画面中部缓慢移动。无水印与图片、透明视频/序列导出需要授权。
+          所有用户的操作预览均无水印。免费用户导出的 MP4 带小号、半透明“山地造物 · 免费版”水印；底框贴合文字，水印在画面中部缓慢移动。无水印与图片、透明视频/序列导出需要授权。
 
           软件内支持支付宝、微信扫码购买：19.90 元 / 365 天，39.90 元永久。购买授权绑定一台设备，首次激活后可离线；换机先解绑。学员保留原星光兑换规则。
 
-          扫码中保留学员入口，未付款可返回选套餐。背景与对齐按钮文案更新；画布工具分成阴影调节、色彩匹配、镜头虚化，调色参数移到独立面板。
+          扫码中保留学员入口，未付款可返回选套餐。背景与对齐按钮文案更新；画布工具分成阴影调节、色彩匹配、镜头设置，调色参数独立，镜头焦段与虚化统一设置；移除独立透视工具与重复背景信息行。
 
-          整合 PR #1 的 Windows 与 Blender/NVIDIA 兼容修复，并验证拓竹 14 型号 × 4 喷嘴 = 56 个切片组合。软件自动测试 888 项：870 通过、18 环境检查跳过、0 失败；Windows 完整流程仍需实机验证。
+          整合 PR #1 的 Windows 与 Blender/NVIDIA 兼容修复，并验证拓竹 14 型号 × 4 喷嘴 = 56 个切片组合。软件自动测试 892 项：874 通过、18 环境检查跳过、0 失败；Windows 完整流程仍需实机验证。
 
           请阅读 INSTALL_AGENT.md，使用固定版本源码 ZIP 与外部 install-manifest.json，核对 SHA256 后安装。升级保留旧授权与作品。
           NOTES
-          gh release create "$GITHUB_REF_NAME" release/growth-timelapse-studio-1.2.0-beta.2-source.zip release/SHA256SUMS.txt release/install-manifest.json release/INSTALL_AGENT.md --verify-tag --draft --prerelease --title '打印延时一键生成 1.2.0-beta.2' --notes-file release-notes.md
+          gh release create "$GITHUB_REF_NAME" release/growth-timelapse-studio-1.2.0-beta.3-source.zip release/SHA256SUMS.txt release/install-manifest.json release/INSTALL_AGENT.md --verify-tag --draft --prerelease --title '打印延时一键生成 1.2.0-beta.3' --notes-file release-notes.md
           gh release edit "$GITHUB_REF_NAME" --draft=false

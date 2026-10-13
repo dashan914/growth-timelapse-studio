@@ -508,7 +508,6 @@ async function setBackgroundFile(file,preset='',{sequence=++backgroundLoadSequen
   if(posePlacement?.preset!==preset)posePlacement=null;
   studio.setPhotoIdentity(preset?`preset:${preset}`:null);
   applyBackgroundAppearance();
-  $('background-name').textContent=preset?printerPresets[preset].label:file.name;$('background-info').hidden=false;
   $('floor-label').textContent='接触阴影';
   $('composite-options').hidden=false;$('calibrate-button').hidden=false;$('auto-bed-button').hidden=true;$('reference-button').hidden=studio.backgroundMetadata.type!=='image';
   $('calibrate-button-label').textContent='调整底板，矫正透视';
@@ -770,7 +769,7 @@ function lockWorkspace(locked) {
   exportButton.setAttribute('aria-label',loading?'模型准备中，暂不能导出':'导出视频');
   if (!locked) {
     const ready=Boolean(studio?.hasModel()&&studio?.getPrintLayerData?.());
-    for(const id of ['export-button','play-button','restart-button','timeline','snapshot-button','reset-camera','canvas-lock','canvas-move','canvas-rotate','canvas-scale','canvas-perspective','canvas-shadow','canvas-color','canvas-dof'])$(id).disabled=!ready;
+    for(const id of ['export-button','play-button','restart-button','timeline','snapshot-button','reset-camera','canvas-lock','canvas-move','canvas-rotate','canvas-scale','canvas-shadow','canvas-color','canvas-dof','lens-camera-drag'])$(id).disabled=!ready;
     const gcode = studio?.metadata?.mode === 'gcode';
     $('layers').disabled = gcode;
     $('layer-lines').disabled = gcode;
@@ -879,14 +878,13 @@ function setModelMode(mode) {
   if(mode&&$('output-appearance').value==='photo'){$('output-appearance').value='model';studio.setOptions(renderOptions());}
   playing=false;transformMode=mode;clearPreviewGesture();
   studio.setShadowEditMode?.(false);$('shadow-popup').hidden=true;$('canvas-shadow').classList.remove('active');$('canvas-shadow').setAttribute('aria-pressed',false);$('canvas-shadow').setAttribute('aria-expanded',false);
-  perspectiveMode=false;$('perspective-popup').hidden=true;
+  perspectiveMode=false;$('lens-camera-drag').checked=false;
   $('color-popup').hidden=true;$('canvas-color').classList.remove('active');$('canvas-color').setAttribute('aria-pressed',false);$('canvas-color').setAttribute('aria-expanded',false);
   $('dof-popup').hidden=true;$('reference-popup').hidden=true;
   $('canvas-compare').classList.remove('active');$('canvas-compare').setAttribute('aria-pressed',false);
   $('canvas-dof').classList.remove('active');$('canvas-dof').setAttribute('aria-pressed',false);$('canvas-dof').setAttribute('aria-expanded',false);
   studio.setTransformMode?.(mode);studio.lockPreviewCamera();
   for(const [id,value] of [['canvas-move','translate'],['canvas-rotate','rotate'],['canvas-scale','scale']]) {const active=mode===value;$(id).classList.toggle('active',active);$(id).setAttribute('aria-pressed',active);}
-  $('canvas-perspective').classList.remove('active');$('canvas-perspective').setAttribute('aria-pressed',false);
   $('gesture-hint').textContent=mode==='translate'?'拖动彩色手柄移动 · Esc 锁定':mode==='rotate'?'拖动彩色圆环旋转 · Esc 锁定':mode==='scale'?'拖动彩色手柄缩放 · Esc 锁定':'预览已锁定 · 选择下方工具开始调整';
   syncPreviewLock();
   showTime();
@@ -902,7 +900,7 @@ function setAppearancePanel(kind,open){
     $('gesture-hint').textContent=open?'拖动底部阴影手柄 · Esc 锁定':'预览已锁定 · 选择下方工具开始调整';
     syncLightingControls();
   }else if(kind==='color')syncLightingControls();
-  else if(kind==='dof')syncDofStatus();
+  else if(kind==='dof'){syncCameraFields();syncDofStatus();}
 }
 
 function setReferencePanel(open){
@@ -919,9 +917,8 @@ function syncCameraFields() {
 }
 
 function setPerspectiveMode(enabled) {
-  setPlacementMode(false);perspectiveMode=enabled;
-  $('perspective-popup').hidden=!enabled;
-  $('canvas-perspective').classList.toggle('active',enabled);$('canvas-perspective').setAttribute('aria-pressed',enabled);
+  setAppearancePanel('dof',true);perspectiveMode=enabled;
+  $('lens-camera-drag').checked=enabled;
   studio.lockPreviewCamera();
   $('gesture-hint').textContent=enabled?'拖动调整机位 · 滚轮调整焦段 · Esc 锁定':'预览已锁定 · 选择下方工具开始调整';
   syncPreviewLock();
@@ -1126,7 +1123,7 @@ function clearBackgroundUI(nextScene=scene) {
   cropRect=null;cropEditing=false;$('crop-overlay').setAttribute('hidden','');$('crop-panel').hidden=true;backgroundPreset='';markPreset();clearReference();
   activeCalibration=null;
   applyBackgroundAppearance();
-  $('background-info').hidden=true;$('composite-options').hidden=true;$('calibrate-button').hidden=true;$('auto-bed-button').hidden=true;$('reference-button').hidden=true;
+  $('composite-options').hidden=true;$('calibrate-button').hidden=true;$('auto-bed-button').hidden=true;$('reference-button').hidden=true;
   $('source-ratio').hidden=true;if(['source','crop'].includes($('ratio').value))$('ratio').value='16:9';$('edit-crop').hidden=true;
   $('preview-mode').textContent='实时预览';$('floor-label').textContent='显示地面';setPlacementMode(false);
   cachePatch({backgroundFile:null,backgroundPreset:null,referenceFile:null});
@@ -1503,7 +1500,6 @@ async function init() {
   $('model-input').addEventListener('change', () => {if ($('model-input').files.length) loadModel($('model-input').files);});
   $('background-button').addEventListener('click', () => $('background-input').click());
   $('background-input').addEventListener('change',async()=>{const file=$('background-input').files[0];if(!file)return;try{await setBackgroundFile(file);}catch(error){say(error.message,true);}finally{$('background-input').value='';}});
-  $('clear-background').addEventListener('click', () => {clearBackgroundUI();updateSettings();});
   for(const button of document.querySelectorAll('[data-preset]'))button.addEventListener('click',()=>loadPreset(button.dataset.preset).catch(error=>say(error.message,true)));
   $('auto-bed-button').addEventListener('click',()=>detectBed().catch(error=>say(error.message,true)));
   $('reference-button').addEventListener('click',()=>$('reference-input').click());
@@ -1517,6 +1513,7 @@ async function init() {
   $('auto-reference-align').addEventListener('click',autoReferenceAlign);
   $('canvas-dof').addEventListener('click',()=>setAppearancePanel('dof',$('dof-popup').hidden));
   $('close-dof').addEventListener('click',()=>setAppearancePanel('dof',false));
+  $('lens-camera-drag').addEventListener('change',event=>setPerspectiveMode(event.target.checked));
   $('canvas-color').addEventListener('click',()=>setAppearancePanel('color',$('color-popup').hidden));
   $('close-color').addEventListener('click',()=>setAppearancePanel('color',false));
   $('edit-crop').addEventListener('click',beginCrop);
@@ -1527,8 +1524,6 @@ async function init() {
   $('canvas-move').addEventListener('click',()=>setModelMode(transformMode==='translate'?null:'translate'));
   $('canvas-rotate').addEventListener('click',()=>setModelMode(transformMode==='rotate'?null:'rotate'));
   $('canvas-scale').addEventListener('click',()=>setModelMode(transformMode==='scale'?null:'scale'));
-  $('canvas-perspective').addEventListener('click',()=>{playing=false;setPerspectiveMode(!perspectiveMode);});
-  $('close-perspective').addEventListener('click',()=>setModelMode(null));
   for(const id of ['camera-pitch','camera-yaw','camera-roll'])$(id).addEventListener('input',changeCameraFromFields);
   for(const id of ['camera-focal-length','camera-focal-length-number'])$(id).addEventListener('input',changeLensFromFields);
   $('camera-focal-length-number').addEventListener('blur',event=>{const raw=event.target.value,value=Number(raw);event.target.value=raw.trim()&&Number.isFinite(value)?Math.max(18,Math.min(135,value)).toFixed(1):studio.getLensOptions().focalLength.toFixed(1);changeLensFromFields(event);});

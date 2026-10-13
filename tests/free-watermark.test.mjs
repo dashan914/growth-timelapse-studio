@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFile, spawn } from 'node:child_process';
@@ -15,6 +15,7 @@ import { FREE_WATERMARK_PATH, freeWatermarkArguments } from '../free-watermark.m
 import * as THREE from 'three';
 import { createSceneRenderPackage } from '../src/scene-package.js';
 import { createRealisticRenderService } from '../realistic-render.mjs';
+import { createExportUnlockController } from '../src/beta-access.js';
 
 const execFileAsync = promisify(execFile);
 const FFMPEG = findFFmpegPath();
@@ -143,6 +144,59 @@ test('brand asset is a PNG and watermark rejects invalid output dimensions', asy
   assert.deepEqual((await readFile(FREE_WATERMARK_PATH)).subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
   for (const [width, height] of [[63, 64], [64, 63], [NaN, 64], [64, Infinity], [64.5, 64]]) {
     assert.throws(() => freeWatermarkArguments(width, height), TypeError);
+  }
+});
+
+test('the served workbench and permission controller start without preview branding for both free and activated users', async t => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const styles = await Promise.all(['style.css', 'beta-access.css'].map(name => readFile(new URL('../src/' + name, import.meta.url), 'utf8')));
+  assert.equal(/free-watermark(?:-preview|\.png)/i.test(html), false, 'the actual workbench HTML must contain no preview branding image, including before any license check');
+  for (const css of styles) assert.equal(/free-watermark(?:-preview|-[xy]|\.png)/i.test(css), false, 'preview branding must not survive as a conditional style or generated background');
+  for (const activated of [false, true]) {
+    const f = await fixture(t, { activated });
+    await writeFile(path.join(f.root, 'index.html'), html);
+    await mkdir(path.join(f.root, 'src'));
+    for (let index = 0; index < styles.length; index++) await writeFile(path.join(f.root, 'src', ['style.css', 'beta-access.css'][index]), styles[index]);
+    const response = await f.request('/');
+    assert.equal(response.status, 200);
+    const served = await response.text();
+    assert.equal(served, html);
+    assert.equal(/free-watermark(?:-preview|\.png)/i.test(served), false);
+    assert.equal((await (await f.request('/api/beta/status')).json()).activated, activated);
+    const preview = await f.request('/api/realistic-previews?exportMode=watermarked', 'POST', Buffer.from('synthetic-preview-scene'), 'application/zip');
+    assert.equal(preview.status, 201, 'both permission states can request the same unmarked preview');
+    assert.equal((await preview.json()).watermarked, false, 'a preview ignores even an explicit watermarked export query');
+    assert.equal(f.realisticCalls[0].format, 'preview');
+    assert.equal(f.realisticCalls[0].watermarked, false, 'the server never asks the preview renderer to add free-export branding');
+
+    const nodes = new Map(), document = { body: { dataset: {} }, activeElement: null };
+    for (const match of served.matchAll(/\bid="([^"]+)"/g)) {
+      const listeners = new Map();
+      const node = {
+        id: match[1], value: '', textContent: '', dataset: {}, disabled: false, hidden: false, open: false, isConnected: true,
+        setAttribute() {}, classList: { toggle() {} },
+        addEventListener(name, listener) { const list = listeners.get(name) || []; list.push(listener); listeners.set(name, list); },
+        focus() { document.activeElement = this; }, showModal() { this.open = true; }, close() { this.open = false; },
+      };
+      nodes.set(match[1], node);
+    }
+    document.getElementById = id => nodes.get(id) || null;
+    document.activeElement = nodes.get('export-button');
+    let loaded = 0;
+    const controller = createExportUnlockController({ document,
+      loadApp: async () => { loaded++; },
+      request: (url, settings) => f.request(url, settings?.method || 'GET', settings?.body === undefined ? undefined : JSON.parse(settings.body)),
+    });
+    await controller.start();
+    const expected = activated ? 'unlocked' : 'free', deadline = Date.now() + 2000;
+    while (document.body.dataset.exportState !== expected && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(document.body.dataset.betaState, 'ready', 'preview loading never waits for or requires activation');
+    assert.equal(loaded, 1);
+    assert.equal(document.body.dataset.exportState, expected);
+    assert.equal(nodes.get('export-unlock-button').dataset.exportState, activated ? 'unlocked' : 'locked');
+    assert.equal(nodes.get('beta-gate').open, false, 'starting the preview does not force an activation dialog');
+    assert.equal([...nodes.keys()].some(id => /(?:preview.*watermark|watermark.*preview)/i.test(id)), false);
+    assert.equal(/free-watermark(?:-preview|\.png)/i.test(served), false, 'both permission states keep the same unmarked preview markup');
   }
 });
 

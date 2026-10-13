@@ -2,7 +2,7 @@
 
 适用 Windows x64。基础实时模式使用 Node.js、Python 和本机切片器；写实渲染和照片立柱检测是可选扩展。普通 Windows 用户要完成依赖检查与首次验收，只有自动发现失败或程序安装在特殊位置时才需要手动配置路径。
 
-本轮固定版本为 [v1.2.0-beta.2](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.2)，待发行；发行资产验证后，安装器使用同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.2/install-manifest.json)。上一版 1.2.0-beta.1 已公开预发布，Windows 兼容 PR 已纳入并继续保留。
+本轮固定版本为 [v1.2.0-beta.3](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.3)，待发行；发行资产验证后，安装器使用同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.3/install-manifest.json)。上一版 1.2.0-beta.2 已公开预发布，Windows 兼容 PR 已纳入并继续保留。
 
 ## 1. 必须、条件必需与可选依赖
 
@@ -24,7 +24,7 @@
 2. 解压到独立目录，先阅读 INSTALL_AGENT.md；让环境检查确认真实解释器、切片器 CLI 和资源目录。
 3. 安装 npm 锁定依赖，运行 doctor，启动本机工作台。保留终端错误与 doctor 输出供排查。
 4. 导入仓库示例或一个单盘工程，确认真实切片完成、多色与时间线正常。再检查一次关闭、重启和项目恢复。
-5. 不输入兑换码也可导出动态水印 MP4；无水印视频、预览图片、透明 MOV 和 PNG 序列由使用者购买或用已有兑换码解锁。技术环境通过不替代画面质量或透明边缘验收。
+5. 不输入兑换码也可进行无水印实时预览；只有免费 MP4 导出成片烙入动态水印，已解锁用户的成片无水印。无水印视频、预览图片、透明 MOV 和 PNG 序列由使用者购买或用已有兑换码解锁。技术环境通过不替代画面质量或透明边缘验收。
 
 软件内可选一年 ¥19.90（365 天）或永久 ¥39.90，支付宝/微信扫码后自动激活。购买授权绑定一台设备，成功后可离线使用，换机前先在旧设备解绑并保留购买兑换码。学员继续原山地造物星光兑换流程与原设备规则，安装器不代付款或代兑换。
 
@@ -87,6 +87,6 @@ $env:PHOTO_CALIBRATION_PYTHON = "$PWD\.venv\Scripts\python.exe"
 
 本分支分别处理 Blender 4.x 的场景合成器和 5.x 的合成器节点组、输出节点、alpha 转换、数学/混色节点与照片缩放接口。保留原几何、材质区域与完整帧数检查。
 
-PR 作者报告已完成 Windows / Blender 5.2.2 / RTX 5060 OptiX 三帧小立方体检查。上一版在 macOS 完成软件 869 项自动测试（851 通过、18 跳过、0 失败），以及 14 个拓竹机型 × 4 种喷嘴共 56 项真实切片与路径解析；未重新执行 Windows 实机或逐台实体打印。beta.2 新增交互的验证结果待补录，复杂模型长视频和最终视觉效果仍应由对应设备验收。驱动和 GPU 偏好不由本项目全局修改。
+PR 作者报告已完成 Windows / Blender 5.2.2 / RTX 5060 OptiX 三帧小立方体检查。已发布 beta.2 在 macOS 完成软件 888 项自动测试（870 通过、18 跳过、0 失败），14 个拓竹机型 × 4 种喷嘴共 56 项真实切片与路径解析继续作为历史兼容性记录；未重新执行 Windows 实机或逐台实体打印。beta.3 的无水印实时预览、背景信息行精简与镜头设置迁移仍待新验收，复杂模型长视频和最终视觉效果仍应由对应设备验收。驱动和 GPU 偏好不由本项目全局修改。
 
 参考：[Blender 5.0 合成器迁移](https://developer.blender.org/docs/release_notes/5.0/migration/compositor_migration/) · [Cycles 设备](https://developer.blender.org/docs/features/cycles/devices/)。
