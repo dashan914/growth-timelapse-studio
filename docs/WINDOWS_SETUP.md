@@ -4,6 +4,8 @@
 
 当前固定版本为 [v1.2.0-beta.5](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5)。官方安装资产为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`，安装器使用同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/install-manifest.json)。Windows 兼容 PR 继续保留，已保存的旧 `-source.zip` 与本地源码安装仍支持；完整安装提示词见 [AI 安装指南](../INSTALL_AGENT.md)。
 
+AI 安装前会先列出本机可选磁盘和建议目录，询问用户安装到哪个盘，收到回答后通过 `-InstallRoot` 传入所选完整目录。再次启动时，使用该目录中的 `打开打印延时.cmd`。
+
 ## 1. 必须、条件必需与可选依赖
 
 | 组件 | 要求 | 使用范围 |

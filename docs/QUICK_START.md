@@ -16,7 +16,7 @@ npm start
 
 `doctor` 检查本机依赖。打开终端显示的地址，默认 `http://127.0.0.1:4317`。macOS 首次安装后也可双击 `start.command`，或执行 `bash start.command`。
 
-也可复制 [AI 一键安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md) 顶部的简短提示词，交给能操作本机终端的 AI，自动完成环境检查、安装和启动。
+也可复制 [AI 一键安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md) 顶部的简短提示词，交给能操作本机终端的 AI，自动完成环境检查、安装和启动。Windows 安装前，AI 会先询问安装到哪个盘，按用户选择的目录安装。
 
 安装后直接进入工作台，导入、编辑和预览免费开放。所有用户的工作台实时预览都不叠加水印；免费用户选择 MP4 后，可以点击“免费导出 · 带动态水印”，水印只在导出成片中出现。已解锁用户的成片无水印；无水印视频、预览图片、透明 MOV 和 PNG 序列需要解锁。
 

@@ -52,7 +52,7 @@
 复制下面这段给能操作你电脑的 AI：
 
 ```text
-请帮我安装并启动“打印延时一键生成”，按照这个官方指南自动检查环境、安装缺失依赖，完成后打开软件并验证导入和预览：
+请帮我安装并启动“打印延时一键生成”，按照这个官方指南操作。Windows 安装前先询问我安装到哪个盘，再按我的选择自动检查环境、安装缺失依赖，完成后打开软件并验证导入和预览：
 https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/main/INSTALL_AGENT.md
 ```
 

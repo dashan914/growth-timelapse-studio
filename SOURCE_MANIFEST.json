@@ -10,8 +10,8 @@
     },
     {
       "path": "INSTALL_AGENT.md",
-      "bytes": 2337,
-      "sha256": "47b6ad10572478f0fbd3a07cb90b70268cf6761be74a58b8e745e5e6844a4942"
+      "bytes": 3441,
+      "sha256": "a85d7c060f2fbb2a3289422c22c3fb22351084c7f61feaf1ed45e22af587f7ba"
     },
     {
       "path": "LICENSE",
@@ -20,8 +20,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 4821,
-      "sha256": "4908257d3f30c707cb5fdb96426ec5b3fd41b436bdb640548a8c8dd871742e3c"
+      "bytes": 4898,
+      "sha256": "d96b2cab3e1cfdfafaa212998c919c615471833edcda9096262722d08b1fda3e"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -100,8 +100,8 @@
     },
     {
       "path": "docs/QUICK_START.md",
-      "bytes": 6716,
-      "sha256": "e79d4de4db075e58765fe36d213de7c80748cb06215dc5e7731e103a67ca8b42"
+      "bytes": 6805,
+      "sha256": "d732568839189c4a77f55e85a717baa6a91c7bc657266037f6138f653b6abb44"
     },
     {
       "path": "docs/RELEASE.md",
@@ -125,8 +125,8 @@
     },
     {
       "path": "docs/WINDOWS_SETUP.md",
-      "bytes": 8074,
-      "sha256": "f079e98f7b257d01eed75d431f9810e47cec2ee3ee54cef58584e206ec3f3b1d"
+      "bytes": 8300,
+      "sha256": "f9987a0fc8664c839a9e8190da3b347e240ce08db0b95abb1c05a9c80f2ea2ee"
     },
     {
       "path": "docs/media/current-backgrounds.gif",
