@@ -64,6 +64,21 @@ test('Bambu Z-trim and ABL setup preserve actual path coordinates, extrusion, di
   assert.ok(candidate.strokes[1] > candidate.strokes[0], 'machine calibration interrupts a connected stroke');
 });
 
+test('official bare A1 G29.4 startup preserves all model paths and does not retain modal motion', () => {
+  const setup = 'M211 X0 Y0 Z0\nM1007 S1\nG29.4\n';
+  const original = parsePrintLayerGCode(fixture, { includeSupport: true });
+  const result = parsePrintLayerGCode(setup + fixture.replace('G1 X10 Y0 E1\n', 'G1 X10 Y0 E1\n' + setup), { includeSupport: true });
+  for (const name of ['positions','tools','features','widths','heights','layers','layerHeights','layerOffsets','layerSegments']) {
+    assert.deepEqual(result[name], original[name], name);
+  }
+  assert.deepEqual(result.toolColors, original.toolColors);
+  assert.equal(result.exactLinearPaths, true);
+  assert.equal(parsePrintLayerGCode(fixture + 'G29.4\nX99 Y99 E7\n').segmentCount, 5);
+  for (const command of ['G29.4 E7', 'G29.4 X5', 'G29.4 Z0', 'G29.4 S1', 'G29.40']) {
+    assert.throws(() => parsePrintLayerGCode(fixture + command + '\n'), /不支持的/);
+  }
+});
+
 test('machine calibration parameters cannot become modal extrusion or permit unknown G29 variants', () => {
   for (const command of ['G29.1 Z-0.04 E7','G29.2 S1 E7','G29.3 Z0','G29.3 S1','G29.3 X5 Y5 E7','G29.10 Z0','G383.70 J0']) {
     assert.throws(() => parsePrintLayerGCode(fixture + command + '\n'), /不支持的/);

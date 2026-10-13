@@ -22,9 +22,10 @@ const identity = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
 // templates at BambuStudio commit 3f126b717ed1f10fee0f32f05ed9731808d0c8bb.
 // Empty axes are settings only; XYZ macros leave physical position uncertain.
 // G2814 is A1 pre-extrude Z calibration; only its explicit axes become unknown.
+// Official A1 startup ends with bare G29.4; no parameterized form is verified.
 // G387 has conditional clamped travel, not the commanded G1 endpoint.
 const MACHINE_G_CODES = new Map([
-  ...['29.1','29.2','29.20','29.7','29.9','29.99','392'].map(code => [code, '']),
+  ...['29.1','29.2','29.20','29.4','29.7','29.9','29.99','392'].map(code => [code, '']),
   ...['28.14','28.140','39.1','150','150.1','150.2','150.3','151','383','383.3','383.4','383.7'].map(code => [code, 'XYZ']),
   ['2814','specified'],
   ...['380','3811','387'].map(code => [code, 'specified']),
@@ -168,6 +169,7 @@ export function parsePrintLayerGCode(text, {
       const code = command.code ?? String(command.value);
       if (MACHINE_G_CODES.has(code)) {
         if (values.E !== undefined) throw new Error(`不支持的 G${code} 运动，无法完整还原真实切片；不会静默遗漏墙线或填充。`);
+        if (code === '29.4' && Object.keys(values).length) throw new Error('不支持的 G29.4 参数，无法完整还原真实切片。');
         const unknownAxes = MACHINE_G_CODES.get(code);
         for (let axis = 0; axis < 3; axis++) {
           if (unknownAxes === 'XYZ' || unknownAxes === 'specified' && values['XYZ'[axis]] !== undefined) positionKnown[axis] = false;

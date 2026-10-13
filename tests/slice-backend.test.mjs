@@ -1,7 +1,7 @@
 import { findPythonPath } from '../runtime-paths.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { access, chmod, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFile, spawn } from 'node:child_process';
@@ -424,6 +424,46 @@ test('installed Bambu Studio slices and parses a real model for every registered
     assert.equal(parsed.exactLinearPaths, true, `${model.id} G-code paths parsed exactly`);
     assert.ok(parsed.segmentCount > 100, `${model.id} contains complete real extrusion paths`);
   }
+});
+
+test('native A1 output with its complete official startup preserves every model path around G29.4', {skip: process.env.GROWTH_NATIVE_SLICER_TESTS !== '1'}, async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'slice-native-a1-startup-'));
+  const service = createSliceService({ root, timeoutMs: 90_000 });
+  t.after(async () => { await service.close(); await rm(root, { recursive: true, force: true }); });
+  const engine = await service.health();
+  if (!engine.available) { t.skip('Local Bambu Studio CLI is not installed.'); return; }
+  const source = path.join(root, 'cube.stl'), prepared = path.join(root, 'saved-a1.3mf');
+  const options = path.join(root, 'options.json'), reportPath = path.join(root, 'prepare-report.json');
+  await writeFile(source, cubeStl());
+  await writeFile(options, JSON.stringify({format:'stl',preset:'a1',slicerResources:engine.profileDirectory,slicerVersion:engine.version,toolColors:['#00AE42']}));
+  await execFileAsync(findPythonPath(), [path.resolve('scripts/prepare-slice-project.py'), source, prepared, reportPath, options]);
+  const settingsFile = path.join(root, 'fallback-machine.json');
+  const settings = JSON.parse(await readFile(settingsFile, 'utf8'));
+  const machineRoot = path.join(engine.profileDirectory, 'BBL', 'machine');
+  const machine = JSON.parse(await readFile(path.join(machineRoot, 'Bambu Lab A1 0.4 nozzle.json'), 'utf8'));
+  const templateName = machine.include.find(name => name.endsWith('template machine_start_gcode'));
+  assert.ok(templateName, 'installed A1 profile references its complete official startup');
+  const template = JSON.parse(await readFile(path.join(machineRoot, templateName + '.json'), 'utf8'));
+  settings.machine_start_gcode = template.machine_start_gcode;
+  assert.match(settings.machine_start_gcode, /^G29\.4\s*$/m);
+  await writeFile(settingsFile, JSON.stringify(settings));
+  const report = JSON.parse(await readFile(reportPath, 'utf8'));
+  const output = path.join(root, 'output'); await mkdir(output);
+  await execFileAsync(engine.executablePath, ['--debug','3','--no-check',
+    '--load-settings',report.fallbackEngineProfiles.loadSettings.join(';'),
+    '--load-filaments',report.fallbackEngineProfiles.loadFilaments.join(';'),
+    '--slice','1','--arrange','0','--orient','0','--mstpp','90','--outputdir',output,prepared],
+    {cwd:root,timeout:90_000,maxBuffer:8*1024*1024,windowsHide:true});
+  const text = await readFile(path.join(output, 'plate_1.gcode'), 'utf8');
+  assert.ok(/^G29\.4\s*$/m.test(text), 'real native output must exercise the reported macro');
+  assert.ok(/^G2814 Z0\.32\s*$/m.test(text), 'full A1 startup must retain its pre-extrude calibration');
+  const parsed = parsePrintLayerGCode(text);
+  const reference = parsePrintLayerGCode(text.replace(/^G29\.4[\t ]*(?:\r?\n|$)/gm, ''));
+  for (const name of ['positions','tools','features','widths','heights','layers','layerHeights','layerOffsets','layerSegments']) {
+    assert.deepEqual(parsed[name], reference[name], name);
+  }
+  assert.equal(parsed.exactLinearPaths, true);
+  assert.ok(parsed.segmentCount > 100);
 });
 
 test('generic two-part 3MF fallback preserves both original part extruders and both real sliced filament colors', async t => {
