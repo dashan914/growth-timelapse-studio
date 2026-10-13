@@ -8,6 +8,7 @@
 | `server.mjs`、根目录 `.mjs` 模块 | 本机 HTTP 服务、切片与渲染任务 |
 | `scripts/` | Python 工程准备、Cycles 渲染与照片线段检测 |
 | `assets/backgrounds/` | 六套正式背景 |
+| `src/printer-presets.json` | 14 款拓竹 0.4 mm 目标机型的唯一登记表，标注官方机型、工艺、耗材配置和基准床面尺寸 |
 | `vendor/slicer-profiles/bambu-v02.07.01.57/` | 最小 Bambu 参数数据、原许可与来源清单 |
 | `vendor/test-dom/` | 仅测试使用的 LinkeDOM 与原 ISC 许可 |
 | `examples/测试2.3mf` | 多色演示案例 |
@@ -54,6 +55,8 @@ npm start
 
 变量值应指向可执行文件，而非安装包或 `.app` 文件夹。切片器安装包里的配置目录也必须存在；非标准目录可用 `BAMBU_STUDIO_RESOURCES`、`ORCA_SLICER_RESOURCES` 或 `FLASH_STUDIO_RESOURCES` 指定资源目录。
 
+左侧切片目标机型下拉与背景照片预设相互独立。目标机型只影响 STL 与缺少机型信息的 3MF；完整保存机型信息的 3MF 仍以源工程配置为准。列表使用 `src/printer-presets.json` 登记的 0.4 mm 机型，但 machine、process、filament 配置从本机 Bambu Studio / OrcaSlicer 资源目录读取；新机型需要更新本机切片器配置后才能使用。H2C 的可视化摆放床面沿用 330 × 320 mm 场景尺寸，其他机型床面尺寸从安装的 machine profile 推导。
+
 可选 OpenCV 环境可以在项目内独立准备：
 
 ```sh
@@ -77,6 +80,8 @@ npm test
 ```sh
 npm run test:native-slicing
 ```
+
+原生切片套件包含 14 款拓竹目标机型的 STL 切片 smoke test，并验证生成的完整 G-code 可被路径解析器读取。普通 `npm test` 不会调用本机切片器。
 
 涉及 Blender / Metal 的测试或人工渲染串行执行，避免争用 GPU。修改制作流程后检查导入、取消与重试、背景切换、模型摆放、首末帧、填充与支撑、颜色、输出尺寸与时长。修改透明导出时，在合成软件中核对透明边缘；新增平台支持时补充安装、切片与导出检查。
 

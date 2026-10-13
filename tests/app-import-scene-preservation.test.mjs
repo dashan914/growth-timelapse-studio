@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import {normalizeLighting,getPresetLighting} from '../src/preset-lighting.js';
 import {getPresetDof} from '../src/preset-dof.js';
 import {BACKGROUND_PRESETS} from '../src/background-presets.js';
+import {BAMBU_PRINTER_MODELS,DEFAULT_BAMBU_PRINTER_MODEL_ID,isBambuPrinterModel} from '../src/printer-presets.js';
 import {selectPresetPlacementSnapshot} from '../src/preset-placement-state.js';
 
 const appSource=await readFile(new URL('../src/app.js',import.meta.url),'utf8');
@@ -31,7 +32,7 @@ function fixture({existing=true,mode='mesh',failure=null,cancel=false,engineFail
     classList:{toggle(){}},setAttribute(key,value){this.attrs[key]=value;},addEventListener(){},
     replaceChildren(...children){this.children=children;},append(...children){this.children.push(...children);}});
   const get=id=>{if(!nodes.has(id))nodes.set(id,makeNode());return nodes.get(id);};
-  const values={'growth-duration':'8',hold:'0',fps:'30',ratio:'crop',resolution:'1080',format:'mp4','output-appearance':'model','export-quality':'realtime',
+  const values={'growth-duration':'8',hold:'0',fps:'30',ratio:'crop',resolution:'1080',format:'mp4','output-appearance':'model','export-quality':'realtime','target-printer':DEFAULT_BAMBU_PRINTER_MODEL_ID,
     layers:'1600','model-color':'#93aabd','surface-preset':'silk','surface-detail':'82',
     'shadow-opacity':'22','shadow-radius':'6','light-direction':'custom','light-azimuth':'117','light-elevation':'57',
     'dof-strength':'34','dof-focus':'61','bed-width':'330','bed-depth':'320','lighting-exposure':'.83','lighting-temperature':'6700'};
@@ -75,7 +76,7 @@ function fixture({existing=true,mode='mesh',failure=null,cancel=false,engineFail
     gcodeBytes:99,engineId:'bambu',engine:'Bambu Studio CLI',engineRevision:'bambu-studio-test-original-v1',reSliced:true,printerToSource:[...new THREE.Matrix4().makeRotationX(-Math.PI/2).elements],
     toolColors:['#f0e8d6','#23599c'],sliceSettings:{layerHeightMm:.16},sourceCoordinateSystem:'printer-z-up'};
   const context=vm.createContext({studio,$:get,document:{createElement:makeNode},THREE,LOCAL_SLICE_CLIENT_REVISION:'local-slicer-original-mesh-v2',
-    DEFAULT_MODEL_POSE:defaults,printerPresets:BACKGROUND_PRESETS,SURFACE_PRESETS:['auto','pla','matte','silk','petg'],
+    DEFAULT_MODEL_POSE:defaults,printerPresets:BACKGROUND_PRESETS,BAMBU_PRINTER_MODELS,DEFAULT_BAMBU_PRINTER_MODEL_ID,isBambuPrinterModel,SURFACE_PRESETS:['auto','pla','matte','silk','petg'],
     modelColorFields:['tint','shadows','highlights','contrast','saturation'],normalizeLighting,lightingProfile:normalizeLighting(lighting),
     sceneColors:{studio:'#30333a'},scene:'studio',cropRect:crop,exporting:false,snapshotting:false,calibrationMode:false,cropEditing:false,
     loading:false,playing:false,time:3,importController:null,sliceController:null,slicingRuntime:null,importInteractionState:null,importSequence:0,cacheTimer:null,restoringProject:false,reducedMotion:true,
@@ -189,7 +190,7 @@ test('a failed printer fit on first import or replacement releases presentation 
 test('photography backgrounds survive model imports while native slicing receives a real printer preset',async t=>{
   for(const key of ['pastel-rug','blue-grey','teal-room'])for(const format of ['3mf','stl'])await t.test(key+' / '+format,async()=>{
     const f=fixture(),preset=BACKGROUND_PRESETS[key],dof=getPresetDof(key),profile=getPresetLighting(key);
-    f.context.backgroundPreset=key;
+    f.context.backgroundPreset=key;f.get('target-printer').value='x2d';
     f.context.posePlacement={preset:key,revision:preset.placement.revision,modelSourceKey:'old-source'};
     f.context.backgroundFile=new File(['background PNG'],key+'.png',{type:'image/png'});
     f.context.activeCalibration={...f.calibration,bedWidth:preset.width,bedDepth:preset.depth,photoKey:'preset:'+key};
@@ -206,8 +207,8 @@ test('photography backgrounds survive model imports while native slicing receive
     assert.equal(await f.context.loadModel([file],false,format==='stl'?{preset:key,resliceExisting:true}:{}),true);
     const upload=f.calls.requests.find(item=>item.options?.method==='POST');
     const options=JSON.parse(new URL(upload.route,'http://localhost').searchParams.get('options'));
-    assert.equal(options.preset,'h2c');assert.equal(options.format,format);assert.equal(upload.options.body,file);
-    assert.equal(f.context.sliceReadyJob.preset,'h2c');assert.equal(f.context.backgroundPreset,key);
+    assert.equal(options.preset,'x2d');assert.equal(options.format,format);assert.equal(upload.options.body,file);
+    assert.equal(f.context.sliceReadyJob.preset,'x2d');assert.equal(f.context.backgroundPreset,key);
     assert.equal(f.context.backgroundFile,background);assert.equal(background.type,'image/png');
     assert.equal(f.context.cropRect,f.crop);assert.equal(f.context.activeCalibration,calibration);
     assert.deepEqual(serialized(f.studio.camera),camera);assert.equal(f.calls.resets,0);assert.equal(f.calls.calibration,0);

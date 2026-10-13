@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeSliceSettings } from './src/slice-settings.js';
+import {DEFAULT_BAMBU_PRINTER_MODEL_ID,isBambuPrinterModel} from './src/printer-presets.js';
 import { BAMBU_STUDIO_DEFAULT_PATH } from './bambu-engine.mjs';
 import { probeSlicerEngine, probeLocalSlicers, LOCAL_SLICER_IDS } from './slicer-engine.mjs';
 import { findPythonPath } from './runtime-paths.mjs';
@@ -24,6 +25,8 @@ export function friendlyNativeFailure(output, { preparing = false } = {}) {
   const text = String(output || '');
   const chinese = text.match(/(?:^|\n)(该工程[^\n]+|原始完整切片文件[^\n]+|原工程[^\n]+)/);
   if (chinese) return chinese[1];
+  const missingPrinterProfile = text.match(/(?:^|\n)(本机切片器缺少[^\n]+)/);
+  if (missingPrinterProfile) return missingPrinterProfile[1];
   if (/No layers were detected|no layers|not generate.*layer/i.test(text)) return '模型没有产生可打印层。先核对模型单位与尺寸；若模型只有表面，请导出闭合实体后重试。';
   if (/Nothing to be sliced|0 printable|no object.*fully inside|print is empty/i.test(text)) return '模型没有可切片的实体，或超出底板范围。请核对单位和大小，并导出单盘闭合实体后重试。';
   if (/does not fit.*plate|not scaled or simplified/i.test(text)) return '模型按原始尺寸超出底板，请检查单位或选择合适底板；工具没有缩放或减面。';
@@ -40,9 +43,9 @@ export function validateSliceOptions(options = {}) {
   const allowed = new Set(['format', 'preset', 'sourceName', 'sourceToPrinter', 'sourceCoordinateSystem', 'toolColors', 'engineId']);
   if (Object.keys(options).some(key => !allowed.has(key))) throw new SliceError(400, 'SLICE_OPTIONS_INVALID', '切片选项含不支持的字段；不接受任何本机文件路径。');
   const format = options.format ?? '3mf';
-  const preset = options.preset ?? 'h2c';
+  const preset = options.preset ?? DEFAULT_BAMBU_PRINTER_MODEL_ID;
   if (!['3mf', 'stl'].includes(format)) throw new SliceError(400, 'SLICE_FORMAT_INVALID', '真实切片须上传 3MF 工程或完整 STL 网格。');
-  if (!['h2c', 'p1s', 'a1'].includes(preset)) throw new SliceError(400, 'SLICE_PRESET_INVALID', '切片背景预设无效。');
+  if (!isBambuPrinterModel(preset)) throw new SliceError(400, 'SLICE_PRESET_INVALID', '切片目标机型无效。');
   const sourceCoordinateSystem = options.sourceCoordinateSystem ?? 'printer-z-up';
   if (!['three-y-up', 'printer-z-up'].includes(sourceCoordinateSystem)) throw new SliceError(400, 'SLICE_TRANSFORM_INVALID', '来源坐标系无效。');
   let sourceToPrinter = options.sourceToPrinter ?? IDENTITY;
@@ -410,6 +413,7 @@ export function createSliceService({ root = HERE, slicerPath, slicerPaths = {}, 
       try {
         await mkdir(jobDirectory, { recursive: true, mode: 0o700 }); await chmod(jobDirectory, 0o700);
         await writeFile(job.optionsPath, JSON.stringify({ ...safe, engineId: job.engineCapability.id, profileVendor: job.engineCapability.profileVendor || 'BBL',
+          slicerVersion: job.engineCapability.version || null,
           slicerResources: job.engineCapability.profileDirectory, forceReslice, maximumGcodeBytes }), { flag: 'wx', mode: 0o600 });
         uploadTimer = setTimeout(() => { job.uploadTimedOut = true; job.cancelled = true; job.abortUpload?.(); }, uploadTimeoutMs); uploadTimer.unref();
         job.upload = receive(input, job.source, job, safe.format === '3mf' ? maximumProjectBytes : maximumStlBytes);

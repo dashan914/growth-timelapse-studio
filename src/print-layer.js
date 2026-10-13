@@ -18,13 +18,15 @@ const MODEL_FEATURES = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 16]);
 const SUPPORT_FEATURES = new Set([10, 11]);
 const TAU = Math.PI * 2;
 const identity = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-// Explicit Bambu machine macros, verified against the official H2C/P1S
+// Explicit Bambu machine macros, verified against the official Bambu Studio
 // templates at BambuStudio commit 3f126b717ed1f10fee0f32f05ed9731808d0c8bb.
 // Empty axes are settings only; XYZ macros leave physical position uncertain.
+// G2814 is A1 pre-extrude Z calibration; only its explicit axes become unknown.
 // G387 has conditional clamped travel, not the commanded G1 endpoint.
 const MACHINE_G_CODES = new Map([
   ...['29.1','29.2','29.20','29.7','29.9','29.99','392'].map(code => [code, '']),
-  ...['28.14','28.140','39.1','150','150.1','150.2','150.3','151','383','383.3','383.7'].map(code => [code, 'XYZ']),
+  ...['28.14','28.140','39.1','150','150.1','150.2','150.3','151','383','383.3','383.4','383.7'].map(code => [code, 'XYZ']),
+  ['2814','specified'],
   ...['380','3811','387'].map(code => [code, 'specified']),
 ]);
 const SERVICE_TOOLS = new Set([255, 1000, 1001, 1100, 65279, 65535]);

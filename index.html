@@ -42,6 +42,12 @@
 </div>
 <div id="slice-feedback" class="slice-feedback" hidden><p id="slice-status" class="field-hint" role="status" aria-live="polite">正在准备真实切片</p><button id="slice-action" class="button quiet small full-width">取消切片</button></div>
 <details id="source-unit-controls" class="advanced-settings" hidden><summary id="source-unit-summary">模型单位 · 工程设置</summary><label class="field-label" for="source-unit">源文件使用的单位</label><select id="source-unit"><option value="1">毫米 / mm</option><option value="10">厘米 / cm</option><option value="1000">米 / m</option></select><p class="field-hint">3MF 保留工程单位；STL 默认毫米，调整单位后重新调用本机切片。</p></details>
+<div class="printer-target-picker"><label class="field-label" for="target-printer">切片目标机型</label><select id="target-printer" aria-describedby="target-printer-hint">
+  <option value="a1">A1 · 0.4 mm</option><option value="a1-mini">A1 mini · 0.4 mm</option><option value="a2l">A2L · 0.4 mm</option>
+  <option value="h2c" selected>H2C · 0.4 mm</option><option value="h2d">H2D · 0.4 mm</option><option value="h2d-pro">H2D Pro · 0.4 mm</option><option value="h2s">H2S · 0.4 mm</option>
+  <option value="p1p">P1P · 0.4 mm</option><option value="p1s">P1S · 0.4 mm</option><option value="p2s">P2S · 0.4 mm</option>
+  <option value="x1">X1 · 0.4 mm</option><option value="x1-carbon">X1 Carbon · 0.4 mm</option><option value="x1e">X1E · 0.4 mm</option><option value="x2d">X2D · 0.4 mm</option>
+</select><p id="target-printer-hint" class="field-hint">用于 STL 和未保存机型信息的 3MF；已保存机型的工程优先使用工程自身配置。只影响切片，不改变背景照片。</p></div>
 <label class="check-row support-row"><input id="show-supports" type="checkbox" checked/><span>显示支撑</span></label><p id="support-status" class="field-hint"></p>
 <button id="generate-supports" class="button small full-width" hidden>生成支撑</button><button id="import-supports" class="button quiet small full-width" hidden>导入支撑 G-code</button><input type="file" id="support-input" accept=".gcode,.gco" hidden/>
 <div class="panel-divider"></div><div class="section-title">背景</div>

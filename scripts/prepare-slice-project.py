@@ -29,9 +29,13 @@ _resources = os.environ.get('BAMBU_STUDIO_RESOURCES')
 NATIVE = (Path(_resources) if Path(_resources).name.lower() == 'profiles' else Path(_resources) / 'profiles') if _resources else Path('/Applications/BambuStudio.app/Contents/Resources/profiles')
 VERSION = 'v02.07.01.57'
 COMMIT = '3f126b717ed1f10fee0f32f05ed9731808d0c8bb'
-PROFILE = {'h2c': '0.20mm Standard @BBL H2C', 'p1s': '0.20mm Standard @BBL X1C', 'a1': '0.20mm Standard @BBL A1'}
-MACHINE = {'h2c': 'Bambu Lab H2C 0.4 nozzle', 'p1s': 'Bambu Lab P1S 0.4 nozzle', 'a1': 'Bambu Lab A1 0.4 nozzle'}
-FILAMENT = {'h2c': 'Generic PLA @BBL H2C 0.4 nozzle', 'p1s': 'Bambu PLA Basic @BBL P1S 0.4 nozzle', 'a1': 'Generic PLA @BBL A1'}
+PRINTER_CATALOG = json.loads((ROOT / 'src/printer-presets.json').read_text(encoding='utf-8'))
+PRINTERS = {model['id']: model for model in PRINTER_CATALOG['models']}
+DEFAULT_PRINTER = PRINTER_CATALOG['defaultPrinterModelId']
+PROFILE = {key: model['processProfile'] for key, model in PRINTERS.items()}
+MACHINE = {key: model['machineProfile'] for key, model in PRINTERS.items()}
+FILAMENT = {key: model['filamentProfile'] for key, model in PRINTERS.items()}
+PACKAGED_PROFILES = {'h2c': '0.20mm Standard @BBL H2C', 'p1s': '0.20mm Standard @BBL X1C', 'a1': '0.20mm Standard @BBL A1'}
 FLASH_PROFILES = {'machine': 'Flashforge Creator 5 0.4 nozzle', 'process': '0.20mm Standard @FF C5', 'filament': 'Generic PLA @FF C5'}
 DEFAULT_LAYER_HEIGHT_MM = 0.16
 DEFAULT_FIRST_LAYER_HEIGHT_MM = 0.2
@@ -83,11 +87,65 @@ def load_flat_profile(filename, base, stack=()):
     return result
 
 
-def official_process(preset):
-    values = load_flat_profile(VENDOR / 'process' / (PROFILE[preset] + '.json'), VENDOR)
+def profile_roots(resources, vendor):
+    root = Path(resources or NATIVE)
+    if root.name.lower() != 'profiles' and (root / 'profiles').is_dir():
+        root = root / 'profiles'
+    library = root / vendor if (root / vendor).is_dir() else root
+    return root, library
+
+
+def official_process(preset, resources=NATIVE, vendor='BBL', slicer_version=None):
+    root, library = profile_roots(resources, vendor)
+    if vendor == 'Flashforge':
+        process_name = FLASH_PROFILES['process']
+    else:
+        model = PRINTERS[preset]
+        process_name = model['processProfile']
+        machine_file = library / 'machine' / (model['machineProfile'] + '.json')
+        if machine_file.exists():
+            machine = load_flat_profile(machine_file, root)
+            process_name = machine.get('default_print_profile') or process_name
+    process_file = library / 'process' / (process_name + '.json')
+    if process_file.exists():
+        values = load_flat_profile(process_file, root)
+        profile_metadata = {'profileSource': 'installed-slicer-profile', 'version': slicer_version or 'unknown'}
+    else:
+        packaged = PACKAGED_PROFILES.get(preset)
+        if not packaged or vendor != 'BBL':
+            model_name = PRINTERS[preset]['displayName'] if preset in PRINTERS else preset
+            raise ValueError(f'本机切片器缺少 {model_name} 的工艺预设，请更新 Bambu Studio / OrcaSlicer 的机型配置后重试。')
+        values = load_flat_profile(VENDOR / 'process' / (packaged + '.json'), VENDOR)
+        profile_metadata = {'profileSource': 'bundled-bambu-profile', 'version': VERSION, 'commit': COMMIT}
     # These facts are constructor defaults in the pinned PrintConfig.cpp.
     values.setdefault('internal_solid_infill_pattern', 'rectilinear')
+    values['_profileMetadata'] = profile_metadata
     return values
+
+
+def printer_id_from_settings(settings):
+    printer_name = str(settings.get('printer_model', '')).strip().casefold()
+    settings_id = str(settings.get('printer_settings_id', '')).strip().casefold()
+    for key, model in PRINTERS.items():
+        system_name = model['machineProfile'].removesuffix(' 0.4 nozzle').casefold()
+        if printer_name == system_name or settings_id == model['machineProfile'].casefold():
+            return key
+    return None
+
+
+def printable_bed_size(machine, fallback):
+    points = []
+    raw_area = machine.get('printable_area', [])
+    if not isinstance(raw_area, list):
+        raw_area = [raw_area]
+    for area in raw_area:
+        for point in str(area).split(','):
+            match = re.fullmatch(r'\s*(-?\d+(?:\.\d+)?)\s*x\s*(-?\d+(?:\.\d+)?)\s*', point)
+            if match:
+                points.append((float(match[1]), float(match[2])))
+    if not points:
+        return [float(value) for value in fallback]
+    return [round(max(point[axis] for point in points) - min(point[axis] for point in points), 4) for axis in (0, 1)]
 
 
 def inert_settings(settings, corrections):
@@ -134,6 +192,7 @@ def read_project_settings(archive, names):
 
 def fill_missing(settings, defaults, corrections):
     sources = {}
+    profile_metadata = defaults.get('_profileMetadata', {'profileSource': 'bundled-bambu-profile', 'version': VERSION, 'commit': COMMIT})
     for key in PROCESS_KEYS:
         if key in settings:
             sources[key] = {'source': 'project', 'value': settings[key]}
@@ -147,8 +206,15 @@ def fill_missing(settings, defaults, corrections):
                             'defaultPolicy': DEFAULT_LAYER_HEIGHT_POLICY}
         elif key in defaults:
             settings[key] = defaults[key]
-            sources[key] = {'source': 'bambu-default', 'profile': defaults['name'], 'version': VERSION, 'commit': COMMIT, 'value': settings[key]}
+            sources[key] = {'source': 'bambu-default', 'profile': defaults['name'], **profile_metadata, 'value': settings[key]}
     return sources
+
+
+def set_fallback_profile_report(report, defaults):
+    if defaults and defaults.get('name'):
+        report['fallbackProfile'] = {'name': defaults['name'], **defaults.get('_profileMetadata', {}), 'parameterOverrides': {}}
+    else:
+        report['fallbackProfile'] = None
 
 
 def native_fallback(destination, settings, defaults, preset, colors, resources=NATIVE, vendor='BBL'):
@@ -160,11 +226,23 @@ def native_fallback(destination, settings, defaults, preset, colors, resources=N
     library = resources / vendor if (resources / vendor).is_dir() else resources
     machine_name = MACHINE[preset] if vendor == 'BBL' else FLASH_PROFILES['machine']
     filament_name = FILAMENT[preset] if vendor == 'BBL' else FLASH_PROFILES['filament']
-    machine = load_flat_profile(library / 'machine' / (machine_name + '.json'), resources)
+    machine_file = library / 'machine' / (machine_name + '.json')
+    filament_file = library / 'filament' / (filament_name + '.json')
+    if not machine_file.is_file() or not filament_file.is_file():
+        model_name = PRINTERS[preset]['displayName'] if vendor == 'BBL' else preset.upper()
+        raise ValueError(f'本机切片器缺少 {model_name} 的 0.4 mm 机型、工艺或耗材预设，请更新切片器的机型配置后重试。')
+    machine = load_flat_profile(machine_file, resources)
     native_machine_name = machine['name']
     process_base = machine.get('default_print_profile', PROFILE[preset]) if vendor == 'BBL' else FLASH_PROFILES['process']
-    process = load_flat_profile(library / 'process' / (process_base + '.json'), resources)
-    filament = load_flat_profile(library / 'filament' / (filament_name + '.json'), resources)
+    process_file = library / 'process' / (process_base + '.json')
+    if not process_file.is_file() and vendor == 'BBL' and process_base != PROFILE[preset]:
+        process_base = PROFILE[preset]
+        process_file = library / 'process' / (process_base + '.json')
+    if not process_file.is_file():
+        model_name = PRINTERS[preset]['displayName'] if vendor == 'BBL' else preset.upper()
+        raise ValueError(f'本机切片器缺少 {model_name} 的工艺预设，请更新切片器的机型配置后重试。')
+    process = load_flat_profile(process_file, resources)
+    filament = load_flat_profile(filament_file, resources)
     process.update({key: value for key, value in defaults.items() if key in process or key in PROCESS_KEYS})
     process.update({key: value for key, value in settings.items() if key in process or key in PROCESS_KEYS})
     layer_height = process.get('layer_height', str(DEFAULT_LAYER_HEIGHT_MM))
@@ -195,7 +273,8 @@ def native_fallback(destination, settings, defaults, preset, colors, resources=N
     # pinned historic Bambu union is wider (345 mm); the scene's conservative
     # 330 mm rectangle is explicit. A Flashforge profile keeps its own machine
     # identity while using this declared visualization stage rectangle.
-    bed = [330.0, 320.0] if preset == 'h2c' else [256.0, 256.0]
+    bed = ((PRINTERS[preset]['bedSizeMm'] if preset == 'h2c' else printable_bed_size(machine, PRINTERS[preset]['bedSizeMm'])) if vendor == 'BBL'
+           else ([330.0, 320.0] if preset == 'h2c' else [256.0, 256.0]))
     machine.update({'name': f'Growth Studio {native_machine_name}', 'from': 'user', 'inherits': native_machine_name,
                     'printable_area': ['0x0', f'{bed[0]:g}x0', f'{bed[0]:g}x{bed[1]:g}', f'0x{bed[1]:g}'],
                     'printer_settings_id': f'Growth Studio {native_machine_name}'})
@@ -272,7 +351,9 @@ def native_fallback(destination, settings, defaults, preset, colors, resources=N
                         'profileVendor': vendor, 'nativeProcessBaseProfile': process_base,
                         'resourcesDirectory': str(resources), 'originalMachine': settings.get('printer_model'),
                         'machineChanges': machine_changes, 'compatibilityChanges': compatibility_changes,
-                        'process': process_name, 'processSource': 'pinned-bambu-standard-base-with-explicit-settings',
+                        'process': process_name, 'processSource': defaults.get('_profileMetadata', {}).get('profileSource', 'unknown'),
+                        'processVersion': defaults.get('_profileMetadata', {}).get('version'),
+                        'processCommit': defaults.get('_profileMetadata', {}).get('commit'),
                         'processBaseProfile': PROFILE[preset],
                         'effectiveLayerHeightMm': float(layer_height),
                         'missingLayerHeightPolicy': DEFAULT_LAYER_HEIGHT_POLICY,
@@ -417,6 +498,23 @@ def prepare_3mf(source, destination, report, options, defaults):
         before = settings.copy()
         source_palette_saved = any(settings.get(key) for key in ('filament_colour', 'filament_color', 'extruder_colour', 'extruder_color'))
         support_before = {key: value for key, value in settings.items() if 'support' in key}
+        machine_missing = not settings.get('printer_settings_id') or not settings.get('printer_model')
+        vendor = options.get('profileVendor', 'BBL')
+        machine_foreign = not str(settings.get('printer_model', '')).startswith('Flashforge ' if vendor == 'Flashforge' else 'Bambu Lab ')
+        # The target picker is only a fallback for geometry-only or foreign
+        # machine projects. A saved native machine keeps its own process base.
+        project_preset = printer_id_from_settings(settings) if vendor == 'BBL' and not (machine_missing or machine_foreign) else None
+        defaults = {}
+        if machine_missing or machine_foreign:
+            defaults = official_process(options['preset'], options.get('slicerResources', NATIVE), vendor, options.get('slicerVersion'))
+        elif project_preset:
+            try:
+                defaults = official_process(project_preset, options.get('slicerResources', NATIVE), vendor, options.get('slicerVersion'))
+            except (FileNotFoundError, ValueError):
+                # Existing source projects remain importable when a local
+                # preset library is incomplete; saved settings stay intact.
+                defaults = {}
+        set_fallback_profile_report(report, defaults)
         sources = fill_missing(settings, defaults, corrections)
         inert_settings(settings, corrections)
         # Same proven inactive-setting compatibility repair as support slicing.
@@ -472,9 +570,6 @@ def prepare_3mf(source, destination, report, options, defaults):
             embedded = {'archiveEntry': entry.filename, 'bytes': entry.file_size,
                         'sha256': file_hash(embedded_path), 'selection': 'original-embedded-complete-gcode',
                         'file': embedded_path.name, 'reSliced': False}
-        machine_missing = not settings.get('printer_settings_id') or not settings.get('printer_model')
-        vendor = options.get('profileVendor', 'BBL')
-        machine_foreign = not str(settings.get('printer_model', '')).startswith('Flashforge ' if vendor == 'Flashforge' else 'Bambu Lab ')
         engine = None
         if (machine_missing or machine_foreign) and not embedded:
             settings, bed, engine = native_fallback(Path(destination).parent, settings, defaults, options['preset'], options.get('toolColors', []), options.get('slicerResources', NATIVE), vendor)
@@ -521,19 +616,25 @@ def prepare_3mf(source, destination, report, options, defaults):
 
 def prepare(source, destination, report_path, options_path):
     options = json.loads(Path(options_path).read_text(encoding='utf-8'))
-    defaults = official_process(options['preset'])
+    options.setdefault('preset', DEFAULT_PRINTER)
+    if options.get('preset') not in PRINTERS:
+        raise ValueError('The selected Bambu target printer is not in the supported 0.4 mm preset catalog.')
+    defaults = official_process(options['preset'], options.get('slicerResources', NATIVE), options.get('profileVendor', 'BBL'), options.get('slicerVersion')) if options.get('format') == 'stl' else {}
     report = {'schemaVersion': 1, 'visualizationOnly': True, 'sourceSha256': file_hash(source),
-              'fallbackProfile': {'name': PROFILE[options['preset']], 'version': VERSION, 'commit': COMMIT,
-                                  'parameterOverrides': {}},
+              'fallbackProfile': None,
               'slicingEngine': {'bambu': 'installed Bambu Studio CLI', 'flash': 'installed Flash Studio CLI', 'orca': 'installed OrcaSlicer CLI'}.get(options.get('engineId'), 'installed Flash Studio CLI' if options.get('profileVendor') == 'Flashforge' else 'installed Bambu Studio CLI'),
               'engineId': options.get('engineId', 'flash' if options.get('profileVendor') == 'Flashforge' else 'bambu'),
               'profileVendor': options.get('profileVendor', 'BBL'), 'forceReslice': options.get('forceReslice') is True, 'corrections': []}
+    set_fallback_profile_report(report, defaults)
     if options['format'] == 'stl':
         prepare_stl(source, destination, report, options, defaults)
     else:
         prepare_3mf(source, destination, report, options, defaults)
     layer_source = report['fieldSources'].get('layer_height', {})
     if layer_source.get('source') == 'studio-default':
+        if report['fallbackProfile'] is None:
+            report['fallbackProfile'] = {'name': PROFILE[options['preset']], 'version': VERSION, 'commit': COMMIT,
+                                         'parameterOverrides': {}}
         report['fallbackProfile']['parameterOverrides']['layer_height'] = layer_source
     os.chmod(destination, 0o600)
     Path(report_path).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')

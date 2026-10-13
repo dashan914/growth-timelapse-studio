@@ -1,5 +1,6 @@
 // Parameter facts verified against Bambu Studio v02.07.01.57. This module
 // normalizes saved settings; it does not synthesize or claim exact toolpaths.
+import {BAMBU_PRINTER_MODELS,DEFAULT_BAMBU_PRINTER_MODEL_ID,getBambuPrinterModel} from './printer-presets.js';
 export const BAMBU_DEFAULT_VERSION = 'v02.07.01.57';
 export const BAMBU_DEFAULT_COMMIT = '3f126b717ed1f10fee0f32f05ed9731808d0c8bb';
 // The user selected 0.16 mm as this tool's missing-layer preference. Other
@@ -18,9 +19,7 @@ export const BAMBU_SLICE_DEFAULT_SOURCES = Object.freeze([
   `${BASE_URL}/src/libslic3r/PrintConfig.cpp`,
 ]);
 
-const PROFILE_NAMES = Object.freeze({
-  h2c: '0.20mm Standard @BBL H2C', p1s: '0.20mm Standard @BBL X1C', a1: '0.20mm Standard @BBL A1',
-});
+const PROFILE_NAMES = Object.freeze(Object.fromEntries(BAMBU_PRINTER_MODELS.map(model=>[model.id,model.processProfile])));
 const DEFAULTS = Object.freeze({
   layer_height: String(DEFAULT_LAYER_HEIGHT_MM), initial_layer_print_height: String(DEFAULT_FIRST_LAYER_HEIGHT_MM), wall_loops: '2',
   sparse_infill_density: '15%', sparse_infill_pattern: 'grid', infill_direction: '45',
@@ -158,7 +157,8 @@ function normalizeLayers(layers, preset) {
 /** Settings describe intent; actual G-code is authoritative for per-layer
  * geometry, painted colors, modifier volumes, shell transitions and Arachne. */
 export function normalizeSliceSettings(project = {}, { preset = 'h2c', objects = new Map(), source = 'project' } = {}) {
-  if (!own(PROFILE_NAMES, preset)) preset = 'h2c';
+  if (!own(PROFILE_NAMES, preset)) preset = DEFAULT_BAMBU_PRINTER_MODEL_ID;
+  const printerModel=getBambuPrinterModel(preset);
   const raw = parseSliceSettingsText(project);
   const layers = [{ source, values: raw }];
   const base = normalizeLayers(layers, preset);
@@ -178,8 +178,8 @@ export function normalizeSliceSettings(project = {}, { preset = 'h2c', objects =
     }
     overrides.push({ objectId: String(objectId), settings: objectSettings, parts });
   }
-  return { ...base, schemaVersion: 1, preset, sourceType: source, profileName: String(raw.print_settings_id || `Growth Studio ${base.layerHeightMm}mm @BBL ${preset.toUpperCase()}`),
-    printerName: String(raw.printer_model || raw.printer_settings_id || `Bambu Lab ${preset.toUpperCase()} 0.4 nozzle`),
+  return { ...base, schemaVersion: 1, preset, sourceType: source, profileName: String(raw.print_settings_id || `Growth Studio ${base.layerHeightMm}mm @BBL ${printerModel.displayName}`),
+    printerName: String(raw.printer_model || raw.printer_settings_id || printerModel.machineProfile),
     fallbackProfile: { name: PROFILE_NAMES[preset], version: BAMBU_DEFAULT_VERSION, commit: BAMBU_DEFAULT_COMMIT, nozzleDiameterMm: 0.4,
       parameterOverrides: base.fields.layerHeightMm.source === 'studio-default' ? { layer_height: { value: String(DEFAULT_LAYER_HEIGHT_MM), source: 'studio-default', defaultPolicy: DEFAULT_LAYER_HEIGHT_POLICY } } : {} },
     filaments, overrides, exactToolpaths: false, colorResolution: 'slice-required' };

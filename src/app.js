@@ -21,6 +21,7 @@ import {waitForSlice,parsePrintLayersInWorker} from './slice-client.js';
 import {createImportProgressUI} from './import-progress.js';
 import {RealisticPreviewRenderer} from './realistic-preview.js';
 import {initializeStyledSelects} from './styled-select.js';
+import {DEFAULT_BAMBU_PRINTER_MODEL_ID,isBambuPrinterModel} from './printer-presets.js';
 import {outputFormat} from './output-format.js';
 import {BACKGROUND_PRESETS} from './background-presets.js';
 import {selectPresetPlacementSnapshot,needsPresetPlacementUpgrade} from './preset-placement-state.js';
@@ -378,7 +379,7 @@ function syncDetectedSlicer(){
   $('detected-slicer').textContent=slicingRuntime.available?`已检测到 ${slicingRuntime.label||slicingRuntime.engine.replace(/\s*CLI$/,'')}，导入后自动切片。`:'未检测到本机切片器，请安装 Bambu Studio、OrcaSlicer 或 Flash Studio。';
 }
 
-async function prepareLocalModelSlice(file,{signal,preset='h2c',sourceUnits=1,onProgress=()=>{}}={}){
+async function prepareLocalModelSlice(file,{signal,preset=DEFAULT_BAMBU_PRINTER_MODEL_ID,sourceUnits=1,onProgress=()=>{}}={}){
   const abort=()=>{if(signal?.aborted)throw new DOMException('Aborted','AbortError');};
   let id=null,cancellation=null;
   const cancelNative=()=>{if(id)cancellation ||= api(`/api/slices/${id}`,{method:'DELETE'}).catch(()=>{});};
@@ -389,6 +390,7 @@ async function prepareLocalModelSlice(file,{signal,preset='h2c',sourceUnits=1,on
     syncDetectedSlicer();
     if(!slicingRuntime?.available)throw new Error('未找到可用的本机切片器，请在运行本机服务的电脑安装 Bambu Studio、OrcaSlicer 或 Flash Studio 后重试。');
     const format=file.name.toLowerCase().split('.').pop();
+    preset=isBambuPrinterModel(preset)?preset:DEFAULT_BAMBU_PRINTER_MODEL_ID;
     const options={format,preset,engineId:'auto',sourceName:file.name,sourceCoordinateSystem:'printer-z-up',
       sourceToPrinter:new THREE.Matrix4().makeScale(format==='stl'?sourceUnits:1,format==='stl'?sourceUnits:1,format==='stl'?sourceUnits:1).toArray(),
       ...(format==='stl'?{toolColors:[$('model-color').value]}:{})};
@@ -463,7 +465,7 @@ const settingIds = ['layers','stepped','layer-lines','model-color','preserve-mat
 function persistSettings() {
   if(restoringProject||calibrationMode||loading)return;
   rememberBackgroundAppearance();
-  const data = {scene,backgroundPreset,modelSourceKey,posePlacement,poseUpdatedAt:Date.now(),sourceSceneScale:studio?.sourceMillimetresToWorld,poseCamera:modelSceneCamera(),cameraMetricRevision:CAMERA_METRIC_REVISION,backgroundAppearanceKey:currentBackgroundAppearanceKey(),backgroundAppearances,lighting:lightingSettings(),lightingPresetRevision:LIGHTING_PRESET_REVISION,dof:dofSettings(),dofPresetRevision:DOF_PRESET_REVISION,pose:modelPose(),...surfaceSettings()};
+  const data = {scene,backgroundPreset,targetPrinterPreset:$('target-printer').value,modelSourceKey,posePlacement,poseUpdatedAt:Date.now(),sourceSceneScale:studio?.sourceMillimetresToWorld,poseCamera:modelSceneCamera(),cameraMetricRevision:CAMERA_METRIC_REVISION,backgroundAppearanceKey:currentBackgroundAppearanceKey(),backgroundAppearances,lighting:lightingSettings(),lightingPresetRevision:LIGHTING_PRESET_REVISION,dof:dofSettings(),dofPresetRevision:DOF_PRESET_REVISION,pose:modelPose(),...surfaceSettings()};
   for (const id of settingIds) data[id] = $(id).type === 'checkbox' ? $(id).checked : $(id).value;
   data.exportQualityPreference=qualityPreference||'realtime';data['export-quality']=data.exportQualityPreference;
   try { localStorage.setItem('growth-studio-settings-v4',JSON.stringify(data)); } catch {}
@@ -478,7 +480,7 @@ function queueProjectState(){
     if(restoringProject || !studio?.hasModel() || !studio.metadata || loading || exporting || alignBusy || calibrationMode)return;
     rememberBackgroundAppearance();
     const poseCamera=modelSceneCamera();
-    const cachedSettings={backgroundPreset,modelSourceKey,posePlacement,poseUpdatedAt:Date.now(),sourceSceneScale:studio.sourceMillimetresToWorld,poseCamera,backgroundAppearanceKey:currentBackgroundAppearanceKey(),backgroundAppearances,activeCalibration,manualSupportMapping:manualSupportMapping?{key:modelSourceKey,matrix:manualSupportMapping}:null,sourceUnits:studio.metadata.sourceUnitsUserConfirmed?{key:modelSourceKey,value:studio.metadata.sourceUnitsToMm}:null,sliceCache:sliceReadyJob,cameraCalibrationRevision:getPresetCalibration(backgroundPreset)?.calibrationRevision||0,cameraMetricRevision:CAMERA_METRIC_REVISION,toolColors,cropRect,lighting:lightingSettings(),lightingPresetRevision:LIGHTING_PRESET_REVISION,dof:dofSettings(),dofPresetRevision:DOF_PRESET_REVISION,outputAppearance:'model',exportQualityPreference:qualityPreference||'realtime',pose:modelPose(),...surfaceSettings()};
+    const cachedSettings={backgroundPreset,targetPrinterPreset:$('target-printer').value,modelSourceKey,posePlacement,poseUpdatedAt:Date.now(),sourceSceneScale:studio.sourceMillimetresToWorld,poseCamera,backgroundAppearanceKey:currentBackgroundAppearanceKey(),backgroundAppearances,activeCalibration,manualSupportMapping:manualSupportMapping?{key:modelSourceKey,matrix:manualSupportMapping}:null,sourceUnits:studio.metadata.sourceUnitsUserConfirmed?{key:modelSourceKey,value:studio.metadata.sourceUnitsToMm}:null,sliceCache:sliceReadyJob,cameraCalibrationRevision:getPresetCalibration(backgroundPreset)?.calibrationRevision||0,cameraMetricRevision:CAMERA_METRIC_REVISION,toolColors,cropRect,lighting:lightingSettings(),lightingPresetRevision:LIGHTING_PRESET_REVISION,dof:dofSettings(),dofPresetRevision:DOF_PRESET_REVISION,outputAppearance:'model',exportQualityPreference:qualityPreference||'realtime',pose:modelPose(),...surfaceSettings()};
     cachePatch({settings:cachedSettings,camera:poseCamera,backgroundPreset:backgroundPreset||null});
   },350);
 }
@@ -723,6 +725,7 @@ function restoreSettings() {
     if (!data) return;
     restoredSettingsData=data;backgroundAppearances=normalizeBackgroundAppearances(data.backgroundAppearances);
     if(!raw)data.hold=0;
+    if(isBambuPrinterModel(data.targetPrinterPreset))$('target-printer').value=data.targetPrinterPreset;
     // Opening the workbench always starts in its responsive default. A saved
     // project must not launch a physical render before the user requests it.
     // Pose restoration waits for the source model and background, then chooses
@@ -1134,7 +1137,7 @@ async function loadModel(files, demo = false, {sourceUnits=null,preset=null,resl
   try {
     await paint();check();
     const format=file.name.toLowerCase().split('.').pop(),units=format==='stl'&&[1,10,1000].includes(Number(sourceUnits))?Number(sourceUnits):1;
-    const selectedPreset=['h2c','p1s','a1'].includes(preset)?preset:['h2c','p1s','a1'].includes(backgroundPreset)?backgroundPreset:'h2c';
+    const selectedPreset=isBambuPrinterModel(preset)?preset:isBambuPrinterModel($('target-printer').value)?$('target-printer').value:DEFAULT_BAMBU_PRINTER_MODEL_ID;
     prepared=await prepareLocalModelSlice(file,{signal:abort.signal,preset:selectedPreset,sourceUnits:units,onProgress:event=>{
       if(generation===importSequence&&!abort.signal.aborted){importProgressUI?.update(event);$('slice-status').textContent=event.message||'正在准备真实切片…';}
     }});
@@ -1446,6 +1449,9 @@ async function init() {
     const units=Number($('source-unit').value);
     if(!loading&&modelFile&&/\.stl$/i.test(modelFile.name)&&[1,10,1000].includes(units))await loadModel([modelFile],false,{sourceUnits:units,resliceExisting:true});
   });
+  $('target-printer').addEventListener('change',()=>{
+    if(isBambuPrinterModel($('target-printer').value))persistSettings();
+  });
   photoPreview=new PhotoPreviewRenderer({canvas:$('photo-growth-layer'),studio,prepare:preparePhotoFrames,renderBase:(progress,{afterPrepare})=>{if(afterPrepare)studio.render(progress,0);return studio.canvas;},onError:error=>say(error.message,true)});
   realisticPreview=new RealisticPreviewRenderer({image:$('realistic-preview-layer'),request:api,onState:showRealisticPreviewState,
     prepare:({width,height,progress})=>studio.createRenderPackage({output:{width,height,fps:1,frames:1,growthFrames:1,samples:64,previewProgress:progress},backgroundFile,bedWidthMm:Number($('bed-width').value),bedDepthMm:Number($('bed-depth').value),cameraMode:'fixed'}),
@@ -1618,6 +1624,11 @@ async function init() {
   });
   try{
     const saved=await loadProjectFiles();
+    const restoredPrinter=saved?.settings?.targetPrinterPreset||saved?.settings?.sliceCache?.preset;
+    if(isBambuPrinterModel(restoredPrinter)){
+      $('target-printer').value=restoredPrinter;
+      $('target-printer').dispatchEvent(new Event('change',{bubbles:true}));
+    }
     restoreBackgroundAppearanceCache(saved);
     if(saved?.modelFiles?.length)await loadModel(saved.modelFiles,false,{sourceUnits:saved.settings?.sourceUnits?.value??null,
       preset:saved.settings?.sliceCache?.clientRevision===LOCAL_SLICE_CLIENT_REVISION?saved.settings.sliceCache.preset:null});

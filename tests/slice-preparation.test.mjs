@@ -7,15 +7,16 @@ import {tmpdir} from 'node:os';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {zipSync,unzipSync,strToU8,strFromU8} from 'three/addons/libs/fflate.module.js';
+import {BAMBU_PRINTER_MODELS} from '../src/printer-presets.js';
 
 const run=promisify(execFile),script=path.resolve('scripts/prepare-slice-project.py');
-const presets={h2c:['Bambu Lab H2C 0.4 nozzle','0.20mm Standard @BBL H2C','Generic PLA @BBL H2C 0.4 nozzle'],p1s:['Bambu Lab P1S 0.4 nozzle','0.20mm Standard @BBL X1C','Bambu PLA Basic @BBL P1S 0.4 nozzle'],a1:['Bambu Lab A1 0.4 nozzle','0.20mm Standard @BBL A1','Generic PLA @BBL A1']};
+const presets=Object.fromEntries(BAMBU_PRINTER_MODELS.map(model=>[model.id,[model.machineProfile,model.processProfile,model.filamentProfile,model.bedSizeMm]]));
 async function resources(directory){
   const root=path.join(directory,'mock-bambu-resources','profiles');
   for(const type of ['machine','process','filament'])await fs.mkdir(path.join(root,'BBL',type),{recursive:true});
-  for(const[preset,[machine,process,filament]]of Object.entries(presets)){
-    const values={machine:{name:machine,type:'machine',printer_model:machine.replace(' 0.4 nozzle',''),nozzle_diameter:['0.4'],default_print_profile:process,printable_height:preset==='h2c'?'320':'256'},
-      process:{name:process,type:'process',layer_height:'0.2',initial_layer_print_height:'0.2',wall_loops:'2',enable_support:'0'},
+  for(const[modelId,[machine,process,filament,bed]]of Object.entries(presets)){
+    const values={machine:{name:machine,type:'machine',printer_model:machine.replace(' 0.4 nozzle',''),nozzle_diameter:['0.4'],...(modelId==='h2d'?{}:{default_print_profile:process}),default_filament_profile:[filament],printable_area:[`0x0,${bed[0]}x0,${bed[0]}x${bed[1]},0x${bed[1]}`],printable_height:String(bed[1])},
+      process:{name:process,type:'process',layer_height:'0.2',initial_layer_print_height:'0.2',wall_loops:'2',enable_support:'0',sparse_infill_pattern:modelId==='a1'?'rectilinear':modelId==='x2d'?'lightning':'grid'},
       filament:{name:filament,type:'filament',filament_type:['PLA'],nozzle_temperature:['220'],filament_flow_ratio:['1']}};
     for(const[type,name]of [['machine',machine],['process',process],['filament',filament]])await fs.writeFile(path.join(root,'BBL',type,name+'.json'),JSON.stringify(values[type]));
   }
@@ -31,12 +32,28 @@ async function flashResources(directory){
 }
 const model='<model unit="centimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/><vertex x="0" y="1" z="1"/></vertices><triangles><triangle v1="0" v2="1" v3="2" paint_color="8843"/></triangles></mesh></object></resources><build><item objectid="1" transform="1 0 0 0 1 0 0 0 1 11 12 0"/></build></model>';
 const meta='<config><object id="1"><metadata key="extruder" value="1"/><metadata key="layer_height" value="0.18"/><part id="1" subtype="normal_part"><metadata key="extruder" value="2"/><metadata key="layer_height" value="0.08"/></part></object><plate><metadata key="plater_id" value="1"/></plate></config>';
+const stl='solid source\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 10 0 0\nvertex 0 10 2\nendloop\nendfacet\nendsolid source\n';
 async function stage(directory,name,bytes,options){
   const root=path.join(directory,name);await fs.mkdir(root);const source=path.join(root,'source.'+(options.format||'3mf')),prepared=path.join(root,'prepared.3mf'),report=path.join(root,'report.json'),settings=path.join(root,'options.json');
   await fs.writeFile(source,bytes);await fs.writeFile(settings,JSON.stringify({preset:'h2c',format:'3mf',...options}));
   await run(findPythonPath(),[script,source,prepared,report,settings]);
   return{root,source,bytes:await fs.readFile(source),archive:unzipSync(new Uint8Array(await fs.readFile(prepared))),report:JSON.parse(await fs.readFile(report,'utf8'))};
 }
+
+test('all 14 Bambu targets stage their matching 0.4 mm profiles and native bed dimensions',async t=>{
+  const directory=await fs.mkdtemp(path.join(tmpdir(),'bambu-printer-catalog-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));
+  const native=await resources(directory);
+  for(const model of BAMBU_PRINTER_MODELS){
+    const result=await stage(directory,`target-${model.id}`,Buffer.from(stl),{format:'stl',preset:model.id,slicerResources:native,toolColors:['#456789']});
+    const profiles=result.report.fallbackEngineProfiles;
+    assert.equal(profiles.machine,model.machineProfile,model.id+' machine');
+    assert.equal(profiles.nativeProcessBaseProfile,model.processProfile,model.id+' process');
+    assert.equal(profiles.filament,model.filamentProfile,model.id+' filament');
+    assert.deepEqual(result.report.bedSizeMm,model.bedSizeMm,model.id+' bed');
+    assert.equal(result.report.fallbackProfile.profileSource,'installed-slicer-profile',model.id+' profile provenance');
+    assert.equal(result.report.rawSettings.printer_model,model.machineProfile.replace(' 0.4 nozzle',''),model.id+' saved machine');
+  }
+});
 
 test('missing H2C prime tower position lies inside the shared nozzle area and explicit coordinates remain authoritative',async t=>{
   const directory=await fs.mkdtemp(path.join(tmpdir(),'h2c-prime-position-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));
@@ -91,10 +108,10 @@ test('forced Bambu re-slicing preserves original complex 3MF members/settings an
 });
 
 test('complete saved Bambu configuration remains authoritative and actual multiple plates still reject before any engine',async t=>{
-  const directory=await fs.mkdtemp(path.join(tmpdir(),'bambu-native-project-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));
+  const directory=await fs.mkdtemp(path.join(tmpdir(),'bambu-native-project-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));const native=await resources(directory);
   const settings={printer_model:'Bambu Lab A1',printer_settings_id:'Saved Bambu custom 0.4 nozzle',layer_height:'0.12',initial_layer_print_height:'0.25',filament_colour:['#13579b'],enable_support:'0'};
   const entries={'3D/3dmodel.model':strToU8(model),'Metadata/model_settings.config':strToU8(meta),'Metadata/project_settings.config':strToU8(JSON.stringify(settings)),'Metadata/plate_2.gcode':strToU8('stale paths')};
-  const r=await stage(directory,'native',zipSync(entries),{forceReslice:true,slicerResources:'/missing-unused-profile-resources'});assert.equal(r.report.fallbackEngineProfiles,null);assert.equal(r.report.rawSettings.printer_settings_id,settings.printer_settings_id);assert.equal(r.report.rawSettings.printer_model,settings.printer_model);assert.equal(r.report.embeddedGcode,null);assert.equal(strFromU8(r.archive['3D/3dmodel.model']),model);
+  const r=await stage(directory,'native',zipSync(entries),{preset:'x2d',forceReslice:true,slicerResources:native});assert.equal(r.report.fallbackEngineProfiles,null);assert.equal(r.report.fallbackProfile.profileSource,'installed-slicer-profile');assert.equal(r.report.fallbackProfile.name,presets.a1[1]);assert.equal(r.report.rawSettings.printer_settings_id,settings.printer_settings_id);assert.equal(r.report.rawSettings.printer_model,settings.printer_model);assert.equal(r.report.rawSettings.sparse_infill_pattern,'rectilinear');assert.equal(r.report.fieldSources.sparse_infill_pattern.profile,presets.a1[1]);assert.equal(r.report.fieldSources.sparse_infill_pattern.version,'unknown');assert.equal(r.report.embeddedGcode,null);assert.equal(strFromU8(r.archive['3D/3dmodel.model']),model);
   entries['Metadata/model_settings.config']=strToU8(meta.replace('</config>','<plate><metadata key="plater_id" value="2"/></plate></config>'));
   await assert.rejects(stage(directory,'multiple',zipSync(entries),{forceReslice:true}),error=>/多个打印盘/.test(error.stderr));
 });

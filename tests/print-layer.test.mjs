@@ -85,6 +85,19 @@ test('native H2C startup and service tools preserve actual colored model/support
   assert.equal(result.exactLinearPaths,true);
 });
 
+test('official X2D and A1 machine startup macros do not hide the following real model paths',()=>{
+  const startup='G90\nM83\nG383.4\nG28 X\nG1 X0 Y0 Z0.2\nG2814 Z0.32\n';
+  const result=parsePrintLayerGCode(startup+fixture);
+  const original=parsePrintLayerGCode(fixture);
+  assert.deepEqual(result.positions,original.positions);
+  assert.deepEqual(result.tools,original.tools);
+  assert.deepEqual(result.features,original.features);
+  assert.equal(result.exactLinearPaths,true);
+  assert.throws(()=>parsePrintLayerGCode(fixture+'G383.4 E7\n'),/不支持的/);
+  assert.throws(()=>parsePrintLayerGCode(fixture+'G2814 Z0.32 E7\n'),/不支持的/);
+  assert.throws(()=>parsePrintLayerGCode(fixture+'G383.40\n'),/不支持的/);
+});
+
 test('conditional H2C wiping requires absolute resynchronization before a retained deposition', () => {
   const wipe='G387 Y320 J1 F10000\nG1 X10 F30000\nG387 Y295 J1\nG387 Y265 J1\nG1 Y0 F30000\n';
   const result=parsePrintLayerGCode(fixture.replace('G1 X10 Y0 E1\n','G1 X10 Y0 E1\n'+wipe));

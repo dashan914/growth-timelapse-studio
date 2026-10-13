@@ -8,6 +8,7 @@ import {DEFAULT_LIGHTING,getPresetLighting,normalizeLighting,LIGHTING_PRESET_REV
 import {migratePresetLighting} from '../src/preset-lighting-migration.js';
 import {getPresetDof,normalizeDof,migratePresetDof,DOF_PRESET_REVISION} from '../src/preset-dof.js';
 import {getPresetCalibration} from '../src/preset-calibrations.js';
+import {isBambuPrinterModel} from '../src/printer-presets.js';
 
 const source=await readFile(new URL('../src/app.js',import.meta.url),'utf8');
 const copy=value=>JSON.parse(JSON.stringify(value));
@@ -70,7 +71,7 @@ function fixture({savedLocal=null,restoring=false}={}){
       this.backgroundMetadata={type:'image',width:1080,height:1440,name:file.name};
     }};
   let timerSequence=0;
-  const context=vm.createContext({File,Blob,DOMException,studio,$:get,printerPresets:BACKGROUND_PRESETS,
+  const context=vm.createContext({File,Blob,DOMException,studio,$:get,printerPresets:BACKGROUND_PRESETS,isBambuPrinterModel,
     backgroundAppearanceKey,normalizeBackgroundAppearance,normalizeBackgroundAppearances,
     DEFAULT_LIGHTING,getPresetLighting,normalizeLighting,LIGHTING_PRESET_REVISION,migratePresetLighting,
     getPresetDof,normalizeDof,migratePresetDof,DOF_PRESET_REVISION,getPresetCalibration,
@@ -221,6 +222,16 @@ test('local settings and debounced project snapshots both persist the complete b
   restored.context.restoreSettings();restored.context.restoreBackgroundAppearanceCache({...project,backgroundPreset:'teal-room'});
   for(const id of ids){await restored.preset(id);assert.deepEqual(restored.snapshot(),expected.get(id));}
   assert.equal(restored.writes.length,0,'restoration must not capture a transient background appearance');
+});
+
+test('the selected slice target persists independently from the chosen background',()=>{
+  const saved=fixture();saved.context.backgroundPreset='a1';saved.get('target-printer').value='x2d';
+  saved.context.persistSettings();saved.context.queueProjectState();saved.flush();
+  const local=saved.writes.at(-1),project=saved.patches.filter(patch=>patch.settings).at(-1);
+  assert.equal(local.targetPrinterPreset,'x2d');assert.equal(project.settings.targetPrinterPreset,'x2d');
+  assert.equal(local.backgroundPreset,'a1');assert.equal(project.settings.backgroundPreset,'a1');
+  const restored=fixture({savedLocal:local,restoring:true});restored.context.restoreSettings();
+  assert.equal(restored.get('target-printer').value,'x2d');assert.equal(restored.context.backgroundPreset,'a1');
 });
 
 test('loading never persists the temporary pose, then both stores capture the same finished placement marker',()=>{

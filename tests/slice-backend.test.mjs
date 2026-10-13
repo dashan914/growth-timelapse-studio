@@ -10,6 +10,7 @@ import { PassThrough } from 'node:stream';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createSliceService, friendlyNativeFailure, indexSliceGCode, SLICE_SLICER, validateSliceOptions } from '../slice-jobs.mjs';
+import {BAMBU_PRINTER_MODELS} from '../src/printer-presets.js';
 import { parsePrintLayerGCode } from '../src/print-layer.js';
 import { createSlicerProfiles } from './helpers/slicer-profiles.mjs';
 
@@ -160,6 +161,13 @@ test('slice option validation rejects paths, implicit Y-up mappings, singular ma
   assert.throws(() => validateSliceOptions({ format: '3mf', sourceToPrinter: axis }), { code: 'SLICE_TRANSFORM_INVALID' });
   assert.throws(() => validateSliceOptions({ toolColors: ['javascript:bad'] }), { code: 'SLICE_PALETTE_INVALID' });
   assert.equal(validateSliceOptions({ sourceName: '../../valid.3mf' }).sourceName, 'valid.3mf');
+});
+
+test('slice request validation accepts each registered Bambu machine and rejects unknown targets',()=>{
+  for(const model of BAMBU_PRINTER_MODELS){
+    assert.equal(validateSliceOptions({preset:model.id}).preset,model.id);
+  }
+  assert.throws(()=>validateSliceOptions({preset:'x2d-prototype'}),{code:'SLICE_PRESET_INVALID'});
 });
 
 test('body limits, empty upload, concurrent reservation and unavailable engine leave no partial job', async t => {
@@ -340,6 +348,8 @@ test('native failures show short actionable Chinese messages while complete orig
   assert.deepEqual(await readdir(path.join(root, '.slice-jobs')), [], 'temporary source/models and partial paths were removed');
   assert.match(friendlyNativeFailure('0 printable instances; Nothing to be sliced'), /超出底板/);
   assert.match(friendlyNativeFailure('Param values in 3mf/config error: unsupported pattern'), /参数.*不兼容/);
+  assert.equal(friendlyNativeFailure('本机切片器缺少 X2D 的工艺预设，请更新 Bambu Studio / OrcaSlicer 的机型配置后重试。',{preparing:true}),
+    '本机切片器缺少 X2D 的工艺预设，请更新 Bambu Studio / OrcaSlicer 的机型配置后重试。');
 });
 
 test('closing one service never removes a different service instance private running or complete results', async t => {
@@ -390,6 +400,30 @@ test('tiny real native slice uses the Bambu pinned fallback geometry facts and o
   assert.equal(report.sliceSettings.fields.wallLoops.source, 'bambu-default');
   assert.equal(report.sliceSettings.fields.layerHeightMm.source, 'studio-default');
   assert.equal(report.sliceSettings.fields.layerHeightMm.defaultPolicy, 'user-preference-0.16');
+});
+
+test('installed Bambu Studio slices and parses a real model for every registered 0.4 mm target', {skip: process.env.GROWTH_NATIVE_SLICER_TESTS !== '1'}, async t => {
+  try { await access(SLICE_SLICER, constants.X_OK); } catch { t.skip('Local Bambu Studio CLI is not installed.'); return; }
+  const root = await mkdtemp(path.join(tmpdir(), 'slice-native-bambu-catalog-'));
+  const service = createSliceService({ root, timeoutMs: 90_000 });
+  t.after(async () => { await service.close(); await rm(root, { recursive: true, force: true }); });
+  for (const model of BAMBU_PRINTER_MODELS) {
+    const created = await service.create(cubeStl(), { format: 'stl', preset: model.id, sourceName: `${model.id}-catalog-smoke.stl`, toolColors: ['#ABCDEF'] });
+    const result = await waitFor(service, created.id);
+    assert.equal(result.status, 'complete', `${model.id}: ${result.message}`);
+    const report = await service.provenance(created.id);
+    assert.equal(report.fallbackEngineProfiles.machine, model.machineProfile, `${model.id} machine`);
+    assert.equal(report.fallbackEngineProfiles.nativeProcessBaseProfile, model.processProfile, `${model.id} process`);
+    assert.equal(report.fallbackEngineProfiles.filament, model.filamentProfile, `${model.id} filament`);
+    assert.equal(report.fallbackEngineProfiles.processSource, 'installed-slicer-profile', `${model.id} process provenance`);
+    assert.ok(report.fallbackProfile.version, `${model.id} installed slicer version`);
+    assert.deepEqual(report.bedSizeMm, model.bedSizeMm, `${model.id} bed`);
+    assert.equal(report.rawSettings.printer_model, model.machineProfile.replace(' 0.4 nozzle', ''), `${model.id} target persisted into staging`);
+    const text = await readFile(await service.gcodeFile(created.id), 'utf8');
+    const parsed = parsePrintLayerGCode(text);
+    assert.equal(parsed.exactLinearPaths, true, `${model.id} G-code paths parsed exactly`);
+    assert.ok(parsed.segmentCount > 100, `${model.id} contains complete real extrusion paths`);
+  }
 });
 
 test('generic two-part 3MF fallback preserves both original part extruders and both real sliced filament colors', async t => {

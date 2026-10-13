@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "catalog": {
+    "software": "Bambu Studio",
+    "version": "v02.07.01.57",
+    "commit": "3f126b717ed1f10fee0f32f05ed9731808d0c8bb"
+  },
+  "defaultPrinterModelId": "h2c",
+  "models": [
+    { "id": "a1", "displayName": "A1", "machineProfile": "Bambu Lab A1 0.4 nozzle", "processProfile": "0.20mm Standard @BBL A1", "filamentProfile": "Generic PLA @BBL A1", "bedSizeMm": [256, 256] },
+    { "id": "a1-mini", "displayName": "A1 mini", "machineProfile": "Bambu Lab A1 mini 0.4 nozzle", "processProfile": "0.20mm Standard @BBL A1M", "filamentProfile": "Bambu PLA Basic @BBL A1M", "bedSizeMm": [180, 180] },
+    { "id": "a2l", "displayName": "A2L", "machineProfile": "Bambu Lab A2L 0.4 nozzle", "processProfile": "0.20mm Standard @BBL A2L", "filamentProfile": "Bambu PLA Basic @BBL A2L 0.4 nozzle", "bedSizeMm": [330, 320] },
+    { "id": "h2c", "displayName": "H2C", "machineProfile": "Bambu Lab H2C 0.4 nozzle", "processProfile": "0.20mm Standard @BBL H2C", "filamentProfile": "Generic PLA @BBL H2C 0.4 nozzle", "bedSizeMm": [330, 320] },
+    { "id": "h2d", "displayName": "H2D", "machineProfile": "Bambu Lab H2D 0.4 nozzle", "processProfile": "0.20mm Standard @BBL H2D", "filamentProfile": "Bambu PLA Basic @BBL H2D", "bedSizeMm": [350, 320] },
+    { "id": "h2d-pro", "displayName": "H2D Pro", "machineProfile": "Bambu Lab H2D Pro 0.4 nozzle", "processProfile": "0.20mm Standard @BBL H2DP", "filamentProfile": "Bambu PLA Basic @BBL H2DP", "bedSizeMm": [350, 320] },
+    { "id": "h2s", "displayName": "H2S", "machineProfile": "Bambu Lab H2S 0.4 nozzle", "processProfile": "0.20mm Standard @BBL H2S", "filamentProfile": "Bambu PLA Basic @BBL H2S", "bedSizeMm": [340, 320] },
+    { "id": "p1p", "displayName": "P1P", "machineProfile": "Bambu Lab P1P 0.4 nozzle", "processProfile": "0.20mm Standard @BBL P1P", "filamentProfile": "Generic PLA High Speed @BBL P1P", "bedSizeMm": [256, 256] },
+    { "id": "p1s", "displayName": "P1S", "machineProfile": "Bambu Lab P1S 0.4 nozzle", "processProfile": "0.20mm Standard @BBL X1C", "filamentProfile": "Bambu PLA Basic @BBL P1S 0.4 nozzle", "bedSizeMm": [256, 256] },
+    { "id": "p2s", "displayName": "P2S", "machineProfile": "Bambu Lab P2S 0.4 nozzle", "processProfile": "0.20mm Standard @BBL P2S", "filamentProfile": "Bambu PLA Basic @BBL P2S", "bedSizeMm": [256, 256] },
+    { "id": "x1", "displayName": "X1", "machineProfile": "Bambu Lab X1 0.4 nozzle", "processProfile": "0.20mm Standard @BBL X1C", "filamentProfile": "Bambu PLA Basic @BBL X1", "bedSizeMm": [256, 256] },
+    { "id": "x1-carbon", "displayName": "X1 Carbon", "machineProfile": "Bambu Lab X1 Carbon 0.4 nozzle", "processProfile": "0.20mm Standard @BBL X1C", "filamentProfile": "Bambu PLA Basic @BBL X1C", "bedSizeMm": [256, 256] },
+    { "id": "x1e", "displayName": "X1E", "machineProfile": "Bambu Lab X1E 0.4 nozzle", "processProfile": "0.20mm Standard @BBL X1C", "filamentProfile": "Bambu PLA Basic @BBL X1C", "bedSizeMm": [256, 256] },
+    { "id": "x2d", "displayName": "X2D", "machineProfile": "Bambu Lab X2D 0.4 nozzle", "processProfile": "0.20mm Standard @BBL X2D", "filamentProfile": "Bambu PLA Basic @BBL X2D 0.4 nozzle", "bedSizeMm": [256, 256] }
+  ]
+}
