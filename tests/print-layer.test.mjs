@@ -113,6 +113,38 @@ test('official X2D and A1 machine startup macros do not hide the following real 
   assert.throws(()=>parsePrintLayerGCode(fixture+'G383.40\n'),/不支持的/);
 });
 
+test('verified X2D startup G130 is explicit auxiliary extrusion and preserves all resynchronized model paths', () => {
+  const macro = 'G130 O0 X100 Y-0.2 Z0.6 F4.36536 L40 E12 D4\n';
+  const header = '; printer_model = Bambu Lab X2D\n; nozzle_diameter = 0.4,0.4\n; layer_change_gcode = ; CHANGE_LAYER\n; FEATURE: Custom\nG90\nM83\n';
+  const marker = '; MACHINE_START_GCODE_END\n';
+  const model = fixture.replace('M82\n', 'M82\nG92 E0\n');
+  const original = parsePrintLayerGCode(model, {includeSupport:true});
+  const result = parsePrintLayerGCode(header + macro + marker + model, {includeSupport:true});
+  for (const name of ['positions','tools','features','widths','heights','layers','layerHeights','layerOffsets','layerSegments']) {
+    assert.deepEqual(result[name], original[name], name);
+  }
+  assert.deepEqual(result.toolColors, original.toolColors);
+  assert.equal(result.excludedStartupExtrusionMacros, 1);
+  assert.ok(result.warnings.some(message => /G130/.test(message)), 'firmware startup extrusion is reported rather than silently omitted');
+  assert.equal(result.exactLinearPaths, true);
+  const relative = parsePrintLayerGCode(header + macro + marker + fixture.replace('M82\n', 'M83\n'));
+  const relativeReference = parsePrintLayerGCode(fixture.replace('M82\n', 'M83\n'));
+  assert.deepEqual(relative.positions, relativeReference.positions);
+  for (const variant of [macro.replace('O0','O1'),macro.replace('D4','D5'),macro.replace('E12','E20'),macro.replace('L40','L41'),macro.replace('F4.36536','F0'),macro.replace('G130','G130.0'),macro.replace('D4','D4 Q1')]) {
+    assert.throws(() => parsePrintLayerGCode(header + variant + marker + model), /G130/);
+  }
+  for (const source of [macro + model, header + marker + macro + model,
+    header + '; FEATURE: Outer wall\n' + macro + marker + model,
+    header + '; CHANGE_LAYER\n; FEATURE: Custom\n' + macro + marker + model,
+    header.replace('Bambu Lab X2D','Bambu Lab P1S') + macro + marker + model,
+    header.replace('0.4,0.4','0.6,0.4') + macro + marker + model]) {
+    assert.throws(() => parsePrintLayerGCode(source), /G130/);
+  }
+  assert.throws(() => parsePrintLayerGCode(header + macro + marker + model, {includeAuxiliary:true}), /G130/);
+  assert.throws(() => parsePrintLayerGCode(header + macro + marker + 'G90\nM83\n; FEATURE: Outer wall\nG1 X10 Y10 Z0.2 E1\n'), /绝对定位/);
+  assert.throws(() => parsePrintLayerGCode(header + macro + marker + fixture), /挤出.*坐标/);
+});
+
 test('conditional H2C wiping requires absolute resynchronization before a retained deposition', () => {
   const wipe='G387 Y320 J1 F10000\nG1 X10 F30000\nG387 Y295 J1\nG387 Y265 J1\nG1 Y0 F30000\n';
   const result=parsePrintLayerGCode(fixture.replace('G1 X10 Y0 E1\n','G1 X10 Y0 E1\n'+wipe));

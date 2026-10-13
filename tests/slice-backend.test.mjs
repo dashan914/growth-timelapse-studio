@@ -426,8 +426,9 @@ test('installed Bambu Studio slices and parses a real model for every registered
   }
 });
 
-test('native A1 output with its complete official startup preserves every model path around G29.4', {skip: process.env.GROWTH_NATIVE_SLICER_TESTS !== '1'}, async t => {
-  const root = await mkdtemp(path.join(tmpdir(), 'slice-native-a1-startup-'));
+async function nativeStartupRegression(t, preset) {
+  const target = BAMBU_PRINTER_MODELS.find(model => model.id === preset);
+  const root = await mkdtemp(path.join(tmpdir(), `slice-native-${preset}-startup-`));
   const service = createSliceService({ root, timeoutMs: 90_000 });
   t.after(async () => { await service.close(); await rm(root, { recursive: true, force: true }); });
   const engine = await service.health();
@@ -435,17 +436,18 @@ test('native A1 output with its complete official startup preserves every model 
   const source = path.join(root, 'cube.stl'), prepared = path.join(root, 'saved-a1.3mf');
   const options = path.join(root, 'options.json'), reportPath = path.join(root, 'prepare-report.json');
   await writeFile(source, cubeStl());
-  await writeFile(options, JSON.stringify({format:'stl',preset:'a1',slicerResources:engine.profileDirectory,slicerVersion:engine.version,toolColors:['#00AE42']}));
+  await writeFile(options, JSON.stringify({format:'stl',preset,slicerResources:engine.profileDirectory,slicerVersion:engine.version,toolColors:['#00AE42']}));
   await execFileAsync(findPythonPath(), [path.resolve('scripts/prepare-slice-project.py'), source, prepared, reportPath, options]);
   const settingsFile = path.join(root, 'fallback-machine.json');
   const settings = JSON.parse(await readFile(settingsFile, 'utf8'));
   const machineRoot = path.join(engine.profileDirectory, 'BBL', 'machine');
-  const machine = JSON.parse(await readFile(path.join(machineRoot, 'Bambu Lab A1 0.4 nozzle.json'), 'utf8'));
+  const machine = JSON.parse(await readFile(path.join(machineRoot, target.machineProfile + '.json'), 'utf8'));
   const templateName = machine.include.find(name => name.endsWith('template machine_start_gcode'));
-  assert.ok(templateName, 'installed A1 profile references its complete official startup');
+  assert.ok(templateName, `${preset} profile references its complete official startup`);
   const template = JSON.parse(await readFile(path.join(machineRoot, templateName + '.json'), 'utf8'));
   settings.machine_start_gcode = template.machine_start_gcode;
-  assert.match(settings.machine_start_gcode, /^G29\.4\s*$/m);
+  const requiredMacro = preset === 'a1' ? /^G29\.4\s*$/m : /^\s*G130 O0 X100 Y-0\.2 Z0\.6 F.* L40 E12 D4\s*$/m;
+  assert.ok(requiredMacro.test(settings.machine_start_gcode), `${preset} source template contains its reported macro`);
   await writeFile(settingsFile, JSON.stringify(settings));
   const report = JSON.parse(await readFile(reportPath, 'utf8'));
   const output = path.join(root, 'output'); await mkdir(output);
@@ -455,16 +457,22 @@ test('native A1 output with its complete official startup preserves every model 
     '--slice','1','--arrange','0','--orient','0','--mstpp','90','--outputdir',output,prepared],
     {cwd:root,timeout:90_000,maxBuffer:8*1024*1024,windowsHide:true});
   const text = await readFile(path.join(output, 'plate_1.gcode'), 'utf8');
-  assert.ok(/^G29\.4\s*$/m.test(text), 'real native output must exercise the reported macro');
-  assert.ok(/^G2814 Z0\.32\s*$/m.test(text), 'full A1 startup must retain its pre-extrude calibration');
+  assert.ok(requiredMacro.test(text), `${preset} real native output must exercise the reported macro`);
+  if (preset === 'a1') assert.ok(/^G2814 Z0\.32\s*$/m.test(text), 'full A1 startup retains its pre-extrude calibration');
   const parsed = parsePrintLayerGCode(text);
-  const reference = parsePrintLayerGCode(text.replace(/^G29\.4[\t ]*(?:\r?\n|$)/gm, ''));
+  const macroLine = preset === 'a1' ? /^G29\.4[\t ]*(?:\r?\n|$)/gm : /^[\t ]*G130[\t ]+[^\r\n]*(?:\r?\n|$)/gm;
+  const reference = parsePrintLayerGCode(text.replace(macroLine, ''));
   for (const name of ['positions','tools','features','widths','heights','layers','layerHeights','layerOffsets','layerSegments']) {
     assert.deepEqual(parsed[name], reference[name], name);
   }
   assert.equal(parsed.exactLinearPaths, true);
   assert.ok(parsed.segmentCount > 100);
-});
+  if (preset === 'x2d') assert.equal(parsed.excludedStartupExtrusionMacros, 1);
+}
+
+test('native A1 output with its complete official startup preserves every model path around G29.4', {skip: process.env.GROWTH_NATIVE_SLICER_TESTS !== '1'}, async t => nativeStartupRegression(t, 'a1'));
+
+test('native X2D output with its complete official startup preserves every model path around G130', {skip: process.env.GROWTH_NATIVE_SLICER_TESTS !== '1'}, async t => nativeStartupRegression(t, 'x2d'));
 
 test('generic two-part 3MF fallback preserves both original part extruders and both real sliced filament colors', async t => {
   if(process.env.GROWTH_NATIVE_SLICER_TESTS!=='1'){t.skip('Native slicing requires explicit GROWTH_NATIVE_SLICER_TESTS=1; ordinary tests use the injected engine.');return;}

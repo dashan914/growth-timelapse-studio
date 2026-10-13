@@ -132,6 +132,10 @@ export function parsePrintLayerGCode(text, {
   reportProgress('configuration', 0, null);
   for(const match of text.matchAll(/^[\t ]*;[\t ]*([a-z][\w]*)[\t ]*=[\t ]*([^\r\n]*)/gim))rawConfiguration[match[1].toLowerCase()]=match[2].trim();
   const savedSettings=normalizeSliceSettings(rawConfiguration,{source:'gcode-config'});
+  const machineStartEnd = text.search(/^[\t ]*;[\t ]*MACHINE_START_GCODE_END[\t ]*\r?$/m);
+  const sourceNozzles = String(rawConfiguration.nozzle_diameter || '').split(/[;,]/).map(value => Number(value.trim()));
+  const x2dPrime = {O:0,X:100,Y:-0.2,Z:0.6,L:40,E:12,D:4};
+  let commandLineStart = 0, modelSectionSeen = false, extrusionPositionKnown = true, excludedStartupExtrusionMacros = 0;
   let inferredHeights=new Uint8Array(capacity),inferredWidths=new Uint8Array(capacity);
   let featureLabel = '';
   let allExtrusionMoves = 0, sampledArcMoves = 0, unknownExtrusionMoves = 0, inferredWidthSegments = 0, inferredHeightSegments = 0;
@@ -167,6 +171,22 @@ export function parsePrintLayerGCode(text, {
     if (command?.letter === 'M') { if (command.value === 82) absoluteE = true; if (command.value === 83) absoluteE = false; return; }
     if (command?.letter === 'G') {
       const code = command.code ?? String(command.value);
+      if (code === '130') {
+        // X2D's official O0/D4 nozzle-load macro extrudes a firmware-generated
+        // startup line. Its E12 is not a G1 endpoint or an E-coordinate delta.
+        // Only this verified form, explicitly before Bambu's startup boundary,
+        // may be excluded from a model-only visualization. Never invent it.
+        const knownForm = Object.keys(values).length === 8 && Object.entries(x2dPrime).every(([key,value]) => values[key] === value) && values.F > 0;
+        if (includeAuxiliary || rawConfiguration.printer_model !== 'Bambu Lab X2D' || sourceNozzles.length !== 2 || !sourceNozzles.every(value => value === 0.4) ||
+          machineStartEnd < 0 || commandLineStart >= machineStartEnd || modelSectionSeen || feature !== PRINT_FEATURE.custom ||
+          unit !== 1 || !absolute || absoluteE || !knownForm) {
+          throw new Error('不支持的 G130 形式或使用区段，无法完整还原真实模型路径或全部辅助挤出。');
+        }
+        excludedStartupExtrusionMacros++;
+        positionKnown.fill(false); extrusionPositionKnown = false;
+        connected = false; motion = null; return;
+      }
+      if (code.startsWith('130.')) throw new Error(`不支持的 G${code} 指令，无法完整还原真实切片。`);
       if (MACHINE_G_CODES.has(code)) {
         if (values.E !== undefined) throw new Error(`不支持的 G${code} 运动，无法完整还原真实切片；不会静默遗漏墙线或填充。`);
         if (code === '29.4' && Object.keys(values).length) throw new Error('不支持的 G29.4 参数，无法完整还原真实切片。');
@@ -196,7 +216,7 @@ export function parsePrintLayerGCode(text, {
             if (!positionKnown[axis]) throw new Error('机器动作后的位置未知，无法可靠还原 G92 坐标偏移。');
             offset[axis] = point[axis] - values['XYZ'[axis]] * unit;
           }
-          if (values.E !== undefined) e = values.E * unit;
+          if (values.E !== undefined) { e = values.E * unit; extrusionPositionKnown = true; }
           return;
         case 0: case 1: case 2: case 3: motion = command.value; break;
         default:
@@ -221,6 +241,7 @@ export function parsePrintLayerGCode(text, {
         if (absolute) positionKnown[axis] = true;
       }
     }
+    if (values.E !== undefined && absoluteE && !extrusionPositionKnown) throw new Error('机器启动挤出后的挤出坐标未知，需要 G92 E 明确重设后才能还原绝对挤出。');
     const previousE = e;
     if (values.E !== undefined) e = absoluteE ? values.E * unit : e + values.E * unit;
     const arc = motion === 2 || motion === 3;
@@ -252,6 +273,7 @@ export function parsePrintLayerGCode(text, {
   let nextProgressCharacter = 1_048_576;
   reportProgress('parse', 0, text.length);
   for (let start = 0; start < text.length;) {
+    commandLineStart = start;
     if (onProgress && start >= nextProgressCharacter) {
       reportProgress('parse', start, text.length);
       nextProgressCharacter = start + 1_048_576;
@@ -269,7 +291,8 @@ export function parsePrintLayerGCode(text, {
         execute({ letter: 'T', value: filament }, Object.create(null));
       }
       const typed = comment.match(/^(?:TYPE|FEATURE)\s*:\s*(.*)$/i);
-      if (typed) { featureLabel = typed[1].trim(); const next = classifyPrintFeature(featureLabel); if (next !== feature) { connected = false; stroke++; } feature = next; }
+      if (typed) { featureLabel = typed[1].trim(); const next = classifyPrintFeature(featureLabel); if (next !== feature) { connected = false; stroke++; } feature = next; if (MODEL_FEATURES.has(next) || SUPPORT_FEATURES.has(next)) modelSectionSeen = true; }
+      if (/^(?:(?:printing object|LAYER_CHANGE|CHANGE_LAYER)(?=\s|:|$)|layer #\d)/i.test(comment)) modelSectionSeen = true;
       const size = comment.match(/^(WIDTH|HEIGHT|LINE_WIDTH|LAYER_HEIGHT)\s*:\s*([\d.]+)/i);
       if (size) {
         const value = Number(size[2]);
@@ -361,12 +384,13 @@ export function parsePrintLayerGCode(text, {
   const labeledUnknown = Object.values(unknownFeatureLabels).reduce((sum, value) => sum + value, 0);
   if (unknownExtrusionMoves > labeledUnknown) warnings.push(`${(unknownExtrusionMoves-labeledUnknown).toLocaleString('zh-CN')} 段未标注类型的挤出未作为模型填充；未猜测其用途。`);
   if (labeledUnknown) warnings.push(`有 ${labeledUnknown} 段已标注但无法识别的用途；结果不完整，不得用于真实打印显示。`);
+  if (excludedStartupExtrusionMacros) warnings.push(`${excludedStartupExtrusionMacros} 条 G130 机器启动预挤出由固件内部生成，未作为模型路径；后续模型路径在定位重同步后完整保留。`);
   if (inferredWidthSegments || inferredHeightSegments) warnings.push('部分路径未逐段记录截面：优先使用保存的用途线宽、首层参数和实际层间距；缺项层高按工具默认 0.16 mm，首层及其他缺项按拓竹基准参数。路径与工具编号保持完整，截面仍标为近似。');
   reportProgress('index', count * 3, count * 3);
   return { version: 1, source: 'sliced-gcode', coordinates: 'printer-mm-z-up', exactLinearPaths: labeledUnknown === 0, segmentCount: count,
     positions, tools, features, widths, heights, strokes, layers, layerHeights, layerOffsets, layerSegments, bounds,
     featureCounts, rawFeatureCounts, rawConfiguration, toolColors, usedTools: [...usedTools].sort((a, b) => a - b),
-    allExtrusionMoves, sampledArcMoves, arcToleranceMm, unknownExtrusionMoves, unknownFeatureLabels, inferredWidthSegments, inferredHeightSegments, sectionSources, warnings };
+    allExtrusionMoves, sampledArcMoves, arcToleranceMm, unknownExtrusionMoves, unknownFeatureLabels, excludedStartupExtrusionMacros, inferredWidthSegments, inferredHeightSegments, sectionSources, warnings };
 }
 
 /** Highest completely deposited model layer at an absolute printer Z. */
