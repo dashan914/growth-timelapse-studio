@@ -221,6 +221,15 @@ function applyLighting(values){
 
 function applyPresetLighting(id=backgroundPreset){applyLighting(getPresetLighting(id)||DEFAULT_LIGHTING);}
 
+function resetPresetColorMatch(){
+  const profile=normalizeLighting(getPresetLighting(backgroundPreset)||DEFAULT_LIGHTING);
+  $('lighting-exposure').value=profile.exposure;
+  $('lighting-temperature').value=profile.colorTemperature;
+  for(const key of modelColorFields)$('lighting-'+key).value=profile[key];
+  updateSettings();
+  say(backgroundPreset?printerPresets[backgroundPreset].label+' 色彩已恢复':'默认色彩已恢复');
+}
+
 function currentBackgroundAppearanceKey(){
   return backgroundAppearanceKey({preset:backgroundPreset,file:backgroundFile,scene});
 }
@@ -626,7 +635,7 @@ async function loadReference(file){
   canvas.getContext('2d').putImageData(new ImageData(referencePixels.rgba,canvas.width,canvas.height),0,0);
   $('reference-status').textContent=referenceAnalysis.warnings[0] || '拖动模型重合，或点击自动重合。';
   $('auto-reference-align').disabled=!referenceAnalysis.usable;$('output-appearance').options[1].disabled=!referenceAnalysis.usable;
-  $('reference-popup').hidden=false;playing=false;time=settings().duration;showTime();updateStageBounds();updateReferenceView();
+  setReferencePanel(true);playing=false;time=settings().duration;showTime();updateStageBounds();updateReferenceView();
   cachePatch({referenceFile:file});
 }
 
@@ -761,7 +770,7 @@ function lockWorkspace(locked) {
   exportButton.setAttribute('aria-label',loading?'模型准备中，暂不能导出':'导出视频');
   if (!locked) {
     const ready=Boolean(studio?.hasModel()&&studio?.getPrintLayerData?.());
-    for(const id of ['export-button','play-button','restart-button','timeline','snapshot-button','reset-camera','canvas-lock','canvas-move','canvas-rotate','canvas-scale','canvas-perspective','canvas-shadow','canvas-dof'])$(id).disabled=!ready;
+    for(const id of ['export-button','play-button','restart-button','timeline','snapshot-button','reset-camera','canvas-lock','canvas-move','canvas-rotate','canvas-scale','canvas-perspective','canvas-shadow','canvas-color','canvas-dof'])$(id).disabled=!ready;
     const gcode = studio?.metadata?.mode === 'gcode';
     $('layers').disabled = gcode;
     $('layer-lines').disabled = gcode;
@@ -869,16 +878,37 @@ function syncPreviewLock(){
 function setModelMode(mode) {
   if(mode&&$('output-appearance').value==='photo'){$('output-appearance').value='model';studio.setOptions(renderOptions());}
   playing=false;transformMode=mode;clearPreviewGesture();
-  studio.setShadowEditMode?.(false);$('shadow-popup').hidden=true;$('canvas-shadow').classList.remove('active');$('canvas-shadow').setAttribute('aria-pressed',false);
+  studio.setShadowEditMode?.(false);$('shadow-popup').hidden=true;$('canvas-shadow').classList.remove('active');$('canvas-shadow').setAttribute('aria-pressed',false);$('canvas-shadow').setAttribute('aria-expanded',false);
   perspectiveMode=false;$('perspective-popup').hidden=true;
+  $('color-popup').hidden=true;$('canvas-color').classList.remove('active');$('canvas-color').setAttribute('aria-pressed',false);$('canvas-color').setAttribute('aria-expanded',false);
   $('dof-popup').hidden=true;$('reference-popup').hidden=true;
-  $('canvas-dof').classList.remove('active');$('canvas-dof').setAttribute('aria-pressed',false);
+  $('canvas-compare').classList.remove('active');$('canvas-compare').setAttribute('aria-pressed',false);
+  $('canvas-dof').classList.remove('active');$('canvas-dof').setAttribute('aria-pressed',false);$('canvas-dof').setAttribute('aria-expanded',false);
   studio.setTransformMode?.(mode);studio.lockPreviewCamera();
   for(const [id,value] of [['canvas-move','translate'],['canvas-rotate','rotate'],['canvas-scale','scale']]) {const active=mode===value;$(id).classList.toggle('active',active);$(id).setAttribute('aria-pressed',active);}
   $('canvas-perspective').classList.remove('active');$('canvas-perspective').setAttribute('aria-pressed',false);
   $('gesture-hint').textContent=mode==='translate'?'拖动彩色手柄移动 · Esc 锁定':mode==='rotate'?'拖动彩色圆环旋转 · Esc 锁定':mode==='scale'?'拖动彩色手柄缩放 · Esc 锁定':'预览已锁定 · 选择下方工具开始调整';
   syncPreviewLock();
   showTime();
+}
+
+function setAppearancePanel(kind,open){
+  setModelMode(null);
+  const button=$('canvas-'+kind),popup=$(kind+'-popup');
+  popup.hidden=!open;button.classList.toggle('active',open);
+  button.setAttribute('aria-pressed',open);button.setAttribute('aria-expanded',open);
+  if(kind==='shadow'){
+    studio.setShadowEditMode?.(open);studio.lockPreviewCamera();syncPreviewLock();
+    $('gesture-hint').textContent=open?'拖动底部阴影手柄 · Esc 锁定':'预览已锁定 · 选择下方工具开始调整';
+    syncLightingControls();
+  }else if(kind==='color')syncLightingControls();
+  else if(kind==='dof')syncDofStatus();
+}
+
+function setReferencePanel(open){
+  setModelMode(null);
+  $('reference-popup').hidden=!open;
+  $('canvas-compare').classList.toggle('active',open);$('canvas-compare').setAttribute('aria-pressed',open);
 }
 
 function syncCameraFields() {
@@ -1479,14 +1509,16 @@ async function init() {
   $('reference-button').addEventListener('click',()=>$('reference-input').click());
   $('reference-input').addEventListener('change',async()=>{const file=$('reference-input').files[0];if(!file)return;try{await loadReference(file);}catch(error){say(error.message,true);}finally{$('reference-input').value='';}});
   $('clear-reference').addEventListener('click',()=>{clearReference();cachePatch({referenceFile:null});});
-  $('canvas-compare').addEventListener('click',()=>{$('reference-popup').hidden=!$('reference-popup').hidden;updateReferenceView();});
-  $('close-reference-popup').addEventListener('click',()=>{$('reference-popup').hidden=true;});
+  $('canvas-compare').addEventListener('click',()=>{setReferencePanel($('reference-popup').hidden);updateReferenceView();});
+  $('close-reference-popup').addEventListener('click',()=>setReferencePanel(false));
   for(const id of ['show-reference','reference-opacity','reference-difference'])$(id).addEventListener('input',updateReferenceView);
   $('reference-blink').addEventListener('pointerdown',()=>{$('reference-layer').style.opacity=1;});
   for(const name of ['pointerup','pointerleave','pointercancel'])$('reference-blink').addEventListener(name,updateReferenceView);
   $('auto-reference-align').addEventListener('click',autoReferenceAlign);
-  $('canvas-dof').addEventListener('click',()=>{const open=$('dof-popup').hidden;setModelMode(null);$('dof-popup').hidden=!open;$('canvas-dof').classList.toggle('active',open);$('canvas-dof').setAttribute('aria-pressed',open);syncDofStatus();});
-  $('close-dof').addEventListener('click',()=>{$('dof-popup').hidden=true;$('canvas-dof').classList.remove('active');$('canvas-dof').setAttribute('aria-pressed',false);});
+  $('canvas-dof').addEventListener('click',()=>setAppearancePanel('dof',$('dof-popup').hidden));
+  $('close-dof').addEventListener('click',()=>setAppearancePanel('dof',false));
+  $('canvas-color').addEventListener('click',()=>setAppearancePanel('color',$('color-popup').hidden));
+  $('close-color').addEventListener('click',()=>setAppearancePanel('color',false));
   $('edit-crop').addEventListener('click',beginCrop);
   $('reset-crop').addEventListener('click',()=>{Object.assign(cropRect,{x:0,y:0,width:1,height:1});drawCrop();});
   $('apply-crop').addEventListener('click',()=>finishCrop(true));$('cancel-crop').addEventListener('click',()=>finishCrop(false));
@@ -1500,17 +1532,9 @@ async function init() {
   for(const id of ['camera-pitch','camera-yaw','camera-roll'])$(id).addEventListener('input',changeCameraFromFields);
   for(const id of ['camera-focal-length','camera-focal-length-number'])$(id).addEventListener('input',changeLensFromFields);
   $('camera-focal-length-number').addEventListener('blur',event=>{const raw=event.target.value,value=Number(raw);event.target.value=raw.trim()&&Number.isFinite(value)?Math.max(18,Math.min(135,value)).toFixed(1):studio.getLensOptions().focalLength.toFixed(1);changeLensFromFields(event);});
-  const toggleShadow=open=>{
-    setModelMode(null);
-    $('shadow-popup').hidden=!open;$('canvas-shadow').classList.toggle('active',open);$('canvas-shadow').setAttribute('aria-pressed',open);
-    playing=false;studio.setShadowEditMode?.(open);
-    studio.lockPreviewCamera();syncPreviewLock();
-    $('gesture-hint').textContent=open?'拖动底部阴影手柄 · Esc 锁定':'预览已锁定 · 选择下方工具开始调整';
-    syncLightingControls();
-  };
-  $('canvas-shadow').addEventListener('click',()=>toggleShadow($('shadow-popup').hidden));
-  $('close-shadow').addEventListener('click',()=>toggleShadow(false));
-  $('reset-preset-lighting').addEventListener('click',()=>{applyPresetLighting();applyPresetDof();updateSettings();say(backgroundPreset?printerPresets[backgroundPreset].label+' 光影与景深已恢复':'默认光影已恢复');});
+  $('canvas-shadow').addEventListener('click',()=>setAppearancePanel('shadow',$('shadow-popup').hidden));
+  $('close-shadow').addEventListener('click',()=>setAppearancePanel('shadow',false));
+  $('reset-preset-lighting').addEventListener('click',resetPresetColorMatch);
   $('canvas-floor').addEventListener('change',()=>{$('floor').checked=$('canvas-floor').checked;updateSettings();});
   for(const id of ['shadow-opacity','shadow-radius','light-direction','light-azimuth','light-elevation'])$('canvas-'+id).addEventListener('input',()=>{
     if($('canvas-'+id).type==='range')touchPreviewInteraction();

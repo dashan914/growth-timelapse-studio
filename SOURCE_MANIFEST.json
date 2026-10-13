@@ -20,8 +20,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 7715,
-      "sha256": "f547da99421fa9169cdecf79be0e4b1a45e95205b9ef492eae09f0ce7976a1ff"
+      "bytes": 8156,
+      "sha256": "582a0f0af857b603b2403fc9881fd68875f387f94f92c60d6ea493a1b27bdea7"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -95,28 +95,28 @@
     },
     {
       "path": "docs/QUICK_START.md",
-      "bytes": 6161,
-      "sha256": "1a86773478062a12d267f56093e4f7afba65aa4f66aa71543da6fe318df20037"
+      "bytes": 6284,
+      "sha256": "22f4e33c90bf8ae4169b9aee27c0678c1e6b895e89622c1d0bc5992b940916f2"
     },
     {
       "path": "docs/RELEASE.md",
-      "bytes": 4286,
-      "sha256": "e3c8627ab03db371ece8d48b655555fa729b971b3d3406ae5560e271bde9db27"
+      "bytes": 4631,
+      "sha256": "feb1f81f105f46183921a8f46c711918dccfc5892eef411039552300342ed520"
     },
     {
       "path": "docs/SOFTWARE_PURCHASE.md",
-      "bytes": 6683,
-      "sha256": "a446a7ce7cee0768e5c32d35d4f4ce148cc7b997477f3b96a62d48b70f30cd50"
+      "bytes": 7508,
+      "sha256": "04412dbaa69119af589eb9f86af0d8c0d14cd05b55fce24470569272e5f816b8"
     },
     {
       "path": "docs/UI_GUIDE.md",
-      "bytes": 10751,
-      "sha256": "bb4f175df98c5f1694cc00efbab76de4b8c68ceff10f68f49e842e0a8128e21e"
+      "bytes": 11238,
+      "sha256": "a887cbd4ede065c484a11e996002fc4faefa4138e4767f874714670e4050bbd4"
     },
     {
       "path": "docs/VERIFICATION.md",
-      "bytes": 7683,
-      "sha256": "a471216c8ce45cc6ab8dc2b21b5cc7ce678281d29096945adc64fd26444533a6"
+      "bytes": 8397,
+      "sha256": "e6c817e70b8fed6c56000253dd4e892dd27cd7215e4f5303ffeb10ad46b07b11"
     },
     {
       "path": "docs/WINDOWS_SETUP.md",
@@ -275,8 +275,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 33053,
-      "sha256": "2b07a5b698267d65074806c74f1ff8f7cb901a2216f0dea2207ae8516d1c55e5"
+      "bytes": 34038,
+      "sha256": "4721fe4ede18da495a8c93735e4e49c165d77aecbc2534a9a589ab0912f06339"
     },
     {
       "path": "install-manifest.json",
@@ -420,8 +420,8 @@
     },
     {
       "path": "src/app.js",
-      "bytes": 124202,
-      "sha256": "7f3b8b1d8a0228474285b2645cdf333924bd1cef09382eab53f90303774cfde2"
+      "bytes": 125212,
+      "sha256": "274506fe034c926337154f43ba60981c20c12b5367088644efb85ef732dfdb62"
     },
     {
       "path": "src/background-appearance.js",
@@ -760,8 +760,8 @@
     },
     {
       "path": "src/style.css",
-      "bytes": 38400,
-      "sha256": "b5c2ccc554aa529cf6d2b297951f6fa8a7fd4347a744c6b303087c5c9f314079"
+      "bytes": 39052,
+      "sha256": "3bb5dd22727f754c3e413e11d5140503ce36aaab06c68ff8214ed3813c3acd68"
     },
     {
       "path": "src/styled-select.js",
@@ -802,6 +802,11 @@
       "path": "tests/agent-installation.test.mjs",
       "bytes": 15843,
       "sha256": "4c08bb6dffcbb79b79fb6a1c45e6ea06b0998fdbf02084590a341e4e65c48720"
+    },
+    {
+      "path": "tests/app-appearance-tools.test.mjs",
+      "bytes": 13418,
+      "sha256": "4d16f3ea798a142269b0126d5f623a1e9d347e98e890fe2fb31846aa9fbf5bc4"
     },
     {
       "path": "tests/app-background-appearance.test.mjs",
