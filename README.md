@@ -2,11 +2,13 @@
 
 把单盘 3MF / STL 模型变成从底部逐层生长的视频。导入模型后，工具调用本机切片器生成真实打印路径，再结合背景、模型摆放、光影和材质完成画面。
 
-![多色模型逐层生长演示](docs/media/demo-model.gif)
+![新版工作台与模型生长预览](docs/media/current-workbench.gif)
 
-示例：蓝灰摄影棚背景，3 秒生长、1 秒停留，720p、24 fps。
+工作台展示模型、背景、时间线与当前工具栏。
 
-[查看清晰 MP4](docs/media/demo-model.mp4) · [下载案例模型](examples/测试2.3mf) · [安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.4/INSTALL_AGENT.md)
+这 4 个 GIF 来自本次当前工作台的实际操作录制。
+
+[查看清晰 MP4](docs/media/demo-model.mp4) · [下载案例模型](examples/测试2.3mf) · [安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/INSTALL_AGENT.md)
 
 ## 可以做什么
 
@@ -21,29 +23,29 @@
 
 ## 背景与构图
 
-![切换打印机与摄影背景](docs/media/ui-backgrounds.gif)
+![新版工作台切换打印机与摄影背景](docs/media/current-backgrounds.gif)
 
 在“或直接使用背景预设”中选择场景，自动应用对应构图；自己的照片使用“自定义导入图片背景”。需要对齐照片时，点击“调整底板，矫正透视”。
 
 ## 模型移动与缩放
 
-![移动、缩放模型并锁定](docs/media/ui-transform.gif)
+![新版工作台调整模型摆放](docs/media/current-transform.gif)
 
 点击“移动”（W）、“旋转”（E）或“缩放”（R），拖动手柄调整模型；点击“锁定”或按 Esc 结束。阴影、色彩与镜头分别在“阴影调节”“色彩匹配”“镜头设置”中调整。
 
-## 多色模型配色
+## 色彩与镜头设置
 
-![修改耗材分区颜色与统一颜色](docs/media/ui-colors.gif)
+![新版色彩匹配与镜头设置](docs/media/current-color-lens.gif)
 
-“模型原色”保留工程中的涂色分区，可单独修改各耗材颜色；“统一颜色”让全模型使用同一颜色，重新选择“模型原色”即可切回分区配色。
+“色彩匹配”调整模型亮度、色温、对比度和饱和度；“镜头设置”调整焦段、虚化强度与焦点位置。多色工程还可以修改耗材分区颜色，或使用统一颜色。
 
-操作动图用于展示功能，按钮位置以当前版本为准。[完整图文操作指南](docs/UI_GUIDE.md)
+[完整操作指南](docs/UI_GUIDE.md)
 
 ## 快速安装
 
-当前固定版本为 **v1.2.0-beta.4**，官方安装文件为 `growth-timelapse-studio-1.2.0-beta.4-runtime.zip`。下载运行包和同版本外部安装清单，核对 SHA256 后安装。
+当前固定版本为 **v1.2.0-beta.5**，官方安装文件为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`。下载运行包和同版本外部安装清单，核对 SHA256 后安装。
 
-[固定版本下载](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.4) · [直接下载官方运行包](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.4/growth-timelapse-studio-1.2.0-beta.4-runtime.zip) · [Agent 安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.4/INSTALL_AGENT.md)
+[固定版本下载](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5) · [直接下载官方运行包](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/growth-timelapse-studio-1.2.0-beta.5-runtime.zip) · [Agent 安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/INSTALL_AGENT.md)
 
 可以把安装指南交给能操作本机终端的 Agent，按固定版本检查依赖、核对 SHA256、安装并启动。Windows x64 的依赖与首次检查见 [Windows 配置说明](docs/WINDOWS_SETUP.md)。
 

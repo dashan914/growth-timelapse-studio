@@ -1,5 +1,30 @@
 # 验证记录
 
+## 2026-10-14：1.2.0-beta.5 新版 UI 实际录屏与安装文档（本地验证通过，公开发行另记）
+
+本轮固定目标为 [v1.2.0-beta.5](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5)，官方资产为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`。README 与 UI 指南只使用本轮当前版本实际操作生成的 4 个 `current-*` GIF，不以旧布局 GIF 说明新界面。主代理已在 beta.5 健康服务中完成真实 3MF 切片导入；4 个实际录屏 GIF 已冻结并独立核验。
+
+本轮完整软件测试 **897 项：879 通过、18 环境检查跳过、0 失败**；运行包回归通过，新版媒体缺失问题已由实际生成文件解决。旧 Release/tag 清理脚本 **7/7** 测试通过；这些是本地验证结果，最终公开安装 ZIP、外部清单、SHA256 及外部旧下载标记删除仍待实际执行后记录。
+
+已独立读取并解码全部 4 个实际录制文件：原始 PNG 1440 × 900，GIF 均为 1280 × 800、无限循环，逐帧加载正常。抽查首、中、末帧、真实模型位移与缩放帧、镜头面板帧，确认新工具栏、背景标题及独立“色彩匹配”“镜头设置”显示正确，35.0 mm 焦段与启用虚化操作可见。
+
+| 实际录制文件 | 帧数 | 时长 | 内容 |
+| --- | --- | --- | --- |
+| `current-workbench.gif` | 28 | 7 秒 | 当前工作台、模型和时间线预览 |
+| `current-backgrounds.gif` | 30 | 7.5 秒 | 打印机、蓝灰棚与室内背景切换 |
+| `current-transform.gif` | 48 | 12 秒 | 真实拖动模型向右移动，再用缩放手柄放大 |
+| `current-color-lens.gif` | 32 | 8 秒 | 阴影、色彩亮度与色温、35 mm 焦段及虚化设置 |
+
+摆放录屏重新录制后冻结为 1,077,705 字节，抽查第 0、15、31、47 帧，模型向右位移和放大清晰可见；没有用仅切换工具按钮代替真实移动、缩放。
+
+已完成媒体、文档和本地运行回归；公开发行阶段继续核对：
+
+- 4 个新版 GIF 的界面、操作内容、完整帧、尺寸和时长检查完成；README 不写付费导出介绍，安装指南顶部完整 AI 提示词包含固定 beta.5 指南、运行 ZIP、外部清单、SHA256、数据保留、缺失依赖检查、doctor、启动、真实小案例及重新启动入口。
+- 源码与包内模板仍为 `published: false`，仅发布后的外部清单用于自动安装；官方运行包内媒体与文档对应。
+- 新版匿名下载与 SHA256 验证通过后，清理已授权旧 Release、包附件和旧 tag refs；保留 commit 源码历史。实际删除对象及结果待执行后记录。
+
+下方 beta.4 与更早记录属于历史证据，不代表 beta.5 已验证或发行。
+
 ## 2026-10-14：1.2.0-beta.4 官方运行包（本地验证通过）
 
 本轮固定目标为 [v1.2.0-beta.4](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.4)，官方资产名为 `growth-timelapse-studio-1.2.0-beta.4-runtime.zip`。公开仓库继续提供 MIT 源码，源码开发命令 `python3 scripts/package-release.py` 与旧 `-source.zip` 安装兼容保留。本轮构建命令为 `node scripts/build-runtime-release.mjs --output <发行目录>`；新增 `RUNTIME_MANIFEST.json` 记录实际运行文件哈希。

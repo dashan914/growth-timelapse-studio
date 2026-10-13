@@ -2,7 +2,7 @@
 
 适用 Windows x64。基础实时模式使用 Node.js、Python 和本机切片器；写实渲染和照片立柱检测是可选扩展。普通 Windows 用户要完成依赖检查与首次验收，只有自动发现失败或程序安装在特殊位置时才需要手动配置路径。
 
-固定版本为 [v1.2.0-beta.4](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.4)。官方安装资产为 `growth-timelapse-studio-1.2.0-beta.4-runtime.zip`，安装器使用同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.4/install-manifest.json)。Windows 兼容 PR 继续保留，旧 `-source.zip` 与本地源码安装仍支持。
+当前固定版本为 [v1.2.0-beta.5](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5)。官方安装资产为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`，安装器使用同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/install-manifest.json)。Windows 兼容 PR 继续保留，已保存的旧 `-source.zip` 与本地源码安装仍支持；完整安装提示词见 [AI 安装指南](../INSTALL_AGENT.md)。
 
 ## 1. 必须、条件必需与可选依赖
 
@@ -87,6 +87,6 @@ $env:PHOTO_CALIBRATION_PYTHON = "$PWD\.venv\Scripts\python.exe"
 
 本分支分别处理 Blender 4.x 的场景合成器和 5.x 的合成器节点组、输出节点、alpha 转换、数学/混色节点与照片缩放接口。保留原几何、材质区域与完整帧数检查。
 
-PR 作者报告已完成 Windows / Blender 5.2.2 / RTX 5060 OptiX 三帧小立方体检查。beta.3 在 macOS 已记录软件 892 项自动测试（874 通过、18 跳过、0 失败），14 个拓竹机型 × 4 种喷嘴共 56 项真实切片与路径解析继续作为历史兼容性记录；未重新执行 Windows 实机或逐台实体打印。beta.4 运行包已完成 897 项自动测试（879 通过、18 环境检查跳过、0 失败）及 macOS 独立目录安装、doctor 和启动验证，复杂模型长视频和最终视觉效果仍应由对应设备验收。驱动和 GPU 偏好不由本项目全局修改。
+PR 作者的 Windows / Blender 5.2.2 / RTX 5060 OptiX 三帧小立方体记录、beta.3 软件测试与 beta.4 的 macOS 运行包验证保留在 [验证记录](VERIFICATION.md)。beta.5 的 4 个新版操作 GIF 已录制并核验，完整软件测试 897 项（879 通过、18 环境跳过、0 失败）及运行包回归通过；Windows 与 Intel Mac 完整安装仍待实机验证，未逐台实体打印。复杂模型长视频和最终画面需由对应设备验收，驱动和 GPU 偏好不由本项目全局修改。
 
 参考：[Blender 5.0 合成器迁移](https://developer.blender.org/docs/release_notes/5.0/migration/compositor_migration/) · [Cycles 设备](https://developer.blender.org/docs/features/cycles/devices/)。

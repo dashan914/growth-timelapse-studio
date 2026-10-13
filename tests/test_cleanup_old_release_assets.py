@@ -50,29 +50,39 @@ class FakeGitHub:
                            asset(tag, cleanup.CURRENT_ZIP, 104 + index * 10)]
             self.old.append(release(tag, 200 + index, candidates))
         self.unknown = release("v9.9.9", 999, [asset("v9.9.9", f"{cleanup.APPLICATION}-1.2.0-beta.3-source.zip", 901)])
+        self.refs = {}
+        for tag in sorted(cleanup.OLD_TAGS | {cleanup.CURRENT_TAG, "v9.9.9"}):
+            name = "refs/tags/" + tag
+            self.refs[name] = {"ref": name, "object": {"type": "tag", "sha": hashlib.sha1(tag.encode()).hexdigest()}}
+        self.refs["refs/heads/main"] = {"ref": "refs/heads/main", "object": {"type": "commit", "sha": "a" * 40}}
+        self.history = tuple(value["object"]["sha"] for value in self.refs.values())
         self.fail_downloads = 0
 
     def api(self, method, resource, body=None):
         self.calls.append((method, resource))
-        if method in {"DELETE", "PATCH"}:
+        if method != "GET":
             self.mutations.append((method, resource, body))
-        if method == "GET" and resource.endswith("/tags/" + cleanup.CURRENT_TAG):
+        if method == "GET" and resource == f"/repos/{cleanup.REPOSITORY}/releases/tags/{cleanup.CURRENT_TAG}":
             return copy.deepcopy(self.current)
         if method == "GET" and "?per_page=100&page=" in resource:
             return copy.deepcopy([self.current] + self.old + [self.unknown])
+        git_prefix = f"/repos/{cleanup.REPOSITORY}/git/"
+        if resource.startswith(git_prefix):
+            _, suffix = resource[len(git_prefix):].split("/", 1)
+            ref = "refs/" + suffix
+            if ref not in self.refs:
+                raise cleanup.HttpStatusError(404)
+            if method == "DELETE":
+                del self.refs[ref]
+                return None
+            return copy.deepcopy(self.refs[ref])
         identity = int(resource.rsplit("/", 1)[-1])
-        if method == "DELETE":
-            for row in [self.current] + self.old + [self.unknown]:
-                for item in row["assets"]:
-                    if item["id"] == identity:
-                        row["assets"].remove(item)
-                        return None
-            raise cleanup.HttpStatusError(404)
         row = next((value for value in [self.current] + self.old + [self.unknown] if value["id"] == identity), None)
         if row is None:
             raise cleanup.HttpStatusError(404)
-        if method == "PATCH":
-            row["body"] = body["body"]
+        if method == "DELETE":
+            self.old.remove(row)
+            return None
         return copy.deepcopy(row)
 
     def download(self, url):
@@ -130,31 +140,39 @@ class CleanupTests(unittest.TestCase):
                 finally:
                     (self.directory / "SHA256SUMS.txt").write_bytes(self.files["SHA256SUMS.txt"])
 
-    def test_apply_deletes_only_exact_allowed_old_zip_assets_and_preserves_other_records(self):
+    def test_apply_deletes_only_fixed_old_release_ids_and_tag_refs_preserving_current_heads_unknown_and_history(self):
         remote = FakeGitHub(self.files)
-        expected = {item["id"] for row in remote.old for item in row["assets"] if item["name"] in {f"{cleanup.APPLICATION}-{row['tag_name'][1:]}-{kind}.zip" for kind in ("source", "runtime")}}
+        expected = {f"/repos/{cleanup.REPOSITORY}/releases/{row['id']}" for row in remote.old}
+        expected |= {f"/repos/{cleanup.REPOSITORY}/git/refs/tags/{tag}" for tag in cleanup.OLD_TAGS}
         current = copy.deepcopy(remote.current)
         unknown = copy.deepcopy(remote.unknown)
+        current_ref = copy.deepcopy(remote.refs["refs/tags/" + cleanup.CURRENT_TAG])
+        branch = copy.deepcopy(remote.refs["refs/heads/main"])
+        unknown_ref = copy.deepcopy(remote.refs["refs/tags/v9.9.9"])
+        history = remote.history
         result = self.run_cleanup(remote, apply=True)
-        deleted = {int(resource.rsplit("/", 1)[-1]) for method, resource, _ in remote.mutations if method == "DELETE"}
+        deleted = {resource for method, resource, _ in remote.mutations if method == "DELETE"}
         self.assertEqual(deleted, expected)
-        self.assertEqual(len(result["deleted"]), 8)
+        self.assertEqual(set(result["deletedReleases"]), cleanup.OLD_TAGS)
+        self.assertEqual(set(result["deletedTags"]), cleanup.OLD_TAGS)
+        self.assertEqual(remote.old, [])
         self.assertEqual(remote.current, current)
         self.assertEqual(remote.unknown, unknown)
-        self.assertTrue(all(item["name"] in {"INSTALL_AGENT.md", "do-not-delete.zip", cleanup.CURRENT_ZIP} for row in remote.old for item in row["assets"]))
-        for row in remote.old:
-            self.assertTrue(row["body"].startswith(cleanup.NOTE_MARKER))
-            self.assertIn("Existing historical notes.", row["body"])
-            self.assertIn(cleanup.CURRENT_PAGE, row["body"])
-        self.assertTrue(all(method != "DELETE" or "/releases/assets/" in resource for method, resource, _ in remote.mutations))
+        self.assertEqual(remote.refs["refs/tags/" + cleanup.CURRENT_TAG], current_ref)
+        self.assertEqual(remote.refs["refs/heads/main"], branch)
+        self.assertEqual(remote.refs["refs/tags/v9.9.9"], unknown_ref)
+        self.assertEqual(remote.history, history)
+        self.assertTrue(all(method == "DELETE" and resource in expected for method, resource, _ in remote.mutations))
 
     def test_dry_run_is_read_only_and_anonymous_downloads_never_receive_token_or_cookie(self):
         remote = FakeGitHub(self.files)
         before = copy.deepcopy(remote.old)
+        refs = copy.deepcopy(remote.refs)
         report = self.run_cleanup(remote)
         self.assertEqual(report["mode"], "dry-run")
         self.assertEqual(remote.mutations, [])
         self.assertEqual(remote.old, before)
+        self.assertEqual(remote.refs, refs)
         self.assertEqual(len(remote.downloads), 4)
         self.assertNotIn(self.config.token, json.dumps(report))
         self.assertNotIn(self.config.token, repr(self.config))
@@ -181,14 +199,29 @@ class CleanupTests(unittest.TestCase):
         remote = FakeGitHub(self.files)
         remote.old = remote.old[:1]  # Other old tags may already have disappeared.
         first = self.run_cleanup(remote, apply=True)
-        self.assertEqual(len(first["deleted"]), 2)
+        self.assertEqual(len(first["deletedReleases"]), 1)
+        self.assertEqual(set(first["deletedTags"]), cleanup.OLD_TAGS)
         previous_mutations = copy.deepcopy(remote.mutations)
         second = self.run_cleanup(remote, apply=True)
-        self.assertEqual(second["deleted"], [])
-        self.assertEqual(second["noted"], [])
+        self.assertEqual(second["deletedReleases"], [])
+        self.assertEqual(second["deletedTags"], [])
         self.assertEqual(remote.mutations, previous_mutations)
         remote.old = []
-        self.assertEqual(self.run_cleanup(remote, apply=True)["plans"], [])
+        self.assertEqual(self.run_cleanup(remote, apply=True)["plans"], {"releases": [], "tags": []})
+
+    def test_mismatched_or_invalid_old_ref_blocks_all_deletes_and_current_heads_unknown_ref_delete_is_rejected(self):
+        tag = sorted(cleanup.OLD_TAGS)[0]
+        for change in ({"ref": "refs/heads/main"}, {"object": {"type": "commit", "sha": "not-a-sha"}}):
+            with self.subTest(change=change):
+                remote = FakeGitHub(self.files)
+                remote.refs["refs/tags/" + tag].update(change)
+                with self.assertRaises(cleanup.CleanupError):
+                    self.run_cleanup(remote, apply=True)
+                self.assertEqual(remote.mutations, [])
+        transport = cleanup.GitHubTransport(self.config)
+        for ref in ("tags/" + cleanup.CURRENT_TAG, "heads/main", "tags/v9.9.9"):
+            with self.assertRaises(cleanup.CleanupError):
+                transport.api("DELETE", f"/repos/{cleanup.REPOSITORY}/git/refs/{ref}")
 
     def test_anonymous_404_retries_are_bounded_to_thirty_seconds_before_any_cleanup(self):
         remote = FakeGitHub(self.files)

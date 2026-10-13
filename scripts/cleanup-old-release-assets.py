@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Remove only specified historical ZIP attachments after verifying beta.4."""
+"""Remove fixed old Releases and tag refs after anonymously verifying beta.5."""
 from __future__ import annotations
 
 import argparse
@@ -17,14 +17,12 @@ import urllib.request
 import zipfile
 
 REPOSITORY = "dashan914/growth-timelapse-studio"
-CURRENT_TAG = "v1.2.0-beta.4"
+CURRENT_TAG = "v1.2.0-beta.5"
 APPLICATION = "growth-timelapse-studio"
-OLD_TAGS = frozenset({"v1.1.0-beta.1", "v1.2.0-beta.1", "v1.2.0-beta.2", "v1.2.0-beta.3"})
+OLD_TAGS = frozenset({"v1.1.0-beta.1", "v1.2.0-beta.1", "v1.2.0-beta.2", "v1.2.0-beta.3", "v1.2.0-beta.4"})
 CURRENT_ZIP = f"{APPLICATION}-{CURRENT_TAG[1:]}-runtime.zip"
 REQUIRED_ASSETS = (CURRENT_ZIP, "SHA256SUMS.txt", "install-manifest.json", "INSTALL_AGENT.md")
 CURRENT_PAGE = f"https://github.com/{REPOSITORY}/releases/tag/{CURRENT_TAG}"
-NOTE_MARKER = f"<!-- growth-old-install-zip-removed:{CURRENT_TAG} -->"
-NOTE = f"{NOTE_MARKER}\n旧版官方安装 ZIP 附件已移除，请使用 [1.2.0-beta.4 安装包]({CURRENT_PAGE})。本版本的 Release 记录、标签和源码历史继续保留。\n\n"
 
 
 class CleanupError(Exception):
@@ -95,8 +93,15 @@ class GitHubTransport:
         self.public_opener = urllib.request.build_opener(AnonymousHttpsRedirect())
 
     def api(self, method, resource, body=None):
-        if method not in {"GET", "DELETE", "PATCH"} or not resource.startswith(f"/repos/{REPOSITORY}/releases"):
+        releases = f"/repos/{REPOSITORY}/releases"
+        read_refs = {tag_ref_resource(tag) for tag in OLD_TAGS | {CURRENT_TAG}}
+        delete_refs = {tag_ref_resource(tag, delete=True) for tag in OLD_TAGS}
+        if (method not in {"GET", "DELETE"}
+                or not (resource.startswith(releases) or method == "GET" and resource in read_refs
+                        or method == "DELETE" and resource in delete_refs)):
             raise CleanupError("API 操作超出固定发行范围。")
+        if method == "DELETE" and resource not in delete_refs and not re.fullmatch(releases + r"/[1-9][0-9]*", resource):
+            raise CleanupError("只允许删除已验证旧 Release 或固定旧标签，不能删除当前标签、分支或其他资源。")
         headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {self.token}",
                    "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "growth-release-cleanup",
                    "Cache-Control": "no-cache"}
@@ -210,6 +215,29 @@ def valid_id(value):
     return type(value) is int and value > 0
 
 
+def tag_ref_resource(tag, delete=False):
+    if tag not in OLD_TAGS | {CURRENT_TAG} or delete and tag not in OLD_TAGS:
+        raise CleanupError("标签不在固定清理范围。")
+    verb = "refs" if delete else "ref"
+    return f"/repos/{REPOSITORY}/git/{verb}/tags/{tag}"
+
+
+def read_tag_ref(transport, tag, missing_allowed=False):
+    try:
+        value = transport.api("GET", tag_ref_resource(tag))
+    except HttpStatusError as error:
+        if error.status == 404 and missing_allowed:
+            return None
+        raise CleanupError("固定发行标签读取未完成，已停止清理。") from None
+    if not isinstance(value, dict) or value.get("ref") != f"refs/tags/{tag}":
+        raise CleanupError("标签 ref 身份不一致，未继续清理。")
+    target = value.get("object")
+    if (not isinstance(target, dict) or target.get("type") not in {"tag", "commit"}
+            or not re.fullmatch(r"[a-f0-9]{40}", target.get("sha") if isinstance(target.get("sha"), str) else "")):
+        raise CleanupError("标签对象 SHA 或类型不明确，未继续清理。")
+    return {"tag": tag, "ref": value["ref"], "objectSha": target["sha"], "objectType": target["type"]}
+
+
 def verify_current_release(config, directory, transport, monotonic, sleep):
     local = verify_local_release(directory)
     release = transport.api("GET", f"/repos/{REPOSITORY}/releases/tags/{CURRENT_TAG}")
@@ -254,26 +282,7 @@ def verify_current_release(config, directory, transport, monotonic, sleep):
     return release, protected_ids
 
 
-def eligible_assets(release, protected_ids):
-    tag = release.get("tag_name")
-    if tag not in OLD_TAGS:
-        return []
-    names = {f"{APPLICATION}-{tag[1:]}-{kind}.zip" for kind in ("source", "runtime")}
-    assets = release.get("assets")
-    if not isinstance(assets, list):
-        raise CleanupError("旧 Release 附件列表无效。")
-    selected = []
-    for item in assets:
-        if not isinstance(item, dict) or item.get("name") not in names:
-            continue
-        if (not valid_id(item.get("id")) or item["id"] in protected_ids
-                or item.get("browser_download_url") != asset_url(tag, item["name"])):
-            raise CleanupError("旧附件标识不明确，未开始清理。")
-        selected.append({"id": item["id"], "name": item["name"]})
-    return selected
-
-
-def plan_cleanup(current, protected_ids, transport):
+def plan_cleanup(current, transport):
     plans, seen = [], set()
     for page in range(1, 101):
         rows = transport.api("GET", f"/repos/{REPOSITORY}/releases?per_page=100&page={page}")
@@ -288,61 +297,82 @@ def plan_cleanup(current, protected_ids, transport):
             if identity in seen:
                 continue
             seen.add(identity)
-            plans.append({"releaseId": identity, "tag": tag, "assets": eligible_assets(release, protected_ids)})
+            plans.append({"releaseId": identity, "tag": tag, "action": "delete-old-release-record"})
         if len(rows) < 100:
             return plans
     raise CleanupError("Release 页数超过安全枚举上限。")
 
 
-def apply_plans(plans, protected_ids, transport):
-    deleted, already_removed, notes = [], [], []
+def apply_plans(plans, current_id, transport):
+    deleted, already_removed = [], []
     for plan in plans:
+        if plan["tag"] not in OLD_TAGS or plan["releaseId"] == current_id or not valid_id(plan["releaseId"]):
+            raise CleanupError("待删除记录不是明确允许的旧 Release。")
         resource = f"/repos/{REPOSITORY}/releases/{plan['releaseId']}"
         try:
             fresh = transport.api("GET", resource)
         except HttpStatusError as error:
             if error.status == 404:
+                already_removed.append(plan["tag"])
                 continue
             raise
-        if not isinstance(fresh, dict) or fresh.get("id") != plan["releaseId"] or fresh.get("tag_name") != plan["tag"]:
+        if (not isinstance(fresh, dict) or fresh.get("id") != plan["releaseId"] or fresh.get("tag_name") != plan["tag"]
+                or fresh.get("html_url") != f"https://github.com/{REPOSITORY}/releases/tag/{plan['tag']}"):
             raise CleanupError("旧 Release 在执行前发生变化，已停止后续操作。")
-        available = {item["id"]: item for item in eligible_assets(fresh, protected_ids)}
-        for item in plan["assets"]:
-            if item["id"] not in available:
-                already_removed.append(item["name"])
-                continue
-            if available[item["id"]]["name"] != item["name"]:
-                raise CleanupError("旧附件在执行前发生变化，已停止后续操作。")
-            try:
-                transport.api("DELETE", f"/repos/{REPOSITORY}/releases/assets/{item['id']}")
-                deleted.append(item["name"])
-            except HttpStatusError as error:
-                if error.status != 404:
-                    raise
-                already_removed.append(item["name"])
-        fresh = transport.api("GET", resource)
-        if not isinstance(fresh, dict) or fresh.get("tag_name") != plan["tag"] or fresh.get("id") != plan["releaseId"]:
-            raise CleanupError("旧 Release 在说明更新前发生变化，已停止。")
-        if eligible_assets(fresh, protected_ids):
-            raise CleanupError("旧 Release 仍有目标 ZIP，未写入已清理说明；可幂等重试。")
-        body = fresh.get("body") or ""
-        if not isinstance(body, str):
-            raise CleanupError("旧 Release 正文格式无效。")
-        if NOTE_MARKER not in body:
-            transport.api("PATCH", resource, {"body": NOTE + body})
-            notes.append(plan["tag"])
-    return {"deleted": deleted, "alreadyRemoved": already_removed, "noted": notes}
+        try:
+            # Release deletion removes its assets; fixed old tag refs are
+            # handled separately. No commit or branch endpoint is ever called.
+            transport.api("DELETE", resource)
+            deleted.append(plan["tag"])
+        except HttpStatusError as error:
+            if error.status != 404:
+                raise
+            already_removed.append(plan["tag"])
+    return {"deleted": deleted, "alreadyRemoved": already_removed}
+
+
+def apply_tag_plans(plans, current_ref, transport):
+    if read_tag_ref(transport, CURRENT_TAG) != current_ref:
+        raise CleanupError("当前新版标签发生变化，已停止旧标签清理。")
+    deleted, already_removed = [], []
+    for plan in plans:
+        if plan["tag"] not in OLD_TAGS:
+            raise CleanupError("待删除标签不是固定旧标签。")
+        fresh = read_tag_ref(transport, plan["tag"], missing_allowed=True)
+        if fresh is None:
+            already_removed.append(plan["tag"])
+            continue
+        if fresh != plan:
+            raise CleanupError("旧标签对象在执行前发生变化，已停止后续操作。")
+        try:
+            transport.api("DELETE", tag_ref_resource(plan["tag"], delete=True))
+            deleted.append(plan["tag"])
+        except HttpStatusError as error:
+            if error.status != 404:
+                raise
+            already_removed.append(plan["tag"])
+    return {"deletedTags": deleted, "alreadyRemovedTags": already_removed}
 
 
 def cleanup(config, directory, *, transport=None, apply=False, monotonic=time.monotonic, sleep=time.sleep):
     config.validate()
     transport = transport or GitHubTransport(config)
-    current, protected_ids = verify_current_release(config, Path(directory), transport, monotonic, sleep)
-    plans = plan_cleanup(current, protected_ids, transport)
+    current, _protected_ids = verify_current_release(config, Path(directory), transport, monotonic, sleep)
+    current_ref = read_tag_ref(transport, CURRENT_TAG)
+    release_plans = plan_cleanup(current, transport)
+    tag_plans = []
+    for tag in sorted(OLD_TAGS):
+        value = read_tag_ref(transport, tag, missing_allowed=True)
+        if value is not None:
+            tag_plans.append(value)
     report = {"mode": "apply" if apply else "dry-run", "verifiedCurrentRelease": CURRENT_TAG,
-              "repository": REPOSITORY, "plans": plans}
+              "repository": REPOSITORY, "plans": {"releases": release_plans, "tags": tag_plans}}
     if apply:
-        report.update(apply_plans(plans, protected_ids, transport))
+        if read_tag_ref(transport, CURRENT_TAG) != current_ref:
+            raise CleanupError("当前新版标签发生变化，未开始删除。")
+        release_result = apply_plans(release_plans, current["id"], transport)
+        report.update(deletedReleases=release_result["deleted"], alreadyRemovedReleases=release_result["alreadyRemoved"])
+        report.update(apply_tag_plans(tag_plans, current_ref, transport))
     return report
 
 
@@ -350,7 +380,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--dry-run", action="store_true", help="只验证新版并打印计划，不写入 GitHub（默认）")
-    modes.add_argument("--apply", action="store_true", help="新版验证通过后删除固定旧 ZIP，并更新旧版说明")
+    modes.add_argument("--apply", action="store_true", help="新版验证通过后删除固定旧 Release/附件及旧标签，保留 commits/history")
     args = parser.parse_args()
     try:
         report = cleanup(Configuration.from_environment(), Path(__file__).resolve().parent.parent / "release", apply=args.apply)

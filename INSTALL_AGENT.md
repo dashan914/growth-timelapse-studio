@@ -1,12 +1,29 @@
-# 使用 Agent 安装打印延时内测版
+# 使用 AI 安装打印延时一键生成
 
-学员可复制给有本机终端执行能力的 Agent：
+把下面完整提示词复制给任何能操作本机终端、文件和网络的 AI：
 
-> 请按照这个项目的 INSTALL_AGENT.md，在我的电脑安装并启动“打印延时一键生成”1.2.0-beta.4。检测系统和现有依赖，只补齐缺失项；使用固定 Release 的官方运行包和外部安装清单并核对 SHA256；保留已有项目、导出作品与授权。完成检查后打开工作台，告诉我如何再次启动。导入、编辑和无水印实时预览免费使用；免费 MP4 成片带动态水印，无水印或透明导出由我自行购买或输入已有兑换码。系统安装器和权限提示由我确认。
+```text
+请帮我在这台电脑安装并启动“打印延时一键生成”v1.2.0-beta.5。
 
-与这句话一起提供本文件的可访问链接或本地路径。安装 Agent 需要访问电脑的终端、文件和网络；纯对话 Agent 无法安装本机程序。
+先读取固定版本安装指南：
+https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/INSTALL_AGENT.md
 
-固定版本为 1.2.0-beta.4。下载入口：[v1.2.0-beta.4](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.4) · [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.4/install-manifest.json)。官方资产名为 `growth-timelapse-studio-1.2.0-beta.4-runtime.zip`。旧安装包附件在新版公开下载并验证后清理；源码、标签与已有用户授权保留。
+官方运行包：
+https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/growth-timelapse-studio-1.2.0-beta.5-runtime.zip
+
+外部安装清单：
+https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/install-manifest.json
+
+检测系统、CPU与已有Node.js、Python、切片器和FFmpeg，只补齐缺失依赖。核对外部清单的release.published为true、固定tag为v1.2.0-beta.5、ZIP对应版本为1.2.0-beta.5，并验证ZIP的SHA256；不要用仓库或ZIP里的published:false模板替代外部清单，也不要改用main/latest或未经核验的旧包。该固定版本未发布、下载失败或校验不符时停止并说明原因。
+
+保留已有作品、工程、设置、订单与授权，不删除或覆盖用户数据目录。按指南执行安装器、npm依赖安装、doctor及启动检查；打开工作台，用随包小型案例或本机合成小模型完成一次真实切片导入与预览，确认没有报错，不替我付款、兑换星光或输出兑换码。
+
+完成后告诉我实际工作台地址、用户数据位置、日志位置、重新启动入口和停止方法。系统安装器、权限、许可、首次打开及管理员密码均由我本人确认；不要代输入密码、关闭系统安全检查或绕过校验。
+```
+
+安装 AI 必须能够访问这台电脑的终端、文件和网络；纯对话 AI 无法完成本机安装。按上述提示词核验固定下载资产，不可用或校验失败时停止。
+
+当前固定版本为 1.2.0-beta.5。下载入口：[v1.2.0-beta.5](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5) · [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/install-manifest.json)。官方资产名为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`。新版公开下载与校验通过后清理已知旧 Release 和旧 tag 下载标记，commit 源码历史与已有用户数据、授权保留。
 
 官方运行包对本项目原创 JavaScript 采用轻量压缩与混淆，不附 source map、测试或开发构建脚本；操作指南、演示媒体、第三方 vendor 文件及许可保留，`RUNTIME_MANIFEST.json` 记录实际运行文件哈希。公开 MIT 源码和开发打包仍保留。此举只提高直接阅读和修改运行文件的成本，源码公开使其门槛有限，不构成防破解保证。已保存的旧 `-source.zip` 继续支持，既有授权和离线逻辑不变。
 
@@ -16,7 +33,7 @@ Windows 用户的依赖分类、手动路径配置和本机验收步骤见 [Wind
 
 1. 读取本文件与 [install-manifest.json](install-manifest.json)，检测操作系统和 CPU。入口支持 macOS Apple Silicon / Intel、Windows x64；Windows 和 Intel Mac 完整流程仍需实机验证。
 2. 从维护者明确提供的固定 tag 的 GitHub Release 资产下载**外部 `install-manifest.json`**，不要使用 ZIP 内或仓库内的模板。外部清单的 `release.published` 必须为 `true`；仓库必须为 `dashan914/growth-timelapse-studio-beta` 或 `dashan914/growth-timelapse-studio`；URL 必须固定到指定 `release.tag`，SHA256 必须完整。不要用 `main` 或 `latest` 源码替代发行包，不要自行猜测下载地址。若指定版本尚未公开发布，维护者先完成发行；本地源码可按下文 `--source` 方式验证。
-3. 按外部清单下载指定 ZIP：beta.4 官方安装使用 `-runtime.zip`，旧版本清单指定的 `-source.zip` 仍兼容。核对 SHA256，再解压并阅读安装脚本。建议把校验通过的 ZIP 保存到用户数据根目录的 `cache/<release.tag>.zip`，安装器会复用同一文件。ZIP 内的安装清单保持未发布模板，实际安装以外部清单为准。不要把下载脚本直接通过管道交给 shell。
+3. 按外部清单下载指定 ZIP：beta.5 官方安装使用 `-runtime.zip`，已保存的旧版本清单与 `-source.zip` 仍兼容。核对 SHA256，再解压并阅读安装脚本。建议把校验通过的 ZIP 保存到用户数据根目录的 `cache/<release.tag>.zip`，安装器会复用同一文件。ZIP 内的安装清单保持未发布模板，实际安装以外部清单为准。不要把下载脚本直接通过管道交给 shell。
 4. 在解压目录执行：macOS `bash scripts/install.sh --manifest "/外部清单完整路径/install-manifest.json"`；Windows `powershell -File .\scripts\install.ps1 -Manifest "C:\外部清单完整路径\install-manifest.json"`。脚本优先复用 Node.js 24+、Python 3、FFmpeg 和兼容的切片器；缺失 Node 使用官方固定版 24.19.0，缺失切片器使用官方 Bambu Studio 2.7.1.57。
 5. Python 与 FFmpeg 在 macOS 通过 Homebrew、Windows 通过 WinGet 安装。没有 Homebrew 时使用固定 commit 的官方安装脚本并验 SHA256；没有 WinGet 时请用户通过 Microsoft App Installer 安装。权限、许可、系统工具与首次打开提示由用户本人确认，不能代输入密码、关闭系统检查或忽略校验失败。
 6. 安装器执行 `npm ci` 和 `doctor`，成功后创建启动入口并打开本机工作台。Blender、OpenCV 和 NumPy 为后续可选项。
@@ -61,7 +78,7 @@ powershell -File .\scripts\install.ps1 -Source "C:\完整路径\growth-timelapse
 维护者先生成并验证官方运行包，再生成放在 ZIP 旁边的外部发行清单：
 
 ```sh
-node scripts/finalize-install-manifest.mjs --archive "/完整路径/growth-timelapse-studio-1.2.0-beta.4-runtime.zip" --repository dashan914/growth-timelapse-studio
+node scripts/finalize-install-manifest.mjs --archive "/完整路径/growth-timelapse-studio-1.2.0-beta.5-runtime.zip" --repository dashan914/growth-timelapse-studio
 ```
 
 该命令不会发布 GitHub Release。把官方运行 ZIP、外部清单与安装指南上传到同一个固定 tag 的 Release 后，才能向学员提供可执行的公开安装链接。旧源码包仍按各自外部清单核验，不将运行包的 SHA256 用于源码包。仓库内模板仍保持 `published: false`；不要把 ZIP 的 SHA256 回填到 ZIP 内文件并重打包，以免哈希自我引用。源码开发打包命令继续保留在 [发布维护](docs/RELEASE.md)，软件与依赖的来源和许可见 [第三方记录](THIRD_PARTY_NOTICES.md)。

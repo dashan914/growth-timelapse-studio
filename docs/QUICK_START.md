@@ -2,7 +2,7 @@
 
 ## 1. 安装并启动
 
-固定版本为 [v1.2.0-beta.4](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.4)。自动安装使用官方 `growth-timelapse-studio-1.2.0-beta.4-runtime.zip` 与同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.4/install-manifest.json)。旧 `-source.zip` 安装兼容保留，源码开发流程继续可用。
+当前固定版本为 [v1.2.0-beta.5](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5)。自动安装使用官方 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip` 与同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/install-manifest.json)，核对 SHA256 后安装。已保存的旧 `-source.zip` 安装兼容保留，源码开发流程继续可用。
 
 官方运行包轻量压缩与混淆运行文件，省略 source map、测试和开发构建脚本。公开仓库仍为 MIT 源码，所以这只是有限的阅读、修改门槛；授权、套餐价格、星光兑换和离线功能不变。
 
@@ -18,7 +18,7 @@ npm start
 
 `doctor` 检查本机依赖。打开终端显示的地址，默认 `http://127.0.0.1:4317`。macOS 首次安装后也可双击 `start.command`，或执行 `bash start.command`。
 
-也可把 [Agent 安装指南](../INSTALL_AGENT.md) 的链接交给能操作本机终端的 Agent，自动完成环境检查和安装。
+也可复制 [AI 安装指南](../INSTALL_AGENT.md) 顶部的完整提示词，交给能操作本机终端的 AI，按固定 beta.5 指南、运行 ZIP 和外部清单完成核验、环境检查和安装。
 
 安装后直接进入工作台，导入、编辑和预览免费开放。所有用户的工作台实时预览都不叠加水印；免费用户选择 MP4 后，可以点击“免费导出 · 带动态水印”，水印只在导出成片中出现。已解锁用户的成片无水印；无水印视频、预览图片、透明 MOV 和 PNG 序列需要解锁。
 
@@ -72,4 +72,4 @@ npm start
 
 反馈问题时附上系统与依赖版本、文件类型、操作步骤和错误截图。逐个按钮的图文说明见 [界面操作指南](UI_GUIDE.md)。
 
-beta.3 已记录 892 项自动测试（874 通过、18 跳过、0 失败），56 项拓竹真实切片/解析矩阵继续作为历史兼容性记录；后者为小模型软件验证，未逐台实体打印。beta.4 运行包已完成 897 项自动测试（879 通过、18 环境检查跳过、0 失败）及独立目录安装、doctor 和启动验证，详见 [验证记录](VERIFICATION.md)。
+beta.5 的 4 个新版工作台 GIF 已完成实际录制与逐帧核验；完整软件测试 897 项，879 通过、18 环境跳过、0 失败，运行包回归通过。公开安装资产结果在发布后另记，详见 [验证记录](VERIFICATION.md)。56 项拓竹真实切片/解析矩阵为历史软件验证，未逐台实体打印。

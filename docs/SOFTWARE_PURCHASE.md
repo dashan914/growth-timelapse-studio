@@ -1,10 +1,10 @@
 # 软件授权购买与免费水印导出
 
-日期：2026-10-14。网站 **1.15.1 已部署**，软件 **1.2.0-beta.3 已公开预发布并完成公开 ZIP 校验**。本轮固定版本为 **1.2.0-beta.4，运行包本地验证通过，公开发布另记**，官方安装资产改为 `growth-timelapse-studio-1.2.0-beta.4-runtime.zip`；只调整运行包交付形态，授权、价格、星光兑换与离线逻辑不变。
+日期：2026-10-14。网站 **1.15.1 已部署**。本轮固定目标为 **1.2.0-beta.5，4 个新版 UI GIF 实际录制与媒体核验、本地完整测试和运行包回归完成，公开发行结果另记**，官方安装资产为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`；更新项目介绍媒体与固定安装文档，授权、价格、星光兑换和离线逻辑不变。
 
 用户已确认开发：软件内扫码支付，网站提供购买页；一年 19.90 元（365 天）、永久 39.90 元；购买授权绑定一台设备，激活后可离线，换机先解绑。学员继续原星光兑换，不变更资格、扣星光和原设备规则。
 
-用户入口：[山地造物购买页](https://ai3dclass.cn/software/checkout) · [学员原星光兑换页](https://ai3dclass.cn/points) · [固定版本软件 v1.2.0-beta.4](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.4)。发行后公开安装指南为 [同版本 INSTALL_AGENT.md](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.4/INSTALL_AGENT.md)，安装校验使用 [外部 install-manifest.json](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.4/install-manifest.json)。本轮软件固定链接在发行完成并验证实际可访问性后使用；旧 `-source.zip` 继续兼容，公开源码开发打包仍保留。
+用户入口：[山地造物购买页](https://ai3dclass.cn/software/checkout) · [学员原星光兑换页](https://ai3dclass.cn/points) · [本轮固定目标 v1.2.0-beta.5](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5)。发行后使用 [同版本安装指南及完整 AI 提示词](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/INSTALL_AGENT.md) 和 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/install-manifest.json)。固定链接经公开验证后使用；已保存的旧 ZIP 仍兼容，公开源码开发打包保留。
 
 ## 实现与数据
 
@@ -25,13 +25,13 @@
 
 软件购买开关 SOFTWARE_PAYMENT_ENABLED 独立于 NEXT_PUBLIC_PAYMENT_SYSTEM_ENABLED；原课程支付开关仍保持 false。正式商户信息只使用服务器 JIANPAY_CLIENT_NO/JIANPAY_KEY，网关使用 HTTPS。软件不包含商户密钥。
 
-网站 1.15.1 已部署，软件购买入口已完成支付宝与微信未付款下单检查，均返回 201；原课程支付开关仍保持 false，安装指南当前已指向公开 beta.3。本轮 beta.4 完成本地验收后，按固定 tag 发行官方运行 ZIP、外部校验清单和安装指南，验证资产可访问性后再更新指南链接，不覆盖旧固定 Release。软件回调入口仍为 https://ai3dclass.cn/api/software-beta/payment/notify。
+网站软件购买的既有支付宝/微信未付款下单检查均返回 201，原课程支付开关保持 false。本轮 beta.5 的 4 个 GIF 使用新版 UI 实际录屏，录制、运行包和公开下载验证完成后再更新安装指南。新版公开校验后清理已知旧 Release、附件和 tag 下载标记，保留 commit 源码历史与已有授权；不提前记录删除成功。软件回调入口仍为 https://ai3dclass.cn/api/software-beta/payment/notify。
 
 用户尚未实际付款，未进行真实扣款、生产签名回调或真实支付后自动激活验收；201 下单成功不能替代这些验证。本地支付预览均为假网关和合成数据库、密钥。当前没有用户自助退款。运营人员若在简付后台退款，必须同时停用本系统对应软件码，并记录退款/停码结果。已签发的离线凭证无法由网页远程清除，正常换机应在原软件内解绑；永久离线不是严格的单设备在线租约。
 
 ## 计划与授权边界
 
-此前网站部署与软件 beta.3 发行已完成；本轮 beta.4 运行包的构建、集成、验收与发行由主代理统一处理。页面、支付和水印本地测试使用合成数据；上一版 892 项结果已记录，本轮运行包已通过 897 项自动测试（879 通过、18 环境检查跳过、0 失败）与独立安装、doctor、启动和切片导入；公开发行与旧包清理结果另外记录。未进行真实扣款验收。
+本轮 beta.5 的录屏、构建、验收、发行和旧下载标记清理由主代理统一处理。旧测试不替代新版媒体核验与运行检查，实际结果完成后补录；本轮不改变支付逻辑，也不代表真实扣款验收。
 
 ## beta.1 已记录的本地验收证据
 
@@ -42,7 +42,7 @@
 - 学员入口文案按用户最新要求改为“山地造物学员 / 跳转课程页面免费兑换”，沿用原学院兑换页面。
 - 拓竹 14 个机型 × 4 种喷嘴的 56 项真实切片与路径解析全部通过；未逐台实体打印，也未在本轮重新进行 Windows 实机验证。见 [兼容性报告](BAMBU_PRINTER_COMPATIBILITY.md)。
 - 桌面/手机截图：工作区 integration-work/review/software-payment-20261013/。
-- 本轮固定发行目标为 v1.2.0-beta.4，官方资产名为 `growth-timelapse-studio-1.2.0-beta.4-runtime.zip`；源码开发命令 `python3 scripts/package-release.py` 保留，官方运行包由 `node scripts/build-runtime-release.mjs --output <发行目录>` 生成。运行包本地完整性、安装和功能等价验收已通过；发布时核对运行文件清单与外部 SHA256，并在匿名新版下载验证成功后清理旧安装 ZIP。本地支付预览服务仅使用合成数据和假网关。
+- 本轮固定目标为 v1.2.0-beta.5，官方资产名为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`；4 个实际操作 GIF 逐帧核验、完整软件 897 项测试（879 通过、18 环境跳过、0 失败）、运行包回归和清理脚本 7 项测试通过。最终公开 ZIP 与外部 SHA256 验证后再执行旧下载标记清理，脚本测试通过不代表外部删除已完成。本地支付预览仍只使用合成数据和假网关。
 
 水印底框按文字实际宽度布局，左右留相同的少量边距；缩短底框后保持小号文字与半透明效果。
 

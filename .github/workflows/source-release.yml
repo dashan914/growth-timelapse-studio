@@ -2,7 +2,7 @@ name: Publish verified runtime release
 on:
   push:
     tags:
-      - 'v1.2.0-beta.4'
+      - 'v1.2.0-beta.5'
 permissions:
   contents: read
 jobs:
@@ -25,7 +25,7 @@ jobs:
           python3 -B -m unittest discover -s tests -p 'test_cleanup_old_release_assets.py' -v
           npm ci --ignore-scripts --no-audit --no-fund
           node scripts/build-runtime-release.mjs --output release
-          node scripts/finalize-install-manifest.mjs --archive release/growth-timelapse-studio-1.2.0-beta.4-runtime.zip --repository dashan914/growth-timelapse-studio
+          node scripts/finalize-install-manifest.mjs --archive release/growth-timelapse-studio-1.2.0-beta.5-runtime.zip --repository dashan914/growth-timelapse-studio
           cp INSTALL_AGENT.md release/INSTALL_AGENT.md
           cd release
           sha256sum -c SHA256SUMS.txt
@@ -37,22 +37,22 @@ jobs:
           cat > release-notes.md <<'NOTES'
           导入单盘 3MF / STL，按真实切片路径生成模型逐层生长视频。支持多色模型、背景预设、自定义图片背景、底板透视对齐、阴影调节、色彩匹配与镜头设置。
 
-          ![模型生长演示](https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.4/docs/media/demo-model.gif)
+          ![当前工作台界面](https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.5/docs/media/current-workbench.gif)
 
-          [功能与演示 GIF](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.4/README.md) · [安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.4/INSTALL_AGENT.md) · [图文操作教程](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.4/docs/UI_GUIDE.md)
+          [功能与演示 GIF](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/README.md) · [安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/INSTALL_AGENT.md) · [图文操作教程](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/docs/UI_GUIDE.md)
 
-          整合 PR #1 的 Windows 与 Blender/NVIDIA 兼容修复，保留拓竹 14 型号 × 4 喷嘴 = 56 个切片组合的验证结果。本轮软件自动测试 897 项：879 通过、18 环境检查跳过、0 失败；运行包独立安装、doctor、启动与真实切片导入通过，Windows 完整流程仍需实机验证。
+          本版展示当前工作台界面，保留 PR #1 的 Windows 与 Blender/NVIDIA 兼容修复，以及拓竹 14 型号 × 4 喷嘴的切片兼容。
 
-          安装使用本页 runtime.zip 与同版本外部 install-manifest.json，核对 SHA256 后安装。升级保留原作品和授权。运行包轻量压缩、混淆原创 JavaScript，无 source map；使用文档、演示素材与第三方许可保留。源码仓库和 MIT 许可保留，只提高直接阅读修改门槛。
+          安装使用本页 runtime.zip 与同版本外部 install-manifest.json，核对 SHA256 后安装。升级保留原作品和设置。运行包轻量压缩、混淆原创 JavaScript，无 source map；使用文档、演示素材与第三方许可保留，源码仓库与 MIT 许可保留。
           NOTES
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" release/growth-timelapse-studio-1.2.0-beta.4-runtime.zip release/SHA256SUMS.txt release/install-manifest.json release/INSTALL_AGENT.md --verify-tag --draft --prerelease --title '打印延时一键生成 1.2.0-beta.4' --notes-file release-notes.md
+            gh release create "$GITHUB_REF_NAME" release/growth-timelapse-studio-1.2.0-beta.5-runtime.zip release/SHA256SUMS.txt release/install-manifest.json release/INSTALL_AGENT.md --verify-tag --draft --prerelease --title '打印延时一键生成 1.2.0-beta.5' --notes-file release-notes.md
           fi
           gh release edit "$GITHUB_REF_NAME" --draft=false
-      - name: Verify public downloads before removing old installation ZIPs
+      - name: Verify public downloads before removing fixed old Releases and tags
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          python3 scripts/cleanup-old-release-assets.py --dry-run
-          python3 scripts/cleanup-old-release-assets.py --apply
+          python3 -B scripts/cleanup-old-release-assets.py --dry-run
+          python3 -B scripts/cleanup-old-release-assets.py --apply
