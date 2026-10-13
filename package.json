@@ -1,6 +1,6 @@
 {
   "name": "growth-timelapse-studio",
-  "version": "1.2.0-beta.1",
+  "version": "1.2.0-beta.2",
   "private": true,
   "type": "module",
   "description": "本机模型生长延时视频工作台",

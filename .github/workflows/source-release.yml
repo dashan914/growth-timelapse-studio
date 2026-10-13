@@ -2,7 +2,7 @@ name: Publish verified source release
 on:
   push:
     tags:
-      - 'v1.2.0-beta.1'
+      - 'v1.2.0-beta.2'
 permissions:
   contents: read
 jobs:
@@ -23,7 +23,7 @@ jobs:
       - name: Build source archive and external checksum manifest
         run: |
           python3 scripts/package-release.py --output release
-          node scripts/finalize-install-manifest.mjs --archive release/growth-timelapse-studio-1.2.0-beta.1-source.zip --repository dashan914/growth-timelapse-studio
+          node scripts/finalize-install-manifest.mjs --archive release/growth-timelapse-studio-1.2.0-beta.2-source.zip --repository dashan914/growth-timelapse-studio
           cp INSTALL_AGENT.md release/INSTALL_AGENT.md
           cd release
           sha256sum -c SHA256SUMS.txt
@@ -41,5 +41,5 @@ jobs:
 
           请阅读 INSTALL_AGENT.md，使用固定版本源码 ZIP 与外部 install-manifest.json，核对 SHA256 后安装。升级保留旧授权与作品。
           NOTES
-          gh release create "$GITHUB_REF_NAME" release/growth-timelapse-studio-1.2.0-beta.1-source.zip release/SHA256SUMS.txt release/install-manifest.json release/INSTALL_AGENT.md --verify-tag --draft --prerelease --title '打印延时一键生成 1.2.0-beta.1' --notes-file release-notes.md
+          gh release create "$GITHUB_REF_NAME" release/growth-timelapse-studio-1.2.0-beta.2-source.zip release/SHA256SUMS.txt release/install-manifest.json release/INSTALL_AGENT.md --verify-tag --draft --prerelease --title '打印延时一键生成 1.2.0-beta.2' --notes-file release-notes.md
           gh release edit "$GITHUB_REF_NAME" --draft=false

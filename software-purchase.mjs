@@ -23,6 +23,13 @@ export function createSoftwarePurchaseService({ betaService, directory = growthD
     await writeFile(temporary, JSON.stringify(current), { flag: 'wx', mode: 0o600 });
     await rename(temporary, file);
   }
+  async function archiveCurrent() {
+    if (!current?.id || !uuid.test(current.id)) return;
+    const history = path.join(directory, 'beta', 'purchase-history');
+    await mkdir(history, { recursive: true, mode: 0o700 });
+    try { await writeFile(path.join(history, current.id + '.json'), JSON.stringify(current), { flag: 'wx', mode: 0o600 }); }
+    catch (error) { if (error.code !== 'EEXIST') throw error; }
+  }
   async function request(resource, options = {}) {
     let response;
     try { response = await fetchImpl(new URL('/api/software-beta/payment/' + resource, origin), {
@@ -47,6 +54,7 @@ export function createSoftwarePurchaseService({ betaService, directory = growthD
     busy = true;
     try {
       if (!current || current.plan !== plan || current.payMethod !== payMethod || ['CLOSED', 'FAILED', 'EXPIRED'].includes(current.status) || current.status === 'PAID' && current.licenseExpiresAt && Date.parse(current.licenseExpiresAt) <= Date.now()) {
+        await archiveCurrent();
         current = { token: randomBytes(32).toString('base64url'), plan, payMethod, status: 'PENDING' };
         await save(); // Persist retry identity before contacting a payment service.
       }

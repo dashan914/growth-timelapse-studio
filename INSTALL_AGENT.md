@@ -2,11 +2,11 @@
 
 学员可复制给有本机终端执行能力的 Agent：
 
-> 请按照这个项目的 INSTALL_AGENT.md，在我的电脑安装并启动“打印延时一键生成”1.2.0-beta.1。检测系统和现有依赖，只补齐缺失项；使用文档指定的固定发行包并核对 SHA256；保留已有项目、导出作品与授权。完成检查后打开工作台，告诉我如何再次启动。导入、编辑、预览和动态水印 MP4 免费使用；无水印或透明导出由我自行购买或输入已有兑换码。系统安装器和权限提示由我确认。
+> 请按照这个项目的 INSTALL_AGENT.md，在我的电脑安装并启动“打印延时一键生成”1.2.0-beta.2。检测系统和现有依赖，只补齐缺失项；使用文档指定的固定发行包并核对 SHA256；保留已有项目、导出作品与授权。完成检查后打开工作台，告诉我如何再次启动。导入、编辑、预览和动态水印 MP4 免费使用；无水印或透明导出由我自行购买或输入已有兑换码。系统安装器和权限提示由我确认。
 
 与这句话一起提供本文件的可访问链接或本地路径。安装 Agent 需要访问电脑的终端、文件和网络；纯对话 Agent 无法安装本机程序。
 
-固定版本入口：[v1.2.0-beta.1](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.1) · [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.1/install-manifest.json)。维护者须完成该固定 Release 的发布并确认资产可访问，再向使用者提供安装链接。
+本轮固定版本为 1.2.0-beta.2，尚待发行。发行后入口：[v1.2.0-beta.2](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.2) · [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.2/install-manifest.json)。上一版 1.2.0-beta.1 已公开预发布；维护者须完成 beta.2 固定 Release 的发布并确认资产可访问，再向使用者提供本轮安装链接。
 
 Windows 用户的依赖分类、手动路径配置和本机验收步骤见 [Windows 配置说明](docs/WINDOWS_SETUP.md)。本地兼容修改属于派生源码，仍须保留固定发行包与外部清单；安装修改后的源码使用 `-Source`，不能把派生包冒充原始 Release。
 
@@ -21,6 +21,8 @@ Windows 用户的依赖分类、手动路径配置和本机验收步骤见 [Wind
 7. 打开工作台，确认无需兑换码即可导入、编辑、预览和导出动态水印 MP4。无水印视频、预览图片、透明 MOV 与 PNG 序列需解锁；由使用者选择软件内扫码购买或输入已有兑换码。安装流程不自动付款或兑换星光，也不记录或输出兑换码。
 
 软件内购买为一年 ¥19.90（365 天）或永久 ¥39.90，绑定一台设备；激活后可离线使用，换机前先在旧软件解除绑定并保存兑换码。学员入口通往山地造物原星光兑换页面，沿用原星光与设备规则；安装和升级保留已有激活记录。
+
+支付二维码显示时学员入口仍可使用。未付款可返回套餐选择，切换一年（YEAR）或永久（LIFETIME）；原二维码在有效期内仍可付款，不要两笔都支付。原订单凭证保留在本机用户数据目录，付款结果未知时先查询原订单；安装 Agent 不代替使用者选择或支付订单。
 
 ## 本地源码验证
 
@@ -57,7 +59,7 @@ powershell -File .\scripts\install.ps1 -Source "C:\完整路径\growth-timelapse
 维护者先生成实际源码包，再生成放在 ZIP 旁边的外部发行清单：
 
 ```sh
-node scripts/finalize-install-manifest.mjs --archive "/完整路径/growth-timelapse-studio-1.2.0-beta.1-source.zip" --repository dashan914/growth-timelapse-studio
+node scripts/finalize-install-manifest.mjs --archive "/完整路径/growth-timelapse-studio-1.2.0-beta.2-source.zip" --repository dashan914/growth-timelapse-studio
 ```
 
 该命令不会发布 GitHub Release。把源码 ZIP、外部清单与安装指南上传到同一个固定 tag 的 Release 后，才能向学员提供可执行的公开安装链接。仓库内模板仍保持 `published: false`；不要把 ZIP 的 SHA256 回填到 ZIP 内文件并重打包，以免哈希自我引用。具体发布步骤见 [发布维护](docs/RELEASE.md)，软件与依赖的来源和许可见 [第三方记录](THIRD_PARTY_NOTICES.md)。

@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 
 export const BETA_PRODUCT_ID = 'growth-timelapse-beta';
-export const APP_VERSION = '1.2.0-beta.1';
+export const APP_VERSION = '1.2.0-beta.2';
 const DEFAULT_CONFIG = JSON.parse(readFileSync(process.env.GROWTH_BETA_CONFIG || new URL('./beta-config.json', import.meta.url), 'utf8'));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createSoftwarePurchaseService } from '../software-purchase.mjs';
@@ -43,6 +43,68 @@ test('request timeout keeps a private durable retry identity across app restarts
   assert.ok(!Object.hasOwn(calls[0], 'price'), 'client cannot set the price');
   assert.equal(calls[0].plan, 'YEAR'); assert.equal(calls[0].payMethod, 'alipay');
   if (process.platform !== 'win32') assert.equal((await stat(file)).mode & 0o777, 0o600);
+  await assert.rejects(stat(path.join(f.directory, 'beta', 'purchase-history')), { code: 'ENOENT' }, 'an unknown request without a server order ID must keep its original token rather than archive and replace it');
+});
+
+test('changing a pending purchase archives its complete private recovery receipt before creating the new plan', async t => {
+  const ids = [randomUUID(), randomUUID()], posts = [];
+  let f, original;
+  f = await fixture(t, async (url, options) => {
+    if (options.method !== 'POST') {
+      assert.equal(new URL(url).pathname, `/api/software-beta/payment/orders/${ids[0]}`);
+      assert.equal(options.headers.Authorization, 'Bearer ' + original.token);
+      return Response.json({ id: ids[0], status: 'PENDING', licenseExpiresAt: null });
+    }
+    const body = JSON.parse(options.body); posts.push(body);
+    if (posts.length === 2) {
+      const archived = JSON.parse(await readFile(path.join(f.directory, 'beta', 'purchase-history', ids[0] + '.json'), 'utf8'));
+      assert.deepEqual(archived, original, 'all existing receipt fields must survive before contacting the server for another purchase');
+      const saved = JSON.parse(await readFile(path.join(f.directory, 'beta', 'purchase.json'), 'utf8'));
+      assert.equal(saved.token, body.token, 'the new retry identity is persisted only after archiving the old receipt');
+    }
+    return Response.json({ id: ids[posts.length - 1], status: 'PENDING', plan: body.plan,
+      amountCents: body.plan === 'YEAR' ? 1990 : 3990, licenseExpiresAt: null });
+  });
+  await f.service.create('YEAR', 'alipay');
+  const file = path.join(f.directory, 'beta', 'purchase.json');
+  original = JSON.parse(await readFile(file, 'utf8'));
+  const next = await f.service.create('LIFETIME', 'wx');
+  assert.equal(next.id, ids[1]); assert.equal(next.plan, 'LIFETIME'); assert.equal(next.amountCents, 3990);
+  assert.equal(posts.length, 2); assert.notEqual(posts[0].token, posts[1].token);
+  assert.equal(posts[1].plan, 'LIFETIME'); assert.equal(posts[1].payMethod, 'wx');
+  assert.equal(Object.hasOwn(posts[1], 'amountCents'), false, 'the software must still leave payment amounts to the server');
+  const history = path.join(f.directory, 'beta', 'purchase-history');
+  const archivedFile = path.join(history, ids[0] + '.json');
+  assert.deepEqual(JSON.parse(await readFile(archivedFile, 'utf8')), original);
+  const current = JSON.parse(await readFile(file, 'utf8'));
+  assert.equal(current.id, ids[1]); assert.equal(current.token, posts[1].token);
+  assert.equal(current.plan, 'LIFETIME'); assert.equal(current.payMethod, 'wx');
+  assert.equal(f.state.activated, false);
+  if (process.platform !== 'win32') {
+    assert.equal((await stat(history)).mode & 0o777, 0o700);
+    assert.equal((await stat(archivedFile)).mode & 0o777, 0o600);
+    assert.equal((await stat(file)).mode & 0o777, 0o600);
+  }
+});
+
+test('replacing an order never overwrites an existing archived recovery receipt', async t => {
+  const ids = [randomUUID(), randomUUID()], posts = [];
+  const f = await fixture(t, async (_url, options) => {
+    if (options.method !== 'POST') return Response.json({ id: ids[0], status: 'PENDING', licenseExpiresAt: null });
+    posts.push(JSON.parse(options.body));
+    return Response.json({ id: ids[posts.length - 1], status: 'PENDING', licenseExpiresAt: null });
+  });
+  await f.service.create('YEAR', 'alipay');
+  const original = JSON.parse(await readFile(path.join(f.directory, 'beta', 'purchase.json'), 'utf8'));
+  const history = path.join(f.directory, 'beta', 'purchase-history');
+  const archivedFile = path.join(history, ids[0] + '.json');
+  await mkdir(history, { mode: 0o700 });
+  const existing = JSON.stringify({ ...original, durableNote: 'synthetic previously archived receipt' }, null, 2) + '\n';
+  await writeFile(archivedFile, existing, { flag: 'wx', mode: 0o600 });
+  const next = await f.service.create('LIFETIME', 'alipay');
+  assert.equal(next.id, ids[1]);
+  assert.equal(await readFile(archivedFile, 'utf8'), existing, 'an existing recovery file must remain byte-for-byte unchanged');
+  assert.equal(JSON.parse(await readFile(path.join(f.directory, 'beta', 'purchase.json'), 'utf8')).id, ids[1]);
 });
 
 test('double clicks cannot make concurrent payment requests and changed purchase options get a fresh identity', async t => {

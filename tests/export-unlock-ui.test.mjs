@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createExportUnlockController } from '../src/beta-access.js';
+import { parseHTML } from '../vendor/test-dom/worker.mjs';
 
 const turn = () => new Promise(resolve => setImmediate(resolve));
 const response = value => Response.json(value);
@@ -12,7 +13,7 @@ function fixture(request = async () => response(locked)) {
     if (nodes.has(id)) return nodes.get(id);
     const listeners = new Map(), classes = new Set();
     const node = {
-      id, value: '', textContent: '', dataset: {}, attrs: {}, disabled: false, readOnly: false, open: false, isConnected: true,
+      id, value: '', textContent: '', dataset: {}, attrs: {}, disabled: false, hidden: false, checked: false, readOnly: false, open: false, isConnected: true,
       classList: { toggle(name, on) { if (on) classes.add(name); else classes.delete(name); }, contains: name => classes.has(name) },
       setAttribute(name, value) { this.attrs[name] = value; },
       addEventListener(name, listener) { const list = listeners.get(name) || []; list.push(listener); listeners.set(name, list); },
@@ -33,6 +34,31 @@ function fixture(request = async () => response(locked)) {
   let loads = 0;
   const controller = createExportUnlockController({ document: doc, request, loadApp() { loads++; } });
   return { controller, get, doc, get loads() { return loads; } };
+}
+
+function pendingPayment(extra = {}) {
+  return { id: '00000000-0000-4000-8000-000000000001', plan: 'YEAR', planName: '一年授权', amountCents: 1990,
+    orderNo: 'synthetic-year-order', status: 'PENDING', expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    licenseExpiresAt: null, qrImage: 'data:image/png;base64,aW1hZ2U=', ...extra };
+}
+function purchaseFixture(t) {
+  const state = { order: pendingPayment(), activated: false, lookup: null }, calls = [];
+  const f = fixture(async (url, options = {}) => {
+    const method = options.method || 'GET'; calls.push({ url, method, ...(options.body ? { body: JSON.parse(options.body) } : {}) });
+    if (url === '/api/beta/status') return response({ ...locked, activated: state.activated });
+    assert.equal(url, '/api/beta/payment/order');
+    if (method === 'POST') {
+      const body = JSON.parse(options.body);
+      state.order = pendingPayment({ id: '00000000-0000-4000-8000-000000000002', plan: body.plan,
+        planName: body.plan === 'LIFETIME' ? '永久授权' : '一年授权', amountCents: body.plan === 'LIFETIME' ? 3990 : 1990,
+        orderNo: 'synthetic-new-order', payMethod: body.payMethod });
+      return response(state.order);
+    }
+    if (state.lookup) return state.lookup();
+    return response({ ...locked, order: state.order, activated: state.activated });
+  });
+  t.after(async () => { if (f.get('beta-gate').open) await f.get('beta-close').dispatch('click'); });
+  return { ...f, state, calls };
 }
 
 test('the free workbench starts exactly once even when the permission service is unavailable', async () => {
@@ -208,4 +234,105 @@ test('markup keeps the initial workbench visible and the native dialog shares it
   assert.match(css, /outline: 2px solid var\(--accent\)/);
   assert.doesNotMatch(html, /beta-brand|山地造物 · 软件工具|shandi-logo/);
   assert.doesNotMatch(css, /--unlock-green|#fff|#0b7c6b/);
+});
+
+test('the actual student entry remains visible when purchase choices collapse, and background inputs retain all presets and media types', async () => {
+  const { document } = parseHTML(await readFile(new URL('../index.html', import.meta.url), 'utf8'));
+  const options = document.getElementById('beta-acquire-options'), student = document.getElementById('beta-student');
+  options.hidden = true;
+  assert.equal(options.contains(student), false);
+  assert.equal(student.closest('[hidden]'), null, 'collapsing the order choices cannot hide student redemption');
+  assert.equal(student.getAttribute('href'), 'https://ai3dclass.cn/points');
+  assert.equal(document.querySelectorAll('.scene-preset[data-preset]').length, 6);
+  const accepts = document.getElementById('background-input').getAttribute('accept');
+  assert.match(accepts, /image\/png/); assert.match(accepts, /video\/mp4/); assert.match(accepts, /video\/quicktime/);
+});
+
+test('returning from a pending QR verifies the order, keeps choices visible through polling and allows a permanent WeChat order', async t => {
+  const f = purchaseFixture(t);
+  await f.get('export-unlock-button').dispatch('click'); await turn();
+  assert.equal(f.get('beta-acquire-options').hidden, true);
+  assert.equal(f.get('beta-order-qr').hidden, false);
+  assert.equal(f.get('beta-payment-back').hidden, false);
+  let completeLookup;
+  f.state.lookup = () => new Promise(resolve => { completeLookup = resolve; });
+  const returning = f.get('beta-payment-back').dispatch('click'); await turn();
+  assert.equal(f.get('beta-payment-back').disabled, true);
+  assert.equal(f.get('beta-acquire-options').hidden, true, 'choices wait for an authoritative payment lookup');
+  completeLookup(response({ ...locked, order: f.state.order })); await returning;
+  f.state.lookup = null;
+  assert.equal(f.calls.filter(call => call.url === '/api/beta/payment/order' && call.method === 'POST').length, 0);
+  assert.equal(f.get('beta-acquire-options').hidden, false);
+  assert.equal(f.get('beta-order-qr').hidden, true);
+  assert.equal(f.get('beta-checkout').hidden, true);
+  assert.equal(f.get('beta-payment-choice-note').hidden, false);
+  assert.match(f.get('beta-message').textContent, /旧订单未取消/);
+  assert.equal(f.doc.activeElement, f.get('beta-buy-year'));
+  await f.get('beta-payment-refresh').dispatch('click'); await turn();
+  assert.equal(f.get('beta-acquire-options').hidden, false, 'a pending-order poll does not force the QR page back');
+  assert.equal(f.get('beta-order-qr').hidden, true);
+  f.get('beta-pay-wx').checked = true;
+  await f.get('beta-buy-lifetime').dispatch('click'); await turn();
+  const orders = f.calls.filter(call => call.method === 'POST');
+  assert.deepEqual(orders.map(call => call.body), [{ plan: 'LIFETIME', payMethod: 'wx' }]);
+  assert.equal(f.get('beta-acquire-options').hidden, true);
+  assert.equal(f.get('beta-checkout').hidden, false);
+  assert.equal(f.get('beta-order-qr').hidden, false);
+  assert.equal(f.get('beta-payment-choice-note').hidden, true);
+  assert.match(f.get('beta-order-title').textContent, /永久授权.*39\.90/);
+});
+
+test('return-to-plans continues a newly paid order instead of offering another purchase', async t => {
+  const f = purchaseFixture(t);
+  await f.get('export-unlock-button').dispatch('click'); await turn();
+  f.state.order = { ...f.state.order, status: 'PAID', code: 'GTB1-SYNTHETIC-CODE' };
+  f.state.activated = true;
+  await f.get('beta-payment-back').dispatch('click');
+  assert.equal(f.get('beta-acquire-options').hidden, true);
+  assert.equal(f.get('beta-payment-back').hidden, true);
+  assert.equal(f.get('beta-order-qr').hidden, true);
+  assert.equal(f.get('beta-paid-code').value, 'GTB1-SYNTHETIC-CODE');
+  assert.equal(f.get('export-unlock-button').dataset.exportState, 'unlocked');
+  assert.match(f.get('beta-order-state').textContent, /当前设备已解锁/);
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, 0);
+});
+
+test('a paid result received while choosing a replacement still completes the original order', async t => {
+  const f = purchaseFixture(t);
+  await f.get('export-unlock-button').dispatch('click'); await turn();
+  await f.get('beta-payment-back').dispatch('click');
+  f.state.order = { ...f.state.order, status: 'PAID', code: 'GTB1-ORIGINAL-PAID-CODE' };
+  f.state.activated = true;
+  await f.get('beta-payment-refresh').dispatch('click'); await turn();
+  assert.equal(f.get('beta-acquire-options').hidden, true);
+  assert.equal(f.get('beta-checkout').hidden, false);
+  assert.equal(f.get('beta-payment-choice-note').hidden, true);
+  assert.equal(f.get('beta-paid-code').value, 'GTB1-ORIGINAL-PAID-CODE');
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, 0);
+});
+
+test('closed, failed and expired orders offer both plans without retaining a payable QR', async t => {
+  for (const status of ['CLOSED', 'FAILED', 'EXPIRED', 'expired-pending']) await t.test(status, async t => {
+    const f = purchaseFixture(t);
+    f.state.order = { ...f.state.order, status: status === 'expired-pending' ? 'PENDING' : status,
+      expiresAt: new Date(Date.now() - 1000).toISOString() };
+    await f.get('export-unlock-button').dispatch('click'); await turn();
+    assert.equal(f.get('beta-acquire-options').hidden, false);
+    assert.equal(f.get('beta-order-qr').hidden, true);
+    assert.equal(f.get('beta-payment-back').hidden, true);
+    assert.equal(f.get('beta-buy-year').disabled, false); assert.equal(f.get('beta-buy-lifetime').disabled, false);
+    assert.equal(f.get('export-unlock-button').dataset.exportState, 'locked');
+  });
+});
+
+test('failed payment verification keeps the QR page and never creates or cancels an order', async t => {
+  const f = purchaseFixture(t);
+  await f.get('export-unlock-button').dispatch('click'); await turn();
+  f.state.lookup = () => { throw new Error('synthetic verification unavailable'); };
+  await f.get('beta-payment-back').dispatch('click');
+  assert.equal(f.get('beta-acquire-options').hidden, true);
+  assert.equal(f.get('beta-order-qr').hidden, false);
+  assert.equal(f.get('beta-payment-back').disabled, false);
+  assert.equal(f.get('beta-message').classList.contains('error'), true);
+  assert.equal(f.calls.filter(call => call.method !== 'GET').length, 0);
 });

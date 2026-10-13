@@ -6,7 +6,7 @@ export function createExportUnlockController({ document, request = globalThis.fe
   const toolbar = $('export-unlock-button'), label = $('export-unlock-label');
   let workspacePromise, pending = null, busy = false, verified = false;
   let session = 0, statusRevision = 0, activeRequest = null, returnFocus = null;
-  let paymentTimer = null, paymentBusy = false;
+  let paymentTimer = null, paymentBusy = false, paymentBackBusy = false, paymentChoosing = false;
 
   function feedback(text, { error = false, fieldError = false } = {}) {
     message.textContent = text;
@@ -145,25 +145,27 @@ export function createExportUnlockController({ document, request = globalThis.fe
   function setPaymentBusy(value) {
     paymentBusy = value;
     for (const id of ['beta-buy-year', 'beta-buy-lifetime', 'beta-pay-method']) if ($(id)) $(id).disabled = value;
+    if ($('beta-payment-back')) $('beta-payment-back').disabled = value || paymentBackBusy;
   }
   function showOrder(order) {
     const panel = $('beta-checkout');
     if (!panel || !order) return;
-    panel.hidden = false;
-    if ($('beta-acquire-options')) $('beta-acquire-options').hidden = order.status === 'PENDING' || order.status === 'PAID' && (!order.licenseExpiresAt || Date.parse(order.licenseExpiresAt) > Date.now());
+    const expired = order.status === 'EXPIRED' || order.status === 'PENDING' && Date.parse(order.expiresAt) <= Date.now();
+    if (order.status === 'PAID' || expired || ['CLOSED', 'FAILED'].includes(order.status)) paymentChoosing = false;
+    panel.hidden = paymentChoosing;
+    if ($('beta-acquire-options')) $('beta-acquire-options').hidden = !paymentChoosing && (order.status === 'PENDING' && !expired || order.status === 'PAID' && (!order.licenseExpiresAt || Date.parse(order.licenseExpiresAt) > Date.now()));
+    if ($('beta-payment-choice-note')) $('beta-payment-choice-note').hidden = !paymentChoosing;
+    if ($('beta-payment-back')) $('beta-payment-back').hidden = paymentChoosing || order.status !== 'PENDING' || expired;
     $('beta-order-title').textContent = `${order.planName} · ¥${(order.amountCents / 100).toFixed(2)} · 订单 ${order.orderNo}`;
     const image = $('beta-order-qr');
-    image.hidden = order.status !== 'PENDING' || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(order.qrImage || '');
+    image.hidden = paymentChoosing || expired || order.status !== 'PENDING' || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(order.qrImage || '');
     if (!image.hidden) image.src = order.qrImage;
-    $('beta-order-state').textContent = order.status === 'PAID' ? '支付成功，正在确认导出权限…' : ['CLOSED', 'FAILED'].includes(order.status) ? '订单已关闭或未完成付款，请重新选择授权方案。' : Date.parse(order.expiresAt) < Date.now() ? '支付二维码已超时。若已付款，请点击查询支付结果，勿重复付款。' : '请使用手机扫码付款。支付成功后会自动解锁。';
+    $('beta-order-state').textContent = order.status === 'PAID' ? '支付成功，正在确认导出权限…' : ['CLOSED', 'FAILED'].includes(order.status) ? '订单已关闭或未完成付款，请重新选择授权方案。' : expired ? '支付二维码已超时。若已付款，请点击查询支付结果，勿重复付款。' : '请使用手机扫码付款。支付成功后会自动解锁。';
     $('beta-unbind').hidden = order.status !== 'PAID' || !verified;
     if ($('beta-paid-receipt')) $('beta-paid-receipt').hidden = order.status !== 'PAID' || !order.code;
     if (order.code && $('beta-paid-code')) $('beta-paid-code').value = order.code;
   }
-  async function refreshPayment() {
-    clearTimeout(paymentTimer); paymentTimer = null;
-    if (!dialog.open || !$('beta-checkout')) return;
-    const result = await requestJson('/api/beta/payment/order');
+  async function applyPaymentResult(result) {
     if (!dialog.open) return;
     if (!result.order) return;
     showOrder(result.order);
@@ -177,21 +179,65 @@ export function createExportUnlockController({ document, request = globalThis.fe
       if (pending) { finish(true); return; }
       feedback(statusMessage(result));
     } else if (result.activationError) feedback('支付成功，但自动激活未完成：' + result.activationError, { error: true });
-    if (result.order?.status === 'PENDING') paymentTimer = setTimeout(() => { void refreshPayment().catch(error => feedback(error.message, { error: true })); }, 5000);
+    schedulePaymentCheck(result.order);
+  }
+  function schedulePaymentCheck(order) {
+    clearTimeout(paymentTimer); paymentTimer = null;
+    if (dialog.open && order?.status === 'PENDING') paymentTimer = setTimeout(() => { void refreshPayment().catch(error => feedback(error.message, { error: true })); }, 5000);
+  }
+  async function refreshPayment() {
+    clearTimeout(paymentTimer); paymentTimer = null;
+    if (!dialog.open || !$('beta-checkout')) return;
+    const result = await requestJson('/api/beta/payment/order', { cache: 'no-store' });
+    await applyPaymentResult(result);
+  }
+  async function returnToPlans() {
+    if (paymentBusy || paymentBackBusy) return;
+    const current = session, button = $('beta-payment-back');
+    paymentBackBusy = true;
+    if (button) { button.disabled = true; button.textContent = '正在确认支付状态…'; }
+    clearTimeout(paymentTimer); paymentTimer = null;
+    try {
+      const result = await requestJson('/api/beta/payment/order', { cache: 'no-store' });
+      if (!dialog.open || current !== session) return;
+      if (result.order?.status === 'PAID') { await applyPaymentResult(result); return; }
+      paymentChoosing = true;
+      if (result.order) { showOrder(result.order); schedulePaymentCheck(result.order); }
+      else {
+        $('beta-checkout').hidden = true; $('beta-order-qr').hidden = true;
+        if ($('beta-acquire-options')) $('beta-acquire-options').hidden = false;
+        if ($('beta-payment-choice-note')) $('beta-payment-choice-note').hidden = false;
+      }
+      feedback('可以重新选择授权方案和支付方式。旧二维码在有效期内仍可支付，请只支付新订单；旧订单未取消。');
+      $('beta-buy-year')?.focus();
+    } catch (error) {
+      if (dialog.open && current === session) feedback(error.message, { error: true });
+    } finally {
+      paymentBackBusy = false;
+      if (button) { button.disabled = paymentBusy; button.textContent = '返回选择套餐'; }
+    }
   }
   async function buy(plan) {
     if (paymentBusy) return;
+    const wasChoosing = paymentChoosing;
+    paymentChoosing = false;
+    if ($('beta-payment-choice-note')) $('beta-payment-choice-note').hidden = true;
     setPaymentBusy(true); feedback('正在创建支付订单…');
     try {
       const order = await requestJson('/api/beta/payment/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan, payMethod: $('beta-pay-wx').checked ? 'wx' : 'alipay' }) });
       showOrder(order); feedback('订单已创建，请扫码付款。');
       void refreshPayment().catch(error => feedback(error.message, { error: true }));
-    } catch (error) { feedback(error.message, { error: true }); }
+    } catch (error) {
+      paymentChoosing = wasChoosing;
+      if ($('beta-payment-choice-note')) $('beta-payment-choice-note').hidden = !paymentChoosing;
+      feedback(error.message, { error: true });
+    }
     finally { setPaymentBusy(false); }
   }
   $('beta-buy-year')?.addEventListener('click', () => { void buy('YEAR'); });
   $('beta-buy-lifetime')?.addEventListener('click', () => { void buy('LIFETIME'); });
   $('beta-payment-refresh')?.addEventListener('click', () => { void refreshPayment().catch(error => feedback(error.message, { error: true })); });
+  $('beta-payment-back')?.addEventListener('click', returnToPlans);
   $('beta-copy-code')?.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText($('beta-paid-code').value); feedback('兑换码已复制，请保留购买记录；换机前先解除旧设备绑定。'); }
     catch { $('beta-paid-code').select(); feedback('请手动复制已选中的兑换码。'); }

@@ -502,7 +502,7 @@ async function setBackgroundFile(file,preset='',{sequence=++backgroundLoadSequen
   $('background-name').textContent=preset?printerPresets[preset].label:file.name;$('background-info').hidden=false;
   $('floor-label').textContent='接触阴影';
   $('composite-options').hidden=false;$('calibrate-button').hidden=false;$('auto-bed-button').hidden=true;$('reference-button').hidden=studio.backgroundMetadata.type!=='image';
-  $('calibrate-button-label').textContent=printerPresets[preset]?.kind==='photography'?'微调台面':'微调底板';
+  $('calibrate-button-label').textContent='调整底板，矫正透视';
   $('source-ratio').hidden=false;$('ratio').value='source';$('audio-row').hidden=studio.backgroundMetadata.type!=='video';
   if(studio.backgroundMetadata.type==='video'&&studio.backgroundMetadata.duration>=2)$('growth-duration').value=Math.min(600,studio.backgroundMetadata.duration);
   $('bed-width').value=preset?printerPresets[preset].width:256;$('bed-depth').value=preset?printerPresets[preset].depth:256;
