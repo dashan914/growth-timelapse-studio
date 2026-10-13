@@ -2,9 +2,7 @@
 
 ## 1. 安装并启动
 
-当前固定版本为 [v1.2.0-beta.5](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5)。自动安装使用官方 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip` 与同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/install-manifest.json)，核对 SHA256 后安装。已保存的旧 `-source.zip` 安装兼容保留，源码开发流程继续可用。
-
-官方运行包轻量压缩与混淆运行文件，省略 source map、测试和开发构建脚本。公开仓库仍为 MIT 源码，所以这只是有限的阅读、修改门槛；授权、套餐价格、星光兑换和离线功能不变。
+当前固定版本为 [v1.2.0-beta.5](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5)。自动安装使用官方 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip` 与同版本的 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/install-manifest.json)，核对 SHA256 后安装。
 
 准备 Node.js 24 LTS（最低 22）、Python 3，以及 Bambu Studio、OrcaSlicer 或 Flash Studio 中的一种切片器。导出 MP4 / MOV 还需要 FFmpeg。
 
@@ -18,7 +16,7 @@ npm start
 
 `doctor` 检查本机依赖。打开终端显示的地址，默认 `http://127.0.0.1:4317`。macOS 首次安装后也可双击 `start.command`，或执行 `bash start.command`。
 
-也可复制 [AI 安装指南](../INSTALL_AGENT.md) 顶部的完整提示词，交给能操作本机终端的 AI，按固定 beta.5 指南、运行 ZIP 和外部清单完成核验、环境检查和安装。
+也可复制 [AI 一键安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md) 顶部的简短提示词，交给能操作本机终端的 AI，自动完成环境检查、安装和启动。
 
 安装后直接进入工作台，导入、编辑和预览免费开放。所有用户的工作台实时预览都不叠加水印；免费用户选择 MP4 后，可以点击“免费导出 · 带动态水印”，水印只在导出成片中出现。已解锁用户的成片无水印；无水印视频、预览图片、透明 MOV 和 PNG 序列需要解锁。
 

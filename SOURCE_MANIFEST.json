@@ -10,8 +10,8 @@
     },
     {
       "path": "INSTALL_AGENT.md",
-      "bytes": 9320,
-      "sha256": "a6826ba58080763ccda61e315d2b98fc3799fdbb680b3f8e4f2a6b49a4c2157b"
+      "bytes": 2337,
+      "sha256": "47b6ad10572478f0fbd3a07cb90b70268cf6761be74a58b8e745e5e6844a4942"
     },
     {
       "path": "LICENSE",
@@ -20,8 +20,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 4517,
-      "sha256": "5a9985d5120453bf0c9dc91970ac8298449db8d82b65b8d8d66564a250c0d043"
+      "bytes": 4821,
+      "sha256": "4908257d3f30c707cb5fdb96426ec5b3fd41b436bdb640548a8c8dd871742e3c"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -94,14 +94,19 @@
       "sha256": "198b9901703e92920be34da5b38ae2c2ec280b11e06a6b970216def78a8c2ced"
     },
     {
+      "path": "docs/INSTALL_MAINTAINER.md",
+      "bytes": 9749,
+      "sha256": "5e8114c7bc9d2d77bc5c71fc335363f69668871470bce7a113f1fe67d7f715f6"
+    },
+    {
       "path": "docs/QUICK_START.md",
-      "bytes": 7023,
-      "sha256": "5dc3ec57b497bc9468c114f21c816695fc5fe55c01369e0efc399a0e7b945d13"
+      "bytes": 6716,
+      "sha256": "e79d4de4db075e58765fe36d213de7c80748cb06215dc5e7731e103a67ca8b42"
     },
     {
       "path": "docs/RELEASE.md",
-      "bytes": 5239,
-      "sha256": "bc8f10ca84c8d0a278682ed2360288ae97113c8d0977370c4dea2aed38b47978"
+      "bytes": 5761,
+      "sha256": "45efb8d9f8cd78a12f30c802438923db2dabfba280a7a543e13e53ff7bd9b1d0"
     },
     {
       "path": "docs/SOFTWARE_PURCHASE.md",

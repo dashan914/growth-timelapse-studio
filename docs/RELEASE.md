@@ -1,5 +1,9 @@
 # 发布维护
 
+新用户安装使用 [main 分支的简洁安装指南](../INSTALL_AGENT.md)，AI 读取入口为 `https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/main/INSTALL_AGENT.md`。原安装指南全文保留在 [安装维护历史参考](INSTALL_MAINTAINER.md)，维护、保护、发布和授权说明不再放入新用户安装入口。
+
+此次只更新 main 分支文档，不产生新软件发行，不修改已固定的 beta.5 tag、Release 附件或 ZIP。
+
 当前固定目标：软件 **1.2.0-beta.5**，tag **v1.2.0-beta.5**。本轮 4 个新版 UI GIF 已完成实际录制与媒体核验；完整软件测试 897 项（879 通过、18 环境跳过、0 失败）、运行包回归和旧下载清理脚本 7 项测试通过，公开发行与外部清理结果待实际执行后记录。山地造物网站 **1.15.1** 已部署。
 
 公开仓库继续保留 MIT 源码、测试和开发打包流程。官方 ZIP 为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`，延续轻量压缩与混淆、第三方许可和 `RUNTIME_MANIFEST.json`。本轮只更新当前 UI 的实际操作媒体与固定安装文档，不改变授权、价格、星光和离线逻辑。已保存的旧源码 ZIP 与清单仍兼容，旧下载入口按下面顺序清理。
@@ -27,7 +31,7 @@ node scripts/finalize-install-manifest.mjs --archive "release/runtime-1.2.0-beta
 ```
 
 7. 将官方运行 ZIP、`SHA256SUMS.txt`、外部 `install-manifest.json` 和 `INSTALL_AGENT.md` 上传到固定 `v1.2.0-beta.5` 的 GitHub Release。先验证新版匿名下载、外部清单、ZIP SHA256、包内媒体和 `RUNTIME_MANIFEST.json`；只有通过后，按用户最新授权清理已知旧 Release、旧包附件和旧 tag refs（包括 1.1 下载标记），保留 commit 源码历史，不重写提交。记录实际删除对象和结果，不提前宣称清理完成。源码开发包继续使用自己的 `SOURCE_MANIFEST.json`，不混用两类哈希。
-8. 网站安装指南在 beta.5 公开校验完成后更新为固定链接 `https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/INSTALL_AGENT.md`，外部清单为 `https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/install-manifest.json`。网站配置更新按自己的 `AGENTS.md` 执行，原课程支付保持关闭。原支付、签名与星光逻辑不变，详情见 [软件购买](SOFTWARE_PURCHASE.md)。
+8. 网站安装指南指向持续维护的用户入口 `https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md`；指南内的 ZIP 与外部清单仍固定到已验证的 beta.5 Release，外部清单为 `https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/install-manifest.json`。网站配置更新按自己的 `AGENTS.md` 执行，原课程支付保持关闭。原支付、签名与星光逻辑不变，详情见 [软件购买](SOFTWARE_PURCHASE.md)。
 
 beta.3 与 beta.4 的历史结果保留在 [验证记录](VERIFICATION.md)，beta.5 的录屏、本地完整测试与运行包回归结果已记录；最终公开 ZIP、SHA256、外部清单和旧下载标记清理结果仍需在执行后补录。56 项拓竹矩阵为历史软件验证，未逐台实体打印，范围见 [兼容性报告](BAMBU_PRINTER_COMPATIBILITY.md)。
 

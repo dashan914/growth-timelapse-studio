@@ -8,7 +8,7 @@
 
 这 4 个 GIF 来自本次当前工作台的实际操作录制。
 
-[查看清晰 MP4](docs/media/demo-model.mp4) · [下载案例模型](examples/测试2.3mf) · [安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/INSTALL_AGENT.md)
+[查看清晰 MP4](docs/media/demo-model.mp4) · [下载案例模型](examples/测试2.3mf) · [安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md)
 
 ## 可以做什么
 
@@ -45,9 +45,16 @@
 
 当前固定版本为 **v1.2.0-beta.5**，官方安装文件为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`。下载运行包和同版本外部安装清单，核对 SHA256 后安装。
 
-[固定版本下载](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5) · [直接下载官方运行包](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/growth-timelapse-studio-1.2.0-beta.5-runtime.zip) · [Agent 安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/INSTALL_AGENT.md)
+[固定版本下载](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5) · [直接下载官方运行包](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/growth-timelapse-studio-1.2.0-beta.5-runtime.zip) · [AI 一键安装](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md)
 
 可以把安装指南交给能操作本机终端的 Agent，按固定版本检查依赖、核对 SHA256、安装并启动。Windows x64 的依赖与首次检查见 [Windows 配置说明](docs/WINDOWS_SETUP.md)。
+
+复制下面这段给能操作你电脑的 AI：
+
+```text
+请帮我安装并启动“打印延时一键生成”，按照这个官方指南自动检查环境、安装缺失依赖，完成后打开软件并验证导入和预览：
+https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/main/INSTALL_AGENT.md
+```
 
 手动启动需准备 Node.js 24 LTS（最低 22）、Python 3，以及 Bambu Studio、OrcaSlicer 或 Flash Studio 中的一种。MP4 / MOV 编码需要 FFmpeg；Blender 和 OpenCV / NumPy 为可选扩展。
 
