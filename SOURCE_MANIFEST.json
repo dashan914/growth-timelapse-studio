@@ -10,8 +10,8 @@
     },
     {
       "path": "INSTALL_AGENT.md",
-      "bytes": 3441,
-      "sha256": "a85d7c060f2fbb2a3289422c22c3fb22351084c7f61feaf1ed45e22af587f7ba"
+      "bytes": 4924,
+      "sha256": "4b80f27e62f4bac51b9c06e7273396554f4a2d1264d478ecdad667d0724b5894"
     },
     {
       "path": "LICENSE",
@@ -405,8 +405,8 @@
     },
     {
       "path": "scripts/install.mjs",
-      "bytes": 24756,
-      "sha256": "be3c65780465f8e4140f847346bf500a7fd77832ae3a888191f75042512f9e84"
+      "bytes": 25067,
+      "sha256": "8fa1107df27fca266901d4b1b238f8a412e9035554146189340fe57c498a57b3"
     },
     {
       "path": "scripts/install.ps1",
@@ -885,8 +885,8 @@
     },
     {
       "path": "tests/agent-installation.test.mjs",
-      "bytes": 15843,
-      "sha256": "4c08bb6dffcbb79b79fb6a1c45e6ea06b0998fdbf02084590a341e4e65c48720"
+      "bytes": 17519,
+      "sha256": "62105b22a7a8a6c96a6a63ad497cee5d65606063ef20bfee57e49152128b9ee2"
     },
     {
       "path": "tests/app-appearance-tools.test.mjs",

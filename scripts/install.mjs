@@ -13,8 +13,9 @@ import { probeLocalSlicers } from '../slicer-engine.mjs';
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const omitted = new Set(['.git', '.aws', '.agents', '.codex', '.ssh', '.auth', 'node_modules', 'exports', 'release', 'research', 'samples', 'test-results', '__pycache__', '.venv', 'venv', 'private-beta', 'integration-work']);
 const sourceDirectories = new Set(['src', 'scripts', 'tests', 'docs', 'examples', 'vendor', 'assets']);
-const sourceRootFiles = new Set(['index.html', 'package.json', 'package-lock.json', 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', '.gitignore', 'start.command', '启动生长延时.command', 'start.cmd', 'INSTALL_AGENT.md', 'install-manifest.json', 'SOURCE_MANIFEST.json', 'RUNTIME_MANIFEST.json', 'server.mjs', 'runtime-paths.mjs', 'bambu-engine.mjs', 'slicer-engine.mjs', 'slice-jobs.mjs', 'support-jobs.mjs', 'realistic-render.mjs', 'photo-calibration.mjs', 'export-codecs.mjs', 'beta-activation.mjs', 'software-purchase.mjs', 'free-watermark.mjs', 'beta-config.json']);
+const sourceRootFiles = new Set(['index.html', 'package.json', 'package-lock.json', 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', '.gitignore', 'start.command', '启动生长延时.command', 'start.cmd', 'INSTALL_AGENT.md', 'install-manifest.json', 'SOURCE_MANIFEST.json', 'RUNTIME_MANIFEST.json', 'server.mjs', 'runtime-paths.mjs', 'bambu-engine.mjs', 'slicer-engine.mjs', 'slice-jobs.mjs', 'support-jobs.mjs', 'realistic-render.mjs', 'photo-calibration.mjs', 'export-codecs.mjs', 'export-sound.mjs', 'beta-activation.mjs', 'software-purchase.mjs', 'free-watermark.mjs', 'beta-config.json']);
 const backgrounds = new Set(['h2c.jpg', 'p1s.jpg', 'a1.jpg', 'pastel-rug.png', 'blue-grey.png', 'teal-room.png']);
+const sounds = new Set(['reference-original.wav', 'SOURCES.md']);
 export const applicationId = 'growth-timelapse-studio';
 
 export function dataDirectory({ platform = process.platform, env = process.env, home = os.homedir() } = {}) {
@@ -222,7 +223,12 @@ async function ensureRuntime({ manifest, installRoot, platform, env, installMiss
 function selected(relative) {
   const parts = relative.split(path.sep);
   if (!sourceDirectories.has(parts[0]) && !sourceRootFiles.has(relative)) return false;
-  if (parts[0] === 'assets' && !(parts.length === 2 && ['shandi-logo.svg', 'free-watermark.png'].includes(parts[1])) && (parts.length > 1 && parts[1] !== 'backgrounds' || parts.length > 2 && !backgrounds.has(parts[2]))) return false;
+  if (parts[0] === 'assets') {
+    const rootAsset = parts.length === 1 || parts.length === 2 && ['shandi-logo.svg', 'free-watermark.png'].includes(parts[1]);
+    const background = parts[1] === 'backgrounds' && (parts.length === 2 || parts.length === 3 && backgrounds.has(parts[2]));
+    const sound = parts[1] === 'sounds' && (parts.length === 2 || parts.length === 3 && sounds.has(parts[2]));
+    if (!rootAsset && !background && !sound) return false;
+  }
   return !parts.some(part => omitted.has(part) || part.startsWith('.slice-') || part.startsWith('.support-') || part.startsWith('.realistic-') || part.startsWith('.env') || part.startsWith('._'))
     && !/\.(?:log|pyc|zip|pem|key|p12|pfx)$/i.test(relative) && !/^inventory.*\.json$/i.test(parts.at(-1))
     && !['.DS_Store', 'Thumbs.db', 'result.json'].includes(parts.at(-1));

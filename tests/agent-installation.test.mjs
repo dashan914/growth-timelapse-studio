@@ -83,11 +83,29 @@ test('repeat install reuses source and preserves exports and beta authorization'
 test('changing local source creates a new release and keeps the previous usable release', async t => {
   const { source, data } = await fixture(t);
   const deps = mockedInstall();
+  await fs.mkdir(path.join(data, 'beta'), { recursive: true });
+  const records = { 'installation.json': '{"installationId":"existing-device"}', 'license.json': 'existing signed license', 'purchase.json': 'existing paid order' };
+  for (const [name, content] of Object.entries(records)) await fs.writeFile(path.join(data, 'beta', name), content);
   const first = await install({ source, installRoot: data, noLaunch: true }, deps);
   await fs.writeFile(path.join(source, 'server.mjs'), '// new fixture server');
   const second = await install({ source, installRoot: data, noLaunch: true }, deps);
   assert.notEqual(second.releaseDirectory, first.releaseDirectory);
   assert.equal(await fs.readFile(path.join(first.releaseDirectory, 'server.mjs'), 'utf8'), '// fixture server');
+  for (const [name, content] of Object.entries(records)) assert.equal(await fs.readFile(path.join(data, 'beta', name), 'utf8'), content);
+  assert.equal(JSON.parse(await fs.readFile(path.join(data, 'installation.json'), 'utf8')).releaseDirectory, second.releaseDirectory);
+});
+
+test('installed releases include required sound modules and only the bundled sound assets', async t => {
+  const { source, data } = await fixture(t);
+  const required = ['export-sound.mjs', 'src/camera-motion.js', 'src/preview-sound-player.js', 'src/sound-effects.js', 'assets/sounds/reference-original.wav', 'assets/sounds/SOURCES.md'];
+  for (const relative of required) {
+    await fs.mkdir(path.dirname(path.join(source, relative)), { recursive: true });
+    await fs.copyFile(path.join(projectRoot, relative), path.join(source, relative));
+  }
+  await fs.writeFile(path.join(source, 'assets/sounds/private-recording.wav'), 'must not copy');
+  const result = await install({ source, installRoot: data, noLaunch: true }, mockedInstall());
+  for (const relative of required) assert.deepEqual(await fs.readFile(path.join(result.releaseDirectory, relative)), await fs.readFile(path.join(projectRoot, relative)), relative);
+  await assert.rejects(fs.stat(path.join(result.releaseDirectory, 'assets/sounds/private-recording.wav')), { code: 'ENOENT' });
 });
 
 test('installer preserves optional rendering and photo runtime settings for later launcher processes', async t => {
