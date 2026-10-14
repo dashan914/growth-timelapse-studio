@@ -97,7 +97,7 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_ENV, `RELEASE_VERSION=${pkg.version}\nRELEASE_TAG=${manifest.release.tag}\nRUNTIME_ZIP=${pkg.name}-${pkg.version}-runtime.zip\n`);
           JS
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          test "$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
+          test "$(gh api "repos/$GH_REPO/git/ref/heads/codex/release-beta6" --jq .object.sha)" = "$SOURCE_SHA"
       - name: Install dependencies and test source plus transformed runtime
         run: |
           if ! command -v ffmpeg >/dev/null; then
