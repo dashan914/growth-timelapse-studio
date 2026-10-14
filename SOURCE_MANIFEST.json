@@ -20,8 +20,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 6961,
-      "sha256": "2537ae5ec0402324c55cb8ec4e9ace498ef931cd9e1f02c6629b0c292eb2a323"
+      "bytes": 8001,
+      "sha256": "aa294956abd1e786558479dd02f4db6edf3b51b86748f44eca37dc41b1da454f"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -67,6 +67,16 @@
       "path": "assets/shandi-logo.svg",
       "bytes": 681,
       "sha256": "e73684b523a761b6e86d068d9fae7474247a7491243fcb1ea092e16caf405f28"
+    },
+    {
+      "path": "assets/sounds/SOURCES.md",
+      "bytes": 471,
+      "sha256": "9afb8557234f0da7e8cbdc53de7e812163262a0b8b62f9b00e71a8477a411e20"
+    },
+    {
+      "path": "assets/sounds/reference-original.wav",
+      "bytes": 673870,
+      "sha256": "071de8437bb18473ad1e26a5b3000ef6a9e61605822538eee543c3c30f208321"
     },
     {
       "path": "bambu-engine.mjs",
@@ -309,14 +319,19 @@
       "sha256": "55767fc93586d0a87bd0cd1a814486c3d114d3f9fee2d41533204508d7d00492"
     },
     {
+      "path": "export-sound.mjs",
+      "bytes": 1371,
+      "sha256": "a97fbd32d1e87cb024f9c73af11effe1cbe1d6f7d4fea91c3025272d8968ff03"
+    },
+    {
       "path": "free-watermark.mjs",
       "bytes": 822,
       "sha256": "5d2ad192175d5777cef5c7247f30d1ae8a70be84a350772a23f624c81a37c53f"
     },
     {
       "path": "index.html",
-      "bytes": 33773,
-      "sha256": "a550561a92a74e454eed0dfb5f9f237493adee0c5d4a657ae0bacf0c4d502b6d"
+      "bytes": 35116,
+      "sha256": "8614de1f102892525a3576e1866fe9e3f2b55d68f63a5bc045655aed4be6848c"
     },
     {
       "path": "install-manifest.json",
@@ -410,8 +425,8 @@
     },
     {
       "path": "scripts/package-release.py",
-      "bytes": 4833,
-      "sha256": "92f870c7cf50fc2a7f950e03db12a110856e4c6dc8dfb25acd9a95a0e8ad253b"
+      "bytes": 4925,
+      "sha256": "b6e0e8e9ce7beaec56ea0db838bcd7e89d4096f288e578b040127e031c551bfb"
     },
     {
       "path": "scripts/prepare-slice-project.py",
@@ -455,8 +470,8 @@
     },
     {
       "path": "server.mjs",
-      "bytes": 41417,
-      "sha256": "5489bf7ad1726ada8ba916dc5cdb3183c5af72bc4915b757102560225a2e763e"
+      "bytes": 42872,
+      "sha256": "fe552ae4bc5661e96e7c36fe77a7dd476585c95e1e4290e63c0e8263295b4284"
     },
     {
       "path": "slice-jobs.mjs",
@@ -475,8 +490,8 @@
     },
     {
       "path": "src/app.js",
-      "bytes": 124669,
-      "sha256": "3d2d06abab43b32e606f8e2fb7f88eb381737f1254ba1fa48f5e9cbc47c97c19"
+      "bytes": 128822,
+      "sha256": "52f719e12374a69a78117d1c1685f61fb8f402f3a04a3e420edf806deb28e715"
     },
     {
       "path": "src/background-appearance.js",
@@ -527,6 +542,11 @@
       "path": "src/camera-lens.js",
       "bytes": 5646,
       "sha256": "eb92679dfef760341da913275d004c2720110815e99e43919e946d0255a6c22c"
+    },
+    {
+      "path": "src/camera-motion.js",
+      "bytes": 1403,
+      "sha256": "2abff8cd6156da1331c63172487c154f6eba2130f9f4d022bb58004da6ae1ce2"
     },
     {
       "path": "src/color-grading.js",
@@ -674,6 +694,11 @@
       "sha256": "84e682482c68c692e273b8ac2cc8f406d3b05f2ae245aacc034882fafbaa523e"
     },
     {
+      "path": "src/preview-sound-player.js",
+      "bytes": 5133,
+      "sha256": "c1b980e81621d87b7c2d0b9ee99eb87cdea405883cbbd28e910f7824f309abaf"
+    },
+    {
       "path": "src/print-environment.js",
       "bytes": 5578,
       "sha256": "42e4b26a7e735d9307e3e32dfd75b3326317098525bd3826eff1c0e97827f2bf"
@@ -794,6 +819,11 @@
       "sha256": "28415042b236c9b57c37cef06c310aee04c6ce4902799de2e299494742bf4f32"
     },
     {
+      "path": "src/sound-effects.js",
+      "bytes": 290,
+      "sha256": "82fcd5fe7245611e7cdd5fc43d6b18d05e7582ebf6869f9a7d0c21d1de1c88e2"
+    },
+    {
       "path": "src/spatial-preview.js",
       "bytes": 5604,
       "sha256": "398ad98e2945360a23cef93bb07ff756ed510d0e3858c8b4c9cb82d6aa6e6b65"
@@ -815,8 +845,8 @@
     },
     {
       "path": "src/style.css",
-      "bytes": 38850,
-      "sha256": "d60ef838855e5ed1e1efed706bd8197f50d8d4889d9a0ec8854d4e2ac86ce793"
+      "bytes": 39423,
+      "sha256": "f5f480809f88efe5825c4704124851086c74c09d4a763b7f6bcff85a06930457"
     },
     {
       "path": "src/styled-select.js",
@@ -865,8 +895,8 @@
     },
     {
       "path": "tests/app-background-appearance.test.mjs",
-      "bytes": 25922,
-      "sha256": "88426fc591be93771a2456368fe15382003c19c2b5043fbde85737873f0ff1b4"
+      "bytes": 25938,
+      "sha256": "dcfa447e22b09fac84b333a182564783e8fab29722814ce03202d2d45a7d2b11"
     },
     {
       "path": "tests/app-import-scene-preservation.test.mjs",
@@ -875,8 +905,8 @@
     },
     {
       "path": "tests/app-preview-performance.test.mjs",
-      "bytes": 17002,
-      "sha256": "15dfce2df06746c2405c867c38130058fe22d2467171227432f543d2ff3386d8"
+      "bytes": 17171,
+      "sha256": "f7cd94cf8d908d043ab07442fa3106aff05dfd6461d828d2277d8443c841c09f"
     },
     {
       "path": "tests/app-render-quality.test.mjs",
@@ -890,8 +920,8 @@
     },
     {
       "path": "tests/backend.test.mjs",
-      "bytes": 33594,
-      "sha256": "784149b4c912ab06b6708023c229bf5d69076d1d7bc0dcea915371e697b58e2e"
+      "bytes": 39452,
+      "sha256": "0e87c28074c9325350825b6b8751b62a23b271e5a6bb3a99732ed70ec8fff245"
     },
     {
       "path": "tests/background-appearance.test.mjs",
@@ -947,6 +977,11 @@
       "path": "tests/camera-lens.test.mjs",
       "bytes": 5645,
       "sha256": "05b892129b24dfe91a685ba9b91ec7625b5946d8a38df88f77ae3fba8b557cd8"
+    },
+    {
+      "path": "tests/camera-motion.test.mjs",
+      "bytes": 1462,
+      "sha256": "12155cd40391ab81f5e98599822eaef6af5ee2269667f7e631a60455f16fdf03"
     },
     {
       "path": "tests/color-grading.test.mjs",
@@ -1334,6 +1369,11 @@
       "sha256": "3aa6d570a1b22b20f89b9870006431681a33735cd5ec5075b71845db3dd87fd6"
     },
     {
+      "path": "tests/sound-preview.test.mjs",
+      "bytes": 5546,
+      "sha256": "5cf689cea060ba3d605ef3e3c0f6cd23b55e9ef65f4e9d05aa360c5853c078fc"
+    },
+    {
       "path": "tests/spatial-preview.test.mjs",
       "bytes": 6787,
       "sha256": "47555dbcb05b6ae730eda45ef91a43f4c773feb7f7cd0461d865a0767ef00f78"
@@ -1385,8 +1425,8 @@
     },
     {
       "path": "tests/styled-select.test.mjs",
-      "bytes": 16165,
-      "sha256": "fccece52a7113070bd20a37930d9fbd6f68b29e924bb197bdabe6bd83b16fed6"
+      "bytes": 16182,
+      "sha256": "ff3ff1bbc18ce7d239e799c283a9ad03d2287e39552896ae62019bfe4ce19f90"
     },
     {
       "path": "tests/support-shading-filter.test.mjs",

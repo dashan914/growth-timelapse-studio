@@ -16,6 +16,7 @@ import { findFFmpegPath, findPythonPath } from './runtime-paths.mjs';
 import { createBetaActivationService, APP_VERSION } from './beta-activation.mjs';
 import { freeWatermarkArguments } from './free-watermark.mjs';
 import { createSoftwarePurchaseService } from './software-purchase.mjs';
+import { normalizeExportSound, soundMuxArguments } from './export-sound.mjs';
 
 const execFileAsync = promisify(execFile);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -29,7 +30,7 @@ const MIME = {
   '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp', '.ico': 'image/x-icon', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.zip': 'application/zip',
+  '.webp': 'image/webp', '.ico': 'image/x-icon', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.zip': 'application/zip',
   '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.stl': 'model/stl',
   '.obj': 'text/plain; charset=utf-8', '.mtl': 'text/plain; charset=utf-8',
   '.bin': 'application/octet-stream', '.wasm': 'application/wasm',
@@ -76,7 +77,10 @@ function validateExport(options) {
   if (!Number.isInteger(fps) || fps < 1 || fps > 60) throw new ApiError(400, 'INVALID_FPS', '帧率须为 1–60 之间的整数。');
   if (!Number.isInteger(frames) || frames < 1 || frames > 72000) throw new ApiError(400, 'INVALID_FRAMES', '总帧数须为 1–72000 之间的整数。');
   if (options.exportMode !== undefined && !['watermarked', 'unlocked'].includes(options.exportMode)) throw new ApiError(400, 'INVALID_EXPORT_MODE', '请选择免费水印导出或无水印导出。');
-  return { width, height, fps, frames, format, exportMode: options.exportMode, name: safeName(options.name) };
+  let sound;
+  try { sound = normalizeExportSound(options, frames / fps); }
+  catch (error) { throw new ApiError(400, 'INVALID_SOUND', error.message); }
+  return { width, height, fps, frames, format, exportMode: options.exportMode, name: safeName(options.name), ...sound };
 }
 
 async function readBody(request, maximum) {
@@ -290,6 +294,7 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
   async function cleanupJobFiles(job) {
     await rm(job.partialPath, { force: true }).catch(() => {});
     if (job.muxPath) await rm(job.muxPath, { force: true }).catch(() => {});
+    if (job.soundMuxPath) await rm(job.soundMuxPath, { force: true }).catch(() => {});
     if (job.backgroundPath) await rm(job.backgroundPath, { force: true }).catch(() => {});
     if (job.frameDirectory) await rm(job.frameDirectory, { recursive: true, force: true }).catch(() => {});
   }
@@ -501,6 +506,23 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
           throw new ApiError(500, 'BACKGROUND_AUDIO_FAILED', job.failure || '实景声音合成失败，请重试或关闭原声。');
         }
         completedPath = job.muxPath;
+      }
+      if (job.options.format !== 'png-sequence' && job.options.soundEffect !== 'none') {
+        let hasAudio = false;
+        if (job.backgroundUploaded) {
+          // FFmpeg emits stream metadata on stderr even when probing has no output.
+          try { await execFileAsync(ffmpegPath, ['-hide_banner', '-i', completedPath], { timeout: 5000, maxBuffer: 256 * 1024 }); }
+          catch (error) { hasAudio = /Stream #.*Audio:/.test(error.stderr || ''); }
+        }
+        const extension = job.options.format === 'mp4' ? 'mp4' : 'mov';
+        job.soundMuxPath = path.join(outputDirectory, `${job.id}.sound.${extension}`);
+        startEncoder(job, ffmpegPath, soundMuxArguments({ root, input: completedPath, output: job.soundMuxPath, options: job.options, hasAudio }));
+        job.child.stdin.end();
+        const soundResult = await job.completion;
+        if (soundResult.code !== 0 || job.status !== 'finishing') {
+          throw new ApiError(500, 'SOUND_MUX_FAILED', job.failure || '音效合成失败，请关闭音效后重试。');
+        }
+        completedPath = job.soundMuxPath;
       }
       const info = await stat(completedPath);
       if (!info.size) throw new ApiError(500, 'EMPTY_OUTPUT', '没有生成有效的导出文件。');

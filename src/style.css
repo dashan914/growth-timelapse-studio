@@ -281,7 +281,7 @@ dialog{background:#2c3340;color:#dde7f6;border:1px solid #5c6e89;border-radius:9
 
 .canvas-tools{width:max-content;flex-wrap:wrap;justify-content:center}
 #canvas-tools{overflow:visible}
-#canvas-tools :is(#canvas-shadow,#canvas-color,#canvas-dof) span{display:inline;font-size:11px}
+#canvas-tools :is(#canvas-shadow,#canvas-color,#canvas-dof,#canvas-motion) span{display:inline;font-size:11px}
 @media(max-width:1050px){.canvas-tools i{display:none}}
 
 .viewport{container-type:inline-size}
@@ -291,3 +291,11 @@ dialog{background:#2c3340;color:#dde7f6;border:1px solid #5c6e89;border-radius:9
 @container(max-width:320px){:is(.shadow-popup,.color-popup,.reference-popup,.dof-popup){max-height:calc(100% - 256px)}}
 
 .lens-angle-controls{margin-top:14px;padding-top:8px;border-top:1px solid var(--border)}.lens-angle-controls summary{display:flex;align-items:center;min-height:44px;color:var(--muted);font-size:12px}.lens-angle-controls[open] summary{color:var(--text)}
+
+/* The motion/audio panel shares the framing tools' placement and scroll behavior. */
+.motion-popup{width:250px;max-width:calc(100% - 28px);top:auto;bottom:calc(40px + var(--canvas-tools-height,54px) + 14px);max-height:calc(100% - 106px - var(--canvas-tools-height,54px));z-index:19}
+.motion-popup .field-hint{font-size:11px;line-height:1.5}
+.motion-popup :is(input[type=number],.styled-select-trigger){min-height:36px}
+@media(max-width:520px){.motion-popup{width:240px;right:10px}}
+
+.camera-tool-pair{display:flex;align-items:center;gap:2px;flex:0 0 auto}

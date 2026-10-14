@@ -161,7 +161,7 @@ test('dispose restores the native select and lets initialization register it aga
 test('the actual page declares the full public dropdown inventory and explicitly keeps internal selects hidden', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   const selects = [...html.matchAll(/<select\b([^>]*)>/g)].map(([, attributes]) => ({id: attributes.match(/\bid="([^"]+)"/)?.[1], attributes}));
-  assert.deepEqual(selects.map(item => item.id).sort(), ['source-unit', 'canvas-light-direction', 'ratio', 'resolution', 'export-quality', 'format', 'surface-preset', 'output-appearance', 'fps', 'light-direction', 'bed-size-preset', 'calibration-handle-select'].sort());
+  assert.deepEqual(selects.map(item => item.id).sort(), ['camera-motion', 'source-unit', 'canvas-light-direction', 'ratio', 'resolution', 'export-quality', 'format', 'surface-preset', 'output-appearance', 'fps', 'light-direction', 'bed-size-preset', 'calibration-handle-select'].sort());
   assert.match(selects.find(item => item.id === 'output-appearance').attributes, /hidden/);
   assert.match(selects.find(item => item.id === 'output-appearance').attributes, /aria-hidden="true"/);
   assert.match(selects.find(item => item.id === 'light-direction').attributes, /data-native-select/);

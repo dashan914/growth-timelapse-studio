@@ -12,9 +12,10 @@ FILES = (
     'THIRD_PARTY_NOTICES.md', '.gitignore', 'start.command', '启动生长延时.command',
     'server.mjs', 'runtime-paths.mjs', 'bambu-engine.mjs', 'slicer-engine.mjs',
     'slice-jobs.mjs', 'support-jobs.mjs', 'realistic-render.mjs',
-    'photo-calibration.mjs', 'export-codecs.mjs',
+    'photo-calibration.mjs', 'export-codecs.mjs', 'export-sound.mjs',
     'beta-activation.mjs', 'software-purchase.mjs', 'free-watermark.mjs', 'beta-config.json', 'INSTALL_AGENT.md', 'install-manifest.json', 'start.cmd',
     'assets/shandi-logo.svg', 'assets/free-watermark.png',
+    'assets/sounds/reference-original.wav', 'assets/sounds/SOURCES.md',
 )
 DIRECTORIES = ('src', 'scripts', 'tests', 'docs', 'examples', 'vendor')
 BACKGROUNDS = ('h2c.jpg', 'p1s.jpg', 'a1.jpg', 'pastel-rug.png', 'blue-grey.png', 'teal-room.png')

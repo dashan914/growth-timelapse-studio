@@ -515,3 +515,80 @@ test('idle jobs are cancelled and release the export slot', async t => {
   assert.equal((await upload(base, id, 1)).status, 409);
   assert.deepEqual(await readdir(path.join(root, 'exports')), []);
 });
+
+test('selected sound mixes with audible or silent background, preserves frames and removes temporary files',async t=>{
+  try {await execFileAsync(FFMPEG,['-version']);}catch{t.skip('FFmpeg unavailable');return;}
+  for(const sourceAudio of [null,false,true]) {
+    const {base,root}=await fixture(t,{ffmpegPath:FFMPEG});
+    await mkdir(path.join(root,'assets','sounds'),{recursive:true});
+    await writeFile(path.join(root,'assets','sounds','reference-original.wav'),await readFile(new URL('../assets/sounds/reference-original.wav',import.meta.url)));
+    const {response,body:{id}}=await createExport(base,{soundEffect:'reference',soundVolume:.7});
+    assert.equal(response.status,201);
+    if(sourceAudio!==null)assert.equal((await uploadBackground(base,id,await sourceVideo(root,{audio:sourceAudio}))).status,200);
+    for(let index=0;index<5;index++)assert.equal((await upload(base,id,index)).status,200);
+    const result=await finish(base,id);assert.equal(result.status,200,JSON.stringify(await result.clone().json()));
+    const saved=await result.json(),file=path.join(root,'exports',saved.filename);
+    const decoded=await execFileAsync(FFMPEG,['-hide_banner','-i',file,'-map','0:v:0','-f','rawvideo','-pix_fmt','rgb24','pipe:1'],{encoding:'buffer',maxBuffer:1024*1024});
+    assert.equal(decoded.stdout.length,5*64*64*3);assert.match(decoded.stderr.toString(),/Audio: aac/);
+    const pcm=await execFileAsync(FFMPEG,['-v','error','-i',file,'-map','0:a:0','-ac','1','-ar','44100','-f','s16le','pipe:1'],{encoding:'buffer',maxBuffer:1024*1024});
+    let peak=0;for(let i=0;i<pcm.stdout.length;i+=2)peak=Math.max(peak,Math.abs(pcm.stdout.readInt16LE(i)));assert.ok(peak>100);
+    assert.deepEqual(await readdir(path.join(root,'exports')),[saved.filename]);
+  }
+});
+
+test('long video plays reference audio once and keeps the remaining timeline silent',async t=>{
+  try{await execFileAsync(FFMPEG,['-version']);}catch{t.skip('FFmpeg unavailable');return;}
+  const {base,root}=await fixture(t,{ffmpegPath:FFMPEG});
+  await mkdir(path.join(root,'assets','sounds'),{recursive:true});
+  await writeFile(path.join(root,'assets','sounds','reference-original.wav'),await readFile(new URL('../assets/sounds/reference-original.wav',import.meta.url)));
+  const {response,body:{id}}=await createExport(base,{frames:50,soundEffect:'reference',soundVolume:1});
+  assert.equal(response.status,201);
+  for(let index=0;index<50;index++)assert.equal((await upload(base,id,index)).status,200);
+  const completed=await finish(base,id);assert.equal(completed.status,200,JSON.stringify(await completed.clone().json()));
+  const saved=await completed.json(),file=path.join(root,'exports',saved.filename);
+  const pcm=await execFileAsync(FFMPEG,['-v','error','-i',file,'-map','0:a:0','-ac','1','-ar','44100','-f','s16le','pipe:1'],{encoding:'buffer',maxBuffer:2*1024*1024});
+  const peak=(start,end)=>{let value=0;for(let i=Math.round(start*44100)*2;i<Math.min(pcm.stdout.length,Math.round(end*44100)*2);i+=2)value=Math.max(value,Math.abs(pcm.stdout.readInt16LE(i)));return value;};
+  assert.ok(peak(0,7)>500,'reference is audible');
+  assert.ok(peak(8.5,9.5)<10,'the tail is silence, not a repeat of the source');
+  const video=await execFileAsync(FFMPEG,['-v','error','-i',file,'-map','0:v:0','-f','rawvideo','-pix_fmt','rgb24','pipe:1'],{encoding:'buffer',maxBuffer:2*1024*1024});
+  assert.equal(video.stdout.length,50*64*64*3);
+});
+
+test('reference audio is served as WAV and invalid sound options never reserve an export slot', async t => {
+  const { base, root } = await fixture(t, { ffmpegPath: '/definitely-missing-ffmpeg' });
+  await mkdir(path.join(root, 'assets', 'sounds'), { recursive: true });
+  await writeFile(path.join(root, 'assets', 'sounds', 'reference-original.wav'), await readFile(new URL('../assets/sounds/reference-original.wav', import.meta.url)));
+  const audio = await fetch(`${base}/assets/sounds/reference-original.wav`);
+  assert.equal(audio.status, 200);
+  assert.equal(audio.headers.get('content-type'), 'audio/wav');
+  assert.equal(Buffer.from(await audio.arrayBuffer()).subarray(0, 4).toString(), 'RIFF');
+  for (const invalid of [{ soundEffect: '../../secret' }, { soundVolume: 2 }]) {
+    const created = await createExport(base, { format: 'png-sequence', ...invalid });
+    assert.equal(created.response.status, 400);
+    assert.equal(created.body.error.code, 'INVALID_SOUND');
+  }
+  assert.equal((await (await fetch(`${base}/api/health`)).json()).activeExport, false);
+});
+
+test('PNG sequence export ignores enabled sound without needing FFmpeg or the audio file', async t => {
+  const { base } = await fixture(t, { ffmpegPath: '/definitely-missing-ffmpeg' });
+  const created = await createExport(base, { format: 'png-sequence', frames: 1, soundEffect: 'reference' });
+  assert.equal(created.response.status, 201);
+  assert.equal((await upload(base, created.body.id, 0)).status, 200);
+  const completed = await finish(base, created.body.id);
+  assert.equal(completed.status, 200);
+  assert.match((await completed.json()).filename, /\.zip$/);
+});
+
+test('missing reference audio fails cleanly and releases the export slot', async t => {
+  try { await execFileAsync(FFMPEG, ['-version']); } catch { t.skip('FFmpeg unavailable'); return; }
+  const { base, root } = await fixture(t, { ffmpegPath: FFMPEG });
+  const created = await createExport(base, { frames: 1, soundEffect: 'reference' });
+  assert.equal(created.response.status, 201);
+  assert.equal((await upload(base, created.body.id, 0)).status, 200);
+  const completed = await finish(base, created.body.id);
+  assert.equal(completed.status, 500);
+  assert.equal((await completed.json()).error.code, 'SOUND_MUX_FAILED');
+  assert.deepEqual(await readdir(path.join(root, 'exports')), []);
+  assert.equal((await (await fetch(`${base}/api/health`)).json()).activeExport, false);
+});

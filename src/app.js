@@ -1,3 +1,6 @@
+import { PreviewSoundPlayer } from './preview-sound-player.js';
+import { cameraMotionScale, applyFramePush } from './camera-motion.js';
+import { soundEffect, soundUrl } from './sound-effects.js';
 import {GrowthStudio} from './studio.js';
 import {timelineState, outputSize} from './timeline.js';
 import {solvePlanarCamera} from './calibration.js';
@@ -155,7 +158,9 @@ function settings() {
     ratio: calibrationMode&&studio?.backgroundMetadata?`${studio.backgroundMetadata.width}:${studio.backgroundMetadata.height}`:$('ratio').value==='crop'?(cropEditing||!cropRect?`${studio?.backgroundMetadata?.width||1600}:${studio?.backgroundMetadata?.height||900}`:`${cropRect.width*cropRect.sourceAspect}:${cropRect.height}`):$('ratio').value === 'source' && studio?.backgroundMetadata ? `${studio.backgroundMetadata.width}:${studio.backgroundMetadata.height}` : $('ratio').value === 'source' ? '16:9' : $('ratio').value,
     resolution: Number($('resolution').value),
     format: $('format').value,
-    motion:'fixed',
+    motion:$('camera-motion').value,
+    pushAmount:Number($('push-amount').value),pushDuration:Number($('push-duration').value),
+    soundEffect:$('sound-enabled').checked?'reference':'none',soundVolume:1,
     appearance:'model',
     quality:$('export-quality').value,
   };
@@ -283,10 +288,40 @@ function touchPreviewInteraction({hold=false}={}){
   studio?.beginPreviewInteraction?.({hold});
 }
 
+let previewSoundPlayer=null;
+function getPreviewSoundPlayer(){
+  if(!previewSoundPlayer){
+    previewSoundPlayer=new PreviewSoundPlayer({url:soundUrl(soundEffect('reference')),
+      createContext:()=>new (window.AudioContext||window.webkitAudioContext)(),
+      onError:()=>say('音效暂时无法播放，请点击播放重试。',true),
+      onState:state=>{
+        $('play-button').dataset.soundState=state.status;
+        $('play-button').dataset.soundTime=state.position.toFixed(3);
+        $('play-button').dataset.soundDuration=state.duration.toFixed(3);
+      }});
+  }
+  return previewSoundPlayer;
+}
+function stopEffectAudio(){previewSoundPlayer?.pause();}
+function unlockPreviewSound(){
+  if($('sound-enabled').checked)getPreviewSoundPlayer().unlock().catch(()=>{});
+}
+function syncEffectAudio(config){
+  getPreviewSoundPlayer().update({enabled:config.soundEffect==='reference',playing:playing&&!exporting&&!document.hidden,time,volume:1});
+}
+
+
 function showTime() {
-  const {duration, hold, motion} = settings();
+  const config=settings();
+  const {duration, hold, motion} = config;
   time = Math.min(duration, Math.max(0, time));
   const state = timelineState(time, duration, hold, motion);
+  const scale = calibrationMode || cropEditing || transformMode || perspectiveMode ? 1 : cameraMotionScale(time,config);
+  for (const id of ['stage','realistic-preview-layer','photo-growth-layer','reference-layer']) {
+    $(id).style.transform = scale === 1 ? '' : `scale(${scale})`;
+    $(id).style.clipPath = scale === 1 ? '' : `inset(${(1-1/scale)*50}%)`;
+  }
+  syncEffectAudio(config);
   syncPreviewPlaybackInteraction();
   studio?.syncBackground?.(time);
   studio?.render(state.progress, state.rotation);
@@ -337,6 +372,7 @@ function updateStageBounds() {
 }
 
 function realisticEligibility(config=settings()) {
+  if(config.motion==='push'||config.soundEffect&&config.soundEffect!=='none')return {available:false,reason:'运镜和音效使用实时画质导出。关闭两者后可选择写实画质。'};
   return realisticExportAvailability({runtime:realisticRuntime,metadata:studio?.metadata,backgroundType:studio?.backgroundMetadata?.type,appearance:config.appearance,showSupports:$('show-supports').checked,supportDisplay:'solid',frames:Math.round(config.duration*config.fps)});
 }
 
@@ -429,6 +465,10 @@ async function ensureModelSlice(){
     }
     if(!await loadModel([modelFile],false,{sourceUnits:studio.metadata.sourceUnitsToMm,resliceExisting:true}))return false;
   }
+  return validatePlaybackColors();
+}
+
+function validatePlaybackColors(){
   const missing=(studio.metadata.materialColors||[]).filter(item=>item.source==='fallback'&&!/^#[\da-f]{6}$/i.test(toolColors[item.tool]||''));
   if($('preserve-materials').checked&&missing.length){
     const message=`切片未记录耗材 ${missing.map(item=>item.tool+1).join('、')} 的颜色，请在右侧确认后播放或导出。`;
@@ -440,13 +480,27 @@ async function ensureModelSlice(){
 async function playGrowth(restart=false){
   if(playing&&!restart){playing=false;showTime();return;}
   const revision=modelRevision;
-  if(await ensureModelSlice()&&revision===modelRevision){setModelMode(null);if(restart||time>=settings().duration)time=0;playing=true;showTime();}
+  const begin=()=>{
+    setModelMode(null);if(restart||time>=settings().duration)time=0;
+    unlockPreviewSound();
+    playing=true;showTime();
+  };
+  // The prepared scene can start sound directly in the click callback. Waiting
+  // for metadata or even the resolved async slice check loses that gesture in
+  // some browsers. The cached buffer starts at the latest timeline position
+  // after decoding completes.
+  if(!loading&&studio?.getPrintLayerData?.()){
+    if(validatePlaybackColors())begin();
+    return;
+  }
+  if(await ensureModelSlice()&&revision===modelRevision)begin();
 }
 
 function updateSettings() {
   updateExportQualityUI();
   const config = settings();
   const formatInfo=outputFormat(config.format);
+  $('push-controls').hidden=config.motion!=='push';$('push-amount-value').textContent=`${config.pushAmount}%`;
   syncLightingControls();
   $('surface-detail-value').textContent=`${Math.round(surfaceSettings().surfaceDetail*100)}%`;
   $('duration').value=config.duration;
@@ -468,7 +522,7 @@ function updateSettings() {
   updateReferenceView();
 }
 
-const settingIds = ['layers','stepped','layer-lines','model-color','preserve-materials','surface-preset','surface-detail','growth-duration','hold','ratio','resolution','fps','format','export-quality','floor','grid','shadow-opacity','shadow-radius','light-direction','light-azimuth','light-elevation','show-supports','dof-enabled','dof-strength','dof-focus','lighting-exposure','lighting-temperature',...modelColorFields.map(key=>'lighting-'+key)];
+const settingIds = ['camera-motion','push-amount','push-duration','sound-enabled','layers','stepped','layer-lines','model-color','preserve-materials','surface-preset','surface-detail','growth-duration','hold','ratio','resolution','fps','format','export-quality','floor','grid','shadow-opacity','shadow-radius','light-direction','light-azimuth','light-elevation','show-supports','dof-enabled','dof-strength','dof-focus','lighting-exposure','lighting-temperature',...modelColorFields.map(key=>'lighting-'+key)];
 function persistSettings() {
   if(restoringProject||calibrationMode||loading)return;
   rememberBackgroundAppearance();
@@ -729,6 +783,7 @@ function restoreSettings() {
     const raw=localStorage.getItem('growth-studio-settings-v4');
     const data = JSON.parse(raw||localStorage.getItem('growth-studio-settings-v3')||'null');
     if (!data) return;
+    if(data['sound-enabled']===undefined&&data['sound-effect']!==undefined)data['sound-enabled']=data['sound-effect']!=='none';
     restoredSettingsData=data;backgroundAppearances=normalizeBackgroundAppearances(data.backgroundAppearances);
     if(!raw)data.hold=0;
     // Opening the workbench always starts in its responsive default. A saved
@@ -880,6 +935,7 @@ function setModelMode(mode) {
   studio.setShadowEditMode?.(false);$('shadow-popup').hidden=true;$('canvas-shadow').classList.remove('active');$('canvas-shadow').setAttribute('aria-pressed',false);$('canvas-shadow').setAttribute('aria-expanded',false);
   perspectiveMode=false;$('lens-camera-drag').checked=false;
   $('color-popup').hidden=true;$('canvas-color').classList.remove('active');$('canvas-color').setAttribute('aria-pressed',false);$('canvas-color').setAttribute('aria-expanded',false);
+  $('motion-popup').hidden=true;$('canvas-motion').classList.remove('active');$('canvas-motion').setAttribute('aria-pressed',false);$('canvas-motion').setAttribute('aria-expanded',false);
   $('dof-popup').hidden=true;$('reference-popup').hidden=true;
   $('canvas-compare').classList.remove('active');$('canvas-compare').setAttribute('aria-pressed',false);
   $('canvas-dof').classList.remove('active');$('canvas-dof').setAttribute('aria-pressed',false);$('canvas-dof').setAttribute('aria-expanded',false);
@@ -1268,7 +1324,8 @@ async function saveSnapshot() {
       let blob=await studio.captureFrame(state.progress,state.rotation,time,{outputPlan:plan});
       if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo);
       if(!await ensureExportUnlocked()){say('画面未保存，可以继续调整。');return;}
-      downloadBlob(blob,'模型生长-画面.png');
+      blob=await applyFramePush(blob,cameraMotionScale(time,config));
+    downloadBlob(blob,'模型生长-画面.png');
       say('当前画面已保存。');
     } catch(error) { say(error.message,true); }
     finally { studio.endExport(); studio.setOptions(renderOptions());snapshotting=false;studio.lockPreviewCamera();studio.transform.enabled=previousTransform;lockWorkspace(false);showTime(); }
@@ -1374,6 +1431,7 @@ async function exportVideo() {
     if(config.format==='mov-alpha'&&!alphaVideoAvailable){say('本机编码器不支持透明 MOV 视频，可先导出透明 PNG 序列。',true);return;}
     if(config.quality==='realistic')return await exportRealisticVideo(config);
     exportBackend='realtime';exportCancellation=null;
+    stopEffectAudio();
     exporting = true; playing = false; cancelled = false; exportId = null; controller = new AbortController();
     const {width,height} = outputSize(config.ratio,config.resolution);
     const plan=exportRenderPlan(width,height);
@@ -1392,7 +1450,7 @@ async function exportVideo() {
       if(config.appearance==='photo'&&outputFormat(config.format).transparent)throw new Error('实拍外观包含完整背景，请选择 MP4 格式。');
       const photo=config.appearance==='photo'?await preparePhotoFrames(width,height):null;
       // Keep creation uncancelled so its ID is always known and a cancelled job is cleaned up.
-      const job = await api('/api/exports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({width,height,fps:config.fps,frames,format:config.format,exportMode:config.watermarked?'watermarked':'unlocked',name:studio.metadata.name.replace(/\.[^.]+$/,'')+'-生长延时'})});
+      const job = await api('/api/exports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({width,height,fps:config.fps,frames,format:config.format,soundEffect:config.soundEffect,soundVolume:config.soundVolume,exportMode:config.watermarked?'watermarked':'unlocked',name:studio.metadata.name.replace(/\.[^.]+$/,'')+'-生长延时'})});
       exportId = job.id;
       if (cancelled) throw new DOMException('Aborted','AbortError');
       if (config.format === 'mp4' && backgroundFile && studio.backgroundMetadata?.type === 'video' && $('background-audio').checked) {
@@ -1401,12 +1459,14 @@ async function exportVideo() {
       }
       studio.startExport(plan.renderWidth,plan.renderHeight);
       studio.setOptions({...renderOptions(),transparent:outputFormat(config.format).transparent});
+      const pushCanvas=document.createElement('canvas');
       for (let index = 0; index < frames; index++) {
         if (cancelled) throw new DOMException('Aborted','AbortError');
         const frameTime = index / Math.max(1,frames-1) * config.duration;
         const state = timelineState(frameTime,config.duration,config.hold,config.motion);
         let blob = await studio.captureFrame(state.progress,state.rotation,index/config.fps,{outputPlan:plan,signal});
         if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo);
+        blob=await applyFramePush(blob,cameraMotionScale(frameTime,config),pushCanvas);
         await api(`/api/exports/${exportId}/frames?index=${index}`,{method:'POST',headers:{'Content-Type':'image/png'},body:blob,signal});
         const pct = Math.round((index+1)/frames*95);
         $('export-progress').value = pct; $('export-percent').textContent = `${pct}%`;
@@ -1478,8 +1538,9 @@ async function init() {
   realisticPreview=new RealisticPreviewRenderer({image:$('realistic-preview-layer'),request:api,onState:showRealisticPreviewState,
     prepare:({width,height,progress})=>studio.createRenderPackage({output:{width,height,fps:1,frames:1,growthFrames:1,samples:64,previewProgress:progress},backgroundFile,bedWidthMm:Number($('bed-width').value),bedDepthMm:Number($('bed-depth').value),cameraMode:'fixed'}),
     readImage:async(url,{signal})=>{const response=await fetch(url,{signal});if(!response.ok)throw new Error('写实预览画面读取失败。');const blob=await response.blob();if(blob.type!=='image/png'||!blob.size)throw new Error('写实预览画面格式无效。');return blob;}});
-  window.addEventListener('pagehide',()=>{realisticPreview.dispose();});
+  window.addEventListener('pagehide',event=>{realisticPreview.dispose();if(event.persisted)previewSoundPlayer?.pause();else previewSoundPlayer?.dispose();});
   new ResizeObserver(updateStageBounds).observe($('viewport'));
+  new ResizeObserver(()=>{$('viewport').style.setProperty('--canvas-tools-height',`${Math.max(54,$('canvas-tools').getBoundingClientRect().height)}px`);}).observe($('canvas-tools'));
   document.querySelector('.center-panel').insertBefore($('calibration-panel'),document.querySelector('.timeline'));
   document.querySelector('.center-panel').insertBefore($('crop-panel'),document.querySelector('.timeline'));
   studio.onTransformChange=()=>{
@@ -1492,6 +1553,7 @@ async function init() {
     syncLightingControls();persistSettings();showTime();
   };
   $('canvas-tools').hidden=false;
+  $('sound-enabled').addEventListener('input',()=>{if($('sound-enabled').checked)unlockPreviewSound();});
   for (const id of settingIds) if(id!=='export-quality')$(id).addEventListener('input',event=>{if(event.target.type==='range')touchPreviewInteraction();updateSettings();});
   $('export-quality').addEventListener('change',()=>{qualityPreference=$('export-quality').value;if(qualityPreference==='realistic')setModelMode(null);updateSettings();});
   $('ratio').addEventListener('change',()=>{if($('ratio').value==='crop')beginCrop();else{cropEditing=false;cropRect=null;$('crop-overlay').setAttribute('hidden','');$('crop-panel').hidden=true;$('edit-crop').hidden=true;updateSettings();updateReferenceView();}});
@@ -1511,6 +1573,10 @@ async function init() {
   $('reference-blink').addEventListener('pointerdown',()=>{$('reference-layer').style.opacity=1;});
   for(const name of ['pointerup','pointerleave','pointercancel'])$('reference-blink').addEventListener(name,updateReferenceView);
   $('auto-reference-align').addEventListener('click',autoReferenceAlign);
+  $('canvas-motion').addEventListener('click',()=>setAppearancePanel('motion',$('motion-popup').hidden));
+  $('close-motion').addEventListener('click',()=>{setAppearancePanel('motion',false);$('canvas-motion').focus();});
+  $('motion-popup').addEventListener('keydown',event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();setAppearancePanel('motion',false);$('canvas-motion').focus();}});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)stopEffectAudio();});
   $('canvas-dof').addEventListener('click',()=>setAppearancePanel('dof',$('dof-popup').hidden));
   $('close-dof').addEventListener('click',()=>setAppearancePanel('dof',false));
   $('lens-camera-drag').addEventListener('change',event=>setPerspectiveMode(event.target.checked));

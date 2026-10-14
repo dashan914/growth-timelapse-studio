@@ -46,7 +46,7 @@ function actualFunction(name){
 function fixture({savedLocal=null,restoring=false}={}){
   const nodes=new Map(),storage=new Map(),writes=[],patches=[],renders=[],timers=new Map(),pending=[];
   if(savedLocal)storage.set('growth-studio-settings-v4',JSON.stringify(savedLocal));
-  const checkboxIds=new Set(['floor','grid','stepped','layer-lines','preserve-materials','show-supports','dof-enabled']);
+  const checkboxIds=new Set(['sound-enabled','floor','grid','stepped','layer-lines','preserve-materials','show-supports','dof-enabled']);
   const get=id=>{
     if(!nodes.has(id))nodes.set(id,{value:'',checked:false,type:checkboxIds.has(id)?'checkbox':'text',hidden:false,textContent:'',
       setAttribute(){},classList:{toggle(){}}});

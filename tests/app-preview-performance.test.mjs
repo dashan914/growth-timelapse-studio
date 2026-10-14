@@ -1,3 +1,4 @@
+import { cameraMotionScale, applyFramePush } from '../src/camera-motion.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -48,7 +49,7 @@ function fixture(){
     startExport(){calls.push(['startExport',fast]);},async captureFrame(){calls.push(['capture',fast]);return new Blob(['png']);},
     endExport(){},lockPreviewCamera(){}};
   const context=vm.createContext({studio,$:get,window:new Target(),document,timelineState,outputSize,exportRenderPlan,outputFormat,alphaVideoAvailable:true,
-    playing:false,previewPlaybackActive:false,exporting:false,exportAuthorizing:false,loading:false,snapshotting:false,alignBusy:false,calibrationMode:false,cropEditing:false,
+    cameraMotionScale,applyFramePush,syncEffectAudio(){},stopEffectAudio(){},transformMode:null,playing:false,previewPlaybackActive:false,exporting:false,exportAuthorizing:false,loading:false,snapshotting:false,alignBusy:false,calibrationMode:false,cropEditing:false,
     perspectiveMode:false,dragPerspective:null,time:3,photoPreview:null,modelRevision:1,calibrationDragIndex:null,calibrationUprightDrag:null,gridDrag:null,cropDrag:null,
     settings:()=>({...config}),syncCameraFields(){},queueProjectState(){},syncDofStatus(){},syncRealisticPreview(){},lastRealisticPreviewCheck:0,say(){},lockWorkspace(){},
     updateSettings(){calls.push('updateSettings');},ensureExportUnlocked:async()=>true,settingIds:['lighting-exposure','dof-strength','floor','export-quality'],
