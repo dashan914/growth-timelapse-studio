@@ -77,7 +77,7 @@ function fixture({existing=true,mode='mesh',failure=null,cancel=false,engineFail
   const context=vm.createContext({studio,$:get,document:{createElement:makeNode},THREE,LOCAL_SLICE_CLIENT_REVISION:'local-slicer-original-mesh-v2',
     DEFAULT_MODEL_POSE:defaults,printerPresets:BACKGROUND_PRESETS,SURFACE_PRESETS:['auto','pla','matte','silk','petg'],
     modelColorFields:['tint','shadows','highlights','contrast','saturation'],normalizeLighting,lightingProfile:normalizeLighting(lighting),
-    sceneColors:{studio:'#30333a'},scene:'studio',cropRect:crop,exporting:false,snapshotting:false,calibrationMode:false,cropEditing:false,
+    sceneColors:{studio:'#30333a'},scene:'studio',cropRect:crop,customSoundFile:null,exporting:false,snapshotting:false,calibrationMode:false,cropEditing:false,
     loading:false,playing:false,time:3,importController:null,sliceController:null,slicingRuntime:null,importInteractionState:null,importSequence:0,cacheTimer:null,restoringProject:false,reducedMotion:true,
     importProgressUI:{begin(){},update(event){calls.phases.push(serialized(event));},complete(){calls.complete++;},fail(){calls.failed++;},cancelled(){calls.cancelled++;}},
     AbortController,DOMException,clearTimeout,requestAnimationFrame:fn=>fn(),PRINTER_MM_TO_THREE_MM:{},

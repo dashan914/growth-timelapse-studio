@@ -7,7 +7,7 @@ import { parseHTML } from '../vendor/test-dom/worker.mjs';
 const turn = () => new Promise(resolve => setImmediate(resolve));
 const response = value => Response.json(value);
 const locked = { activated: false, configured: true, reason: 'ACTIVATION_REQUIRED' };
-function fixture(request = async () => response(locked)) {
+function fixture(request = async () => response(locked), options = {}) {
   const nodes = new Map(), doc = { body: { dataset: {} }, activeElement: null };
   const get = id => {
     if (nodes.has(id)) return nodes.get(id);
@@ -23,6 +23,7 @@ function fixture(request = async () => response(locked)) {
         return event;
       },
       focus() { doc.activeElement = this; },
+      select() { this.selected = true; },
       showModal() { this.open = true; },
       close() { this.open = false; void this.dispatch('close'); },
       querySelectorAll() { return ['beta-close', 'beta-code', 'beta-activate', 'beta-retry', 'beta-dismiss', 'beta-redeem'].map(get).filter(item => !item.disabled); }
@@ -32,7 +33,7 @@ function fixture(request = async () => response(locked)) {
   doc.getElementById = get;
   doc.activeElement = get('original-action');
   let loads = 0;
-  const controller = createExportUnlockController({ document: doc, request, loadApp() { loads++; } });
+  const controller = createExportUnlockController({ document: doc, request, loadApp() { loads++; }, ...options });
   return { controller, get, doc, get loads() { return loads; } };
 }
 
@@ -41,7 +42,7 @@ function pendingPayment(extra = {}) {
     orderNo: 'synthetic-year-order', status: 'PENDING', expiresAt: new Date(Date.now() + 60_000).toISOString(),
     licenseExpiresAt: null, qrImage: 'data:image/png;base64,aW1hZ2U=', ...extra };
 }
-function purchaseFixture(t) {
+function purchaseFixture(t, options) {
   const state = { order: pendingPayment(), activated: false, lookup: null }, calls = [];
   const f = fixture(async (url, options = {}) => {
     const method = options.method || 'GET'; calls.push({ url, method, ...(options.body ? { body: JSON.parse(options.body) } : {}) });
@@ -56,7 +57,7 @@ function purchaseFixture(t) {
     }
     if (state.lookup) return state.lookup();
     return response({ ...locked, order: state.order, activated: state.activated });
-  });
+  }, options);
   t.after(async () => { if (f.get('beta-gate').open) await f.get('beta-close').dispatch('click'); });
   return { ...f, state, calls };
 }
@@ -285,13 +286,13 @@ test('returning from a pending QR verifies the order, keeps choices visible thro
 test('return-to-plans continues a newly paid order instead of offering another purchase', async t => {
   const f = purchaseFixture(t);
   await f.get('export-unlock-button').dispatch('click'); await turn();
-  f.state.order = { ...f.state.order, status: 'PAID', code: 'GTB1-SYNTHETIC-CODE' };
+  f.state.order = { ...f.state.order, status: 'PAID', code: 'GTB1-SYNTHETIC-CODE-ABCDE-FGHJK' };
   f.state.activated = true;
   await f.get('beta-payment-back').dispatch('click');
   assert.equal(f.get('beta-acquire-options').hidden, true);
   assert.equal(f.get('beta-payment-back').hidden, true);
   assert.equal(f.get('beta-order-qr').hidden, true);
-  assert.equal(f.get('beta-paid-code').value, 'GTB1-SYNTHETIC-CODE');
+  assert.equal(f.get('beta-paid-code').value, 'GTB1-SYNTHETIC-CODE-ABCDE-FGHJK');
   assert.equal(f.get('export-unlock-button').dataset.exportState, 'unlocked');
   assert.match(f.get('beta-order-state').textContent, /当前设备已解锁/);
   assert.equal(f.calls.filter(call => call.method === 'POST').length, 0);
@@ -301,13 +302,13 @@ test('a paid result received while choosing a replacement still completes the or
   const f = purchaseFixture(t);
   await f.get('export-unlock-button').dispatch('click'); await turn();
   await f.get('beta-payment-back').dispatch('click');
-  f.state.order = { ...f.state.order, status: 'PAID', code: 'GTB1-ORIGINAL-PAID-CODE' };
+  f.state.order = { ...f.state.order, status: 'PAID', code: 'GTB1-ORIGINAL-PAID-CODE-ABCDE' };
   f.state.activated = true;
   await f.get('beta-payment-refresh').dispatch('click'); await turn();
   assert.equal(f.get('beta-acquire-options').hidden, true);
   assert.equal(f.get('beta-checkout').hidden, false);
   assert.equal(f.get('beta-payment-choice-note').hidden, true);
-  assert.equal(f.get('beta-paid-code').value, 'GTB1-ORIGINAL-PAID-CODE');
+  assert.equal(f.get('beta-paid-code').value, 'GTB1-ORIGINAL-PAID-CODE-ABCDE');
   assert.equal(f.calls.filter(call => call.method === 'POST').length, 0);
 });
 
@@ -335,4 +336,110 @@ test('failed payment verification keeps the QR page and never creates or cancels
   assert.equal(f.get('beta-payment-back').disabled, false);
   assert.equal(f.get('beta-message').classList.contains('error'), true);
   assert.equal(f.calls.filter(call => call.method !== 'GET').length, 0);
+});
+
+test('paid recovery receipt can be copied and saved locally without payment tokens', async t => {
+  const copied = [], downloaded = [];
+  const f = purchaseFixture(t, { clipboard: { writeText: async value => copied.push(value) }, saveReceipt: async value => downloaded.push(value) });
+  const code = 'GTB1-SYNTHETIC-RECOVERY-ABCDE';
+  const installationId = '00000000-0000-4000-8000-000000000003', expiresAt = '2030-01-01T00:00:00.000Z';
+  f.state.order = pendingPayment({ status: 'PAID', code, installationId, licenseExpiresAt: expiresAt, token: 'synthetic-private-order-token' });
+  f.state.activated = true;
+  await f.get('export-unlock-button').dispatch('click'); await turn();
+  assert.equal(f.get('beta-paid-receipt').hidden, false);
+  assert.equal(f.get('beta-paid-order').value, f.state.order.orderNo);
+  assert.equal(f.get('beta-paid-device').value, installationId);
+  f.get('beta-paid-code').value = 'tampered-field-must-not-be-copied';
+  await f.get('beta-copy-code').dispatch('click');
+  assert.deepEqual(copied, [code], 'copy uses validated receipt state rather than a mutable form field');
+  assert.match(f.get('beta-message').textContent, /授权恢复码已复制/);
+  await f.get('beta-save-receipt').dispatch('click');
+  assert.equal(downloaded.length, 1); assert.match(downloaded[0].filename, /^打印延时-购买凭据-synthetic-year-order\.txt$/);
+  assert.match(downloaded[0].text, /订单号：synthetic-year-order/);
+  assert.ok(downloaded[0].text.includes(installationId)); assert.ok(downloaded[0].text.includes(code)); assert.ok(downloaded[0].text.includes(expiresAt));
+  assert.match(downloaded[0].text, /联网恢复/); assert.match(downloaded[0].text, /不能单独解锁/);
+  assert.doesNotMatch(downloaded[0].text, /synthetic-private-order-token|Bearer|tampered-field/);
+});
+
+test('cached PAID receipt is visible offline but cannot satisfy a pending export', async t => {
+  const f = purchaseFixture(t);
+  f.state.order = pendingPayment({ status: 'PAID', code: 'GTB1-SYNTHETIC-OFFLINE-ABCDE' });
+  f.state.lookup = () => response({ ...locked, order: f.state.order, receiptOnly: true, paymentError: 'synthetic offline' });
+  let completed = false;
+  const operation = f.controller.ensureExportUnlocked().then(value => { completed = true; return value; });
+  await turn();
+  assert.equal(f.get('beta-paid-receipt').hidden, false); assert.equal(f.get('beta-order-qr').hidden, true);
+  assert.equal(f.get('beta-gate').open, true); assert.equal(f.get('export-unlock-button').dataset.exportState, 'locked');
+  assert.equal(completed, false); assert.match(f.get('beta-order-state').textContent, /本机保存的购买凭据/);
+  await f.get('beta-close').dispatch('click'); assert.equal(await operation, false);
+});
+
+test('successful pending purchase continues export and reopening unlocked button exposes its recovery receipt', async t => {
+  const f = purchaseFixture(t);
+  const operation = f.controller.ensureExportUnlocked(); await turn();
+  f.state.order = pendingPayment({ status: 'PAID', code: 'GTB1-SYNTHETIC-REOPEN-ABCDE' }); f.state.activated = true;
+  await f.get('beta-payment-refresh').dispatch('click');
+  assert.equal(await operation, true); assert.equal(f.get('beta-gate').open, false);
+  assert.match(f.get('export-unlock-button').title, /授权恢复码与购买凭据/);
+  await f.get('export-unlock-button').dispatch('click'); await turn();
+  assert.equal(f.get('beta-paid-receipt').hidden, false);
+  assert.equal(f.get('beta-paid-code').value, 'GTB1-SYNTHETIC-REOPEN-ABCDE');
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, 0);
+});
+
+test('invalid paid codes cannot be copied or downloaded and receipt filenames cannot inject paths', async t => {
+  const copied = [], downloaded = [];
+  const f = purchaseFixture(t, { clipboard: { writeText: async value => copied.push(value) }, saveReceipt: async value => downloaded.push(value) });
+  f.state.order = pendingPayment({ status: 'PAID', code: 'GTB1-SYNTHETIC\nINJECTED-ABCDE' });
+  await f.get('export-unlock-button').dispatch('click'); await turn();
+  assert.equal(f.get('beta-paid-receipt').hidden, true);
+  await f.get('beta-copy-code').dispatch('click'); await f.get('beta-save-receipt').dispatch('click');
+  assert.equal(copied.length, 0); assert.equal(downloaded.length, 0);
+  f.state.order = pendingPayment({ status: 'PAID', code: 'GTB1-SYNTHETIC-SAFE-CODE-ABCDE', orderNo: '../../spoofed\nreceipt', licenseExpiresAt: null });
+  await f.get('beta-payment-refresh').dispatch('click'); await turn();
+  await f.get('beta-save-receipt').dispatch('click');
+  assert.equal(downloaded.length, 1);
+  assert.equal(downloaded[0].filename, `打印延时-购买凭据-${f.state.order.id}.txt`);
+  assert.doesNotMatch(downloaded[0].text, /spoofed|授权到期：永久/);
+  assert.match(downloaded[0].text, /授权到期：以授权状态为准/, 'a YEAR receipt with missing expiry must not claim permanent access');
+});
+
+test('clipboard and receipt download failures preserve a selectable recovery code and show feedback', async t => {
+  const f = purchaseFixture(t, { clipboard: { writeText: async () => { throw new Error('clipboard unavailable'); } }, saveReceipt: async () => { throw new Error('download unavailable'); } });
+  f.state.order = pendingPayment({ status: 'PAID', code: 'GTB1-SYNTHETIC-FALLBACK-ABCDE' });
+  await f.get('export-unlock-button').dispatch('click'); await turn();
+  await f.get('beta-copy-code').dispatch('click');
+  assert.equal(f.get('beta-paid-code').selected, true); assert.match(f.get('beta-message').textContent, /手动复制/);
+  await f.get('beta-save-receipt').dispatch('click');
+  assert.match(f.get('beta-message').textContent, /未能下载/); assert.equal(f.get('beta-message').classList.contains('error'), true);
+  assert.equal(f.get('beta-paid-code').value, 'GTB1-SYNTHETIC-FALLBACK-ABCDE');
+});
+
+test('actual markup labels recovery receipt controls and leaves the original code activation entry available', async () => {
+  const { document } = parseHTML(await readFile(new URL('../index.html', import.meta.url), 'utf8'));
+  for (const id of ['beta-paid-order', 'beta-paid-device', 'beta-paid-code']) {
+    assert.ok(document.querySelector(`label[for="${id}"]`));
+    assert.ok(document.getElementById(id).hasAttribute('readonly'));
+  }
+  assert.equal(document.getElementById('beta-save-receipt').getAttribute('type'), 'button');
+  assert.match(document.getElementById('beta-code-entry').textContent, /已有兑换码 \/ 授权恢复码/);
+  assert.equal(document.getElementById('beta-code').getAttribute('maxlength'), '80');
+});
+
+test('receipt lookup waits beyond the payment backend timeout before showing its offline cached response', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let paymentSignal;
+  const f = fixture(async (url, options) => {
+    if (url === '/api/beta/status') return response(locked);
+    paymentSignal = options.signal;
+    return new Promise(resolve => setTimeout(() => resolve(response({ ...locked, receiptOnly: true,
+      order: pendingPayment({ status: 'PAID', code: 'GTB1-SYNTHETIC-SLOW-CACHE-ABCDE' }) })), 15001));
+  });
+  await f.get('export-unlock-button').dispatch('click'); await turn();
+  t.mock.timers.tick(10001); await turn();
+  assert.equal(paymentSignal.aborted, false, 'the earlier 10 s timeout would discard the backend cache fallback');
+  t.mock.timers.tick(5000); await turn();
+  assert.equal(paymentSignal.aborted, false); assert.equal(f.get('beta-paid-receipt').hidden, false);
+  assert.match(f.get('beta-order-state').textContent, /本机保存的购买凭据/);
+  await f.get('beta-close').dispatch('click');
 });

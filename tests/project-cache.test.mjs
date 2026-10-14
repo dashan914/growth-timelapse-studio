@@ -4,7 +4,7 @@ import { File } from 'node:buffer';
 import { SOURCE_BLOB_LIMIT, validateCachePatch, normalizeFile } from '../src/project-cache.js';
 
 test('partial cache updates retain existing source sizes and explicit clears release them', () => {
-  const previous = { modelFiles: 18_000_000, backgroundFile: 3_000_000, referenceFile: 2_000_000, supportGcode: 68_000_000, supportFile:0 };
+  const previous = { modelFiles: 18_000_000, backgroundFile: 3_000_000, referenceFile: 2_000_000, supportGcode: 68_000_000, supportFile:0, customSoundFile:0 };
   const poseUpdate = validateCachePatch({ camera: { yaw: 10 }, backgroundFile: undefined }, previous);
   assert.deepEqual(poseUpdate.sourceBytes, previous);
   assert.equal(poseUpdate.totalSourceBytes, 91_000_000);
@@ -35,7 +35,7 @@ test('invalid file and patch types fail explicitly instead of saving malformed s
     assert.throws(() => validateCachePatch(patch), TypeError);
   }
   assert.deepEqual(validateCachePatch({ settings: null, camera: null, backgroundPreset: null }).sourceBytes,
-    { modelFiles: 0, backgroundFile: 0, referenceFile: 0, supportGcode: 0, supportFile:0 });
+    { modelFiles: 0, backgroundFile: 0, referenceFile: 0, supportGcode: 0, supportFile:0, customSoundFile:0 });
 });
 
 test('restored Blob keeps the original File import name, type, modification date and contents', async () => {
@@ -75,4 +75,16 @@ test('generated PNG backgrounds retain their exact preset ID and file metadata t
   } finally {
     if(originalFileConstructor===undefined)delete globalThis.File;else globalThis.File=originalFileConstructor;
   }
+});
+
+test('custom audio Blob and mode share the project budget and retain import metadata',async()=>{
+  const file=new File(['original-audio-bytes'],'自定义.mp3',{type:'audio/mpeg',lastModified:123});
+  const patch={customSoundFile:file,soundMode:'custom'};
+  assert.equal(validateCachePatch(patch).sourceBytes.customSoundFile,file.size);
+  const restored=normalizeFile(structuredClone({blob:file,name:file.name,type:file.type,lastModified:file.lastModified}));
+  assert.equal(restored.name,file.name);assert.equal(restored.type,file.type);assert.equal(await restored.text(),'original-audio-bytes');
+  assert.equal(validateCachePatch({customSoundFile:null,soundMode:'none'},validateCachePatch(patch).sourceBytes).sourceBytes.customSoundFile,0);
+  assert.throws(()=>validateCachePatch({customSoundFile:'base64'}),TypeError);
+  assert.throws(()=>validateCachePatch({soundMode:'unknown'}),TypeError);
+  assert.throws(()=>validateCachePatch(patch,{modelFiles:SOURCE_BLOB_LIMIT}),/512 MiB/);
 });

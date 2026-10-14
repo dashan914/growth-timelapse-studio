@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createSoftwarePurchaseService } from '../software-purchase.mjs';
+import { BETA_PRODUCT_ID, createBetaActivationService } from '../beta-activation.mjs';
 
 const code = 'GTB1-ABCDE-FGHJK-LMNPQ-RSTUV-WXY23-4';
 
@@ -285,4 +286,94 @@ test('permanent purchases with no expiry reuse the paid order across payment-met
   assert.deepEqual(f.state.activations, [code]);
   const saved = JSON.parse(await readFile(path.join(f.directory, 'beta', 'purchase.json'), 'utf8'));
   assert.equal(saved.id, id); assert.equal(saved.token, posts[0].token); assert.equal(saved.licenseExpiresAt, null);
+});
+
+test('paid year and permanent receipts survive restart offline without becoming authorization', async t => {
+  for (const plan of ['YEAR', 'LIFETIME']) await t.test(plan, async t => {
+    const id = randomUUID(), expiresAt = plan === 'YEAR' ? new Date(Date.now() + 86400000).toISOString() : null;
+    const f = await fixture(t, async (_url, options) => Response.json({ id, status: options.method === 'POST' ? 'PENDING' : 'PAID',
+      code, orderNo: 'GT-SYNTHETIC-RECEIPT', plan, amountCents: plan === 'YEAR' ? 1990 : 3990, licenseExpiresAt: expiresAt }));
+    await f.service.create(plan, 'alipay'); await f.service.status();
+    const file = path.join(f.directory, 'beta', 'purchase.json'), saved = JSON.parse(await readFile(file, 'utf8'));
+    assert.equal(saved.receipt.code, code); assert.equal(saved.receipt.licenseExpiresAt, expiresAt);
+    assert.equal(saved.receipt.installationId, f.state.installationId);
+    const offlineSettings = { ...f.settings, fetchImpl: async () => { throw new Error('synthetic offline'); } };
+    const offline = createSoftwarePurchaseService(offlineSettings);
+    const available = await offline.status();
+    assert.equal(available.receiptOnly, true); assert.equal(available.order.orderNo, 'GT-SYNTHETIC-RECEIPT');
+    assert.equal(available.activated, true); assert.equal(available.order.code, code);
+    assert.equal(available.order.licenseExpiresAt, expiresAt); assert.equal(Object.hasOwn(available.order, 'token'), false);
+    f.state.activated = false;
+    const missingLicense = await createSoftwarePurchaseService(offlineSettings).status();
+    assert.equal(missingLicense.activated, false, 'a PAID cache does not substitute for a signed certificate');
+    assert.deepEqual(f.state.activations, [code], 'offline receipt viewing never attempts activation');
+    if (process.platform !== 'win32') assert.equal((await stat(file)).mode & 0o777, 0o600);
+  });
+});
+
+test('unbound cached paid receipt remains visible offline without rebinding the old device', async t => {
+  const id = randomUUID();
+  const f = await fixture(t, async (url, options) => new URL(url).pathname.endsWith('/unbind') ? Response.json({ unbound: true })
+    : Response.json({ id, status: options.method === 'POST' ? 'PENDING' : 'PAID', code, orderNo: 'GT-SYNTHETIC-UNBOUND', licenseExpiresAt: null }));
+  await f.service.create('LIFETIME', 'wx'); await f.service.status(); await f.service.unbind();
+  const offline = createSoftwarePurchaseService({ ...f.settings, fetchImpl: async () => { throw new Error('offline'); } });
+  const result = await offline.status();
+  assert.equal(result.unbound, true); assert.equal(result.activated, false); assert.equal(result.order.code, code);
+  assert.deepEqual(f.state.activations, [code]);
+});
+
+test('invalid or oversized cached receipt codes cannot be returned as recovery information', async t => {
+  for (const changed of [{ code: 'GTB1-' + 'A'.repeat(1000) }, { code: 'GTB1-VALID-LOOKING\nINJECTED-RECEIPT' }, { id: randomUUID() }]) await t.test(Object.keys(changed)[0], async t => {
+    const id = randomUUID();
+    const f = await fixture(t, async (_url, options) => Response.json({ id, status: options.method === 'POST' ? 'PENDING' : 'PAID', code, licenseExpiresAt: null }));
+    await f.service.create('LIFETIME', 'alipay'); await f.service.status();
+    const file = path.join(f.directory, 'beta', 'purchase.json'), saved = JSON.parse(await readFile(file, 'utf8'));
+    Object.assign(saved.receipt, changed); await writeFile(file, JSON.stringify(saved));
+    const restarted = createSoftwarePurchaseService({ ...f.settings, fetchImpl: async () => { throw new Error('offline'); } });
+    await assert.rejects(restarted.status(), { code: 'PAYMENT_NETWORK_ERROR' });
+    assert.deepEqual(f.state.activations, [code]);
+  });
+});
+
+test('a paid response for another order cannot replace the current receipt or activate', async t => {
+  const id = randomUUID();
+  const f = await fixture(t, async (_url, options) => Response.json({ id: options.method === 'POST' ? id : randomUUID(),
+    status: options.method === 'POST' ? 'PENDING' : 'PAID', code }));
+  await f.service.create('YEAR', 'wx');
+  await assert.rejects(f.service.status(), { code: 'INVALID_PAYMENT_RESPONSE' });
+  assert.deepEqual(f.state.activations, []);
+  const saved = JSON.parse(await readFile(path.join(f.directory, 'beta', 'purchase.json'), 'utf8'));
+  assert.equal(saved.id, id); assert.equal(saved.receipt, undefined);
+});
+
+test('same-device receipt recovery reinstalls a verified signed license with its original annual expiry', async t => {
+  const id = randomUUID(), keyId = 'synthetic-recovery', keys = generateKeyPairSync('ed25519');
+  const directory = await mkdtemp(path.join(tmpdir(), 'growth-signed-recovery-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const expiresAt = new Date(Date.now() + 86400000).toISOString();
+  const config = { productId: BETA_PRODUCT_ID, serverUrl: 'https://synthetic-license.invalid', redemptionUrl: 'https://synthetic-license.invalid/points',
+    publicKeys: { [keyId]: keys.publicKey.export({ type: 'spki', format: 'pem' }).toString() } };
+  const installations = [];
+  const licenseFetch = async (_url, options) => {
+    const input = JSON.parse(options.body); assert.equal(input.code, code); installations.push(input.installationId);
+    const payload = Buffer.from(JSON.stringify({ version: 1, productId: BETA_PRODUCT_ID, codeId: id, installationId: input.installationId,
+      issuedAt: new Date(Date.now() - 1000).toISOString(), expiresAt }));
+    return Response.json({ license: { version: 1, algorithm: 'Ed25519', keyId,
+      payload: payload.toString('base64url'), signature: sign(null, payload, keys.privateKey).toString('base64url') } });
+  };
+  const betaService = createBetaActivationService({ config, dataDirectory: directory, fetchImpl: licenseFetch });
+  const paymentFetch = async (_url, options) => Response.json({ id, status: options.method === 'POST' ? 'PENDING' : 'PAID',
+    code, orderNo: 'GT-SIGNED-RECOVERY', licenseExpiresAt: expiresAt });
+  const purchase = createSoftwarePurchaseService({ directory, betaService, fetchImpl: paymentFetch, serverUrl: config.serverUrl });
+  await purchase.create('YEAR', 'alipay'); assert.equal((await purchase.status()).activated, true);
+  const original = await betaService.status();
+  await rm(path.join(directory, 'beta', 'license.json'));
+  const recoveredService = createBetaActivationService({ config, dataDirectory: directory, fetchImpl: licenseFetch });
+  const offline = createSoftwarePurchaseService({ directory, betaService: recoveredService, serverUrl: config.serverUrl, fetchImpl: async () => { throw new Error('offline'); } });
+  const receipt = await offline.status(); assert.equal(receipt.activated, false); assert.equal(receipt.order.code, code);
+  const recovered = await recoveredService.activate(receipt.order.code);
+  assert.equal(recovered.activated, true); assert.equal(recovered.installationId, original.installationId);
+  assert.equal(recovered.expiresAt, original.expiresAt); assert.deepEqual(installations, [original.installationId, original.installationId]);
+  const restarted = createBetaActivationService({ config, dataDirectory: directory, fetchImpl: async () => { throw new Error('offline'); } });
+  assert.equal((await restarted.status()).activated, true); assert.equal((await restarted.status()).expiresAt, expiresAt);
 });

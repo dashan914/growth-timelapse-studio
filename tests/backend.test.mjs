@@ -87,6 +87,19 @@ async function uploadBackground(base, id, video, type = 'video/mp4') {
   });
 }
 
+async function uploadSound(base, id, audio, type = 'application/octet-stream') {
+  return fetch(`${base}/api/exports/${id}/sound`, {
+    method: 'POST', headers: { 'Content-Type': type, Origin: base }, body: audio,
+  });
+}
+
+async function sourceSound(root, { duration = 0.3, format = 'mp3', sampleRate = 48000, channels = 2 } = {}) {
+  const filename = path.join(root, `custom-${duration}.${format}`);
+  await execFileAsync(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `sine=frequency=880:sample_rate=${sampleRate}`,
+    '-t', String(duration), '-ac', String(channels), '-c:a', format === 'wav' ? 'pcm_s16le' : 'libmp3lame', filename]);
+  return readFile(filename);
+}
+
 async function sourceVideo(root, { audio = true, duration = 0.4 } = {}) {
   const filename = path.join(root, audio ? 'background-with-audio.mp4' : 'silent-background.mp4');
   await execFileAsync(FFMPEG, [
@@ -591,4 +604,176 @@ test('missing reference audio fails cleanly and releases the export slot', async
   assert.equal((await completed.json()).error.code, 'SOUND_MUX_FAILED');
   assert.deepEqual(await readdir(path.join(root, 'exports')), []);
   assert.equal((await (await fetch(`${base}/api/health`)).json()).activeExport, false);
+});
+
+test('imported MP3 normalizes once, mixes with optional background and stays silent after its end', async t => {
+  try { await execFileAsync(FFMPEG, ['-version']); } catch { t.skip('FFmpeg unavailable'); return; }
+  for (const backgroundAudio of [null, false, true]) {
+    const { base, root } = await fixture(t, { ffmpegPath: FFMPEG });
+    const custom = await sourceSound(root);
+    const created = await createExport(base, { soundEffect: 'custom', frames: 10 });
+    assert.equal(created.response.status, 201);
+    const id = created.body.id, prepared = await uploadSound(base, id, custom);
+    assert.equal(prepared.status, 200, await prepared.clone().text());
+    const info = await prepared.json();
+    assert.equal(info.uploaded, true); assert.equal(info.bytes, custom.length);
+    assert.ok(info.duration >= .29 && info.duration <= .34);
+    const files = await readdir(path.join(root, 'exports'));
+    assert.ok(files.includes(`${id}.custom.wav`));
+    assert.equal(files.includes(`${id}.sound-upload`), false, 'the undecoded original is removed before the upload succeeds');
+    assert.equal((await readFile(path.join(root, 'exports', `${id}.custom.wav`))).subarray(0, 4).toString(), 'RIFF');
+    assert.equal((await uploadSound(base, id, custom)).status, 409);
+    if (backgroundAudio !== null) assert.equal((await uploadBackground(base, id, await sourceVideo(root, { audio: backgroundAudio }))).status, 200);
+    for (let index = 0; index < 10; index++) assert.equal((await upload(base, id, index)).status, 200);
+    const completed = await finish(base, id); assert.equal(completed.status, 200, await completed.clone().text());
+    const saved = await completed.json(), file = path.join(root, 'exports', saved.filename);
+    assert.equal((await fetch(base + saved.url)).status, 200);
+    const video = await execFileAsync(FFMPEG, ['-v', 'error', '-i', file, '-map', '0:v:0', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], { encoding: 'buffer', maxBuffer: 1024 * 1024 });
+    assert.equal(video.stdout.length, 10 * 64 * 64 * 3);
+    const pcm = await execFileAsync(FFMPEG, ['-v', 'error', '-i', file, '-map', '0:a:0', '-ac', '1', '-ar', '44100', '-f', 's16le', 'pipe:1'], { encoding: 'buffer', maxBuffer: 1024 * 1024 });
+    const peak = (start, end) => {
+      let value = 0;
+      for (let i = Math.round(start * 44100) * 2; i < Math.min(pcm.stdout.length, Math.round(end * 44100) * 2); i += 2) value = Math.max(value, Math.abs(pcm.stdout.readInt16LE(i)));
+      return value;
+    };
+    assert.ok(peak(.05, .2) > 500, 'imported sound is audible');
+    if (backgroundAudio === true) assert.ok(peak(1, 1.5) > 200, 'background audio continues after the custom effect ends');
+    else assert.ok(peak(1, 1.5) < 10, 'the short custom sound does not loop');
+    assert.deepEqual(await readdir(path.join(root, 'exports')), [saved.filename], 'all original, normalized and mux temporary files are removed');
+  }
+});
+
+test('custom upload rejects invalid contents and playlists without reserving a second task or retaining files', async t => {
+  try { await execFileAsync(FFMPEG, ['-version']); } catch { t.skip('FFmpeg unavailable'); return; }
+  const { base, root } = await fixture(t, { ffmpegPath: FFMPEG });
+  const { body: { id } } = await createExport(base, { soundEffect: 'custom' });
+  const realAudio = await sourceSound(root, { format: 'wav' });
+  const playlist = Buffer.from(`ffconcat version 1.0\nfile '${path.join(root, 'custom-0.3.wav')}'\n`);
+  for (const audio of [Buffer.from('not an audio file'), playlist, Buffer.from('#EXTM3U\nhttp://127.0.0.1:1/private.wav\n')]) {
+    const result = await uploadSound(base, id, audio, 'audio/wav');
+    assert.equal(result.status, 400, await result.clone().text());
+    assert.equal((await result.json()).error.code, 'INVALID_CUSTOM_SOUND');
+    assert.equal((await readdir(path.join(root, 'exports'))).some(name => /(?:custom\.wav|sound-upload)$/.test(name)), false);
+  }
+  const empty = await uploadSound(base, id, Buffer.alloc(0));
+  assert.equal(empty.status, 400); assert.equal((await empty.json()).error.code, 'EMPTY_CUSTOM_SOUND');
+  assert.equal((await uploadSound(base, id, realAudio, 'text/plain')).status, 415);
+  assert.equal((await uploadSound(base, id, realAudio)).status, 200, 'invalid content leaves the task retryable');
+  assert.equal((await cancel(base, id)).status, 200);
+  assert.deepEqual(await readdir(path.join(root, 'exports')), []);
+});
+
+test('oversized and overlong custom audio fail clearly and remove both source and normalized files', async t => {
+  try { await execFileAsync(FFMPEG, ['-version']); } catch { t.skip('FFmpeg unavailable'); return; }
+  const { base, root, port } = await fixture(t, { ffmpegPath: FFMPEG });
+  const { body: { id } } = await createExport(base, { soundEffect: 'custom' });
+  const oversized = await new Promise((resolve, reject) => {
+    const request = http.request({ hostname: '127.0.0.1', port, method: 'POST', path: `/api/exports/${id}/sound`,
+      headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': String(50 * 1024 * 1024 + 1) } }, response => {
+      response.resume(); response.once('end', () => { request.destroy(); resolve(response.statusCode); });
+    });
+    request.once('error', error => { if (error.code !== 'ECONNRESET') reject(error); });
+    request.flushHeaders();
+  });
+  assert.equal(oversized, 413);
+  const overlong = await uploadSound(base, id, await sourceSound(root, { duration: 601, format: 'wav', sampleRate: 8000, channels: 1 }));
+  assert.equal(overlong.status, 400, await overlong.clone().text());
+  assert.equal((await overlong.json()).error.code, 'CUSTOM_SOUND_TOO_LONG');
+  assert.equal((await readdir(path.join(root, 'exports'))).some(name => /(?:custom\.wav|sound-upload)$/.test(name)), false);
+  assert.equal((await uploadSound(base, id, await sourceSound(root))).status, 200);
+  await cancel(base, id);
+  assert.deepEqual(await readdir(path.join(root, 'exports')), []);
+});
+
+test('a missing custom upload fails video finish and releases its slot, while PNG ignores custom sound', async t => {
+  try { await execFileAsync(FFMPEG, ['-version']); } catch { t.skip('FFmpeg unavailable'); return; }
+  const { base, root } = await fixture(t, { ffmpegPath: FFMPEG });
+  const created = await createExport(base, { soundEffect: 'custom', frames: 1, customSoundPath: '/untrusted/path.wav' });
+  assert.equal(created.response.status, 201);
+  assert.equal((await upload(base, created.body.id, 0)).status, 200);
+  const missing = await finish(base, created.body.id);
+  assert.equal(missing.status, 400); assert.equal((await missing.json()).error.code, 'CUSTOM_SOUND_MISSING');
+  assert.deepEqual(await readdir(path.join(root, 'exports')), []);
+  assert.equal((await (await fetch(`${base}/api/health`)).json()).activeExport, false);
+  const next = await createExport(base, { format: 'png-sequence', soundEffect: 'custom', frames: 1 });
+  assert.equal(next.response.status, 201);
+  const unsupported = await uploadSound(base, next.body.id, Buffer.from('ignored'));
+  assert.equal(unsupported.status, 409);
+  assert.equal((await upload(base, next.body.id, 0)).status, 200);
+  assert.equal((await finish(base, next.body.id)).status, 200);
+});
+
+test('custom audio endpoint honors free watermarked jobs and rechecks paid authorization', async t => {
+  try { await execFileAsync(FFMPEG, ['-version']); } catch { t.skip('FFmpeg unavailable'); return; }
+  let activated = true;
+  const betaService = { status: async () => ({ activated }), requireActivation: async () => {
+    if (!activated) throw Object.assign(new Error('activation required'), { status: 403, code: 'ACTIVATION_REQUIRED' });
+  } };
+  const { base, root } = await fixture(t, { ffmpegPath: FFMPEG, betaService });
+  const sound = await sourceSound(root), paid = await createExport(base, { soundEffect: 'custom' });
+  assert.equal(paid.response.status, 201); activated = false;
+  const denied = await uploadSound(base, paid.body.id, sound);
+  assert.equal(denied.status, 403); assert.equal((await denied.json()).error.code, 'ACTIVATION_REQUIRED');
+  assert.equal((await cancel(base, paid.body.id)).status, 200, 'an expired paid job can still be cancelled');
+  const free = await createExport(base, { soundEffect: 'custom', exportMode: 'watermarked', frames: 1 });
+  assert.equal(free.response.status, 201); assert.equal(free.body.watermarked, true);
+  assert.equal((await uploadSound(base, free.body.id, sound)).status, 200);
+  assert.equal((await upload(base, free.body.id, 0)).status, 200);
+  const done = await finish(base, free.body.id); assert.equal(done.status, 200);
+  assert.equal((await fetch(base + (await done.json()).url)).status, 200, 'free sound video download needs no activation');
+  const unknown = await uploadSound(base, '11111111-1111-4111-8111-111111111111', sound);
+  assert.equal(unknown.status, 403, 'query flags cannot grant custom upload access to an unknown job');
+});
+
+test('cancelling a custom upload closes its file, rejects concurrent work and releases the export slot', async t => {
+  try { await execFileAsync(FFMPEG, ['-version']); } catch { t.skip('FFmpeg unavailable'); return; }
+  const { base, root, port } = await fixture(t, { ffmpegPath: FFMPEG });
+  const { body: { id } } = await createExport(base, { soundEffect: 'custom' });
+  let request;
+  const uploadResult = new Promise((resolve, reject) => {
+    request = http.request({ hostname: '127.0.0.1', port, method: 'POST', path: `/api/exports/${id}/sound`,
+      headers: { 'Content-Type': 'application/octet-stream', 'Transfer-Encoding': 'chunked' } }, response => {
+      let body = ''; response.on('data', chunk => { body += chunk; });
+      response.once('end', () => resolve({ status: response.statusCode, body: JSON.parse(body) }));
+    });
+    request.once('error', reject); request.write(Buffer.alloc(4096));
+  });
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if ((await readdir(path.join(root, 'exports'))).some(name => name.endsWith('.sound-upload'))) break;
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  const concurrent = await uploadSound(base, id, Buffer.from('second upload'));
+  assert.equal(concurrent.status, 409); assert.equal((await concurrent.json()).error.code, 'FRAME_IN_PROGRESS');
+  assert.equal((await upload(base, id, 0)).status, 409);
+  assert.equal((await finish(base, id)).status, 409);
+  assert.equal((await cancel(base, id)).status, 200); request.end();
+  const aborted = await uploadResult;
+  assert.equal(aborted.status, 409); assert.equal(aborted.body.error.code, 'EXPORT_NOT_ACTIVE');
+  assert.deepEqual(await readdir(path.join(root, 'exports')), []);
+  assert.equal((await (await fetch(`${base}/api/health`)).json()).activeExport, false);
+});
+
+test('a disconnected custom uploader removes its partial file and allows a fresh upload', async t => {
+  try { await execFileAsync(FFMPEG, ['-version']); } catch { t.skip('FFmpeg unavailable'); return; }
+  const { base, root, port } = await fixture(t, { ffmpegPath: FFMPEG });
+  const { body: { id } } = await createExport(base, { soundEffect: 'custom' });
+  const request = http.request({ hostname: '127.0.0.1', port, method: 'POST', path: `/api/exports/${id}/sound`,
+    headers: { 'Content-Type': 'application/octet-stream', 'Transfer-Encoding': 'chunked' } });
+  request.on('error', () => {}); request.write(Buffer.alloc(4096));
+  const source = path.join(root, 'exports', `${id}.sound-upload`);
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if ((await readdir(path.join(root, 'exports'))).includes(`${id}.sound-upload`)) break;
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  assert.ok((await readdir(path.join(root, 'exports'))).includes(`${id}.sound-upload`));
+  request.destroy();
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (!(await readdir(path.join(root, 'exports'))).includes(`${id}.sound-upload`)) break;
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  await assert.rejects(readFile(source), { code: 'ENOENT' });
+  const retried = await uploadSound(base, id, await sourceSound(root));
+  assert.equal(retried.status, 200, await retried.clone().text());
+  await cancel(base, id);
+  assert.deepEqual(await readdir(path.join(root, 'exports')), []);
 });

@@ -6,7 +6,7 @@
 
 工作台展示模型、背景、时间线与当前工具栏。
 
-以下 GIF 展示当前工作台的实际操作。
+以下 GIF 在 beta.5 中录制，展示沿用的基础操作；beta.6 的运镜、音效和材质调整见下文。
 
 [查看清晰 MP4](docs/media/demo-model.mp4) · [下载案例模型](examples/测试2.3mf) · [安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md)
 
@@ -16,6 +16,7 @@
 - **多色模型与材质**：保留 3MF 的涂色分区，修改耗材颜色，比较 PLA、哑光、丝绸和 PETG 等表面质感。
 - **打印机或摄影背景**：选择内置背景，或导入自己的照片、固定机位视频；照片可用底板四角和竖直参考线校正透视。
 - **摆放与画面调整**：移动、旋转、缩放模型，分别调整阴影、色彩、镜头焦段和虚化。
+- **镜头推进与音效**：调整匀速推进的幅度和用时，使用默认音效或导入自己的音效，预览与成片同步播放。
 - **时间线预览**：播放、循环、拖动进度，检查模型和支撑在不同层高的状态。
 - **多种输出**：生成 MP4、透明 MOV 或 PNG 序列，适合直接分享或后期合成。
 
@@ -70,18 +71,20 @@
 
 ## 快速安装
 
-当前固定版本为 **v1.2.0-beta.5**，官方安装文件为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`。下载运行包和同版本外部安装清单，核对 SHA256 后安装。
+当前固定版本为 **v1.2.0-beta.6**，官方安装文件为 `growth-timelapse-studio-1.2.0-beta.6-runtime.zip`。下载运行包和同版本外部安装清单，核对 SHA256 后安装。
 
-[固定版本下载](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.5) · [直接下载官方运行包](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/growth-timelapse-studio-1.2.0-beta.5-runtime.zip) · [AI 一键安装](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md)
+[固定版本下载](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.6) · [直接下载官方运行包](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.6/growth-timelapse-studio-1.2.0-beta.6-runtime.zip) · [AI 一键安装](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md)
 
 可以把安装指南交给能操作本机终端的 Agent，按固定版本检查依赖、核对 SHA256、安装并启动。Windows x64 的依赖与首次检查见 [Windows 配置说明](docs/WINDOWS_SETUP.md)。
 
 复制下面这段给能操作你电脑的 AI：
 
 ```text
-请帮我安装并启动“打印延时一键生成”，按照这个官方指南操作。Windows 安装前先询问我安装到哪个盘，再按我的选择自动检查环境、安装缺失依赖，完成后打开软件并验证导入和预览：
-https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/main/INSTALL_AGENT.md
+请帮我安装并启动“打印延时一键生成”1.2.0-beta.6，按照这个官方指南操作。有旧版时使用原安装目录并保留授权、订单和作品；没有旧版时，Windows 安装前先询问我安装到哪个盘。自动检查环境、安装缺失依赖，完成后打开软件并验证导入和预览：
+https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.6/INSTALL_AGENT.md
 ```
+
+已有安装请使用 [Agent 升级指令](INSTALL_AGENT.md#老用户升级)，安装到原目录即可，无需删除重装。有效授权、订单和作品继续保留；年付到期时间不变，永久授权继续有效。当前没有软件内自动更新。
 
 手动启动需准备 Node.js 24 LTS（最低 22）、Python 3，以及 Bambu Studio、OrcaSlicer 或 Flash Studio 中的一种。MP4 / MOV 编码需要 FFmpeg；Blender 和 OpenCV / NumPy 为可选扩展。
 
@@ -115,4 +118,10 @@ npm start
 
 点击画面工具栏中紧挨“镜头设置”的“运镜与音效”，选择“平滑推进”。推进幅度为最终画面放大的百分比（20% 表示最终为 1.2 倍）；推进用时越短，运动越快，默认匀速推进。完成推进后保持最后构图。运镜对整个画面进行中心缩放与裁切，模型和照片背景保持对齐，不改变已保存的相机位置。保存当前画面与视频/PNG 序列导出使用同一推进曲线。
 
-勾选“音效”后，预览与视频导出直接使用用户参考视频的原声音量；取消勾选即关闭该音效。没有声音选择、音量调节和单独试听。音效跟随播放、暂停、重新开始和拖动时间线，只播放一次，较长视频的剩余时间保持静音。MP4 和透明 MOV 包含音效；PNG 序列不含声音。MP4 的实景原声可与音效混合。运镜与音效目前使用实时画质；关闭两者后可选择写实画质。设置自动保存。来源见 `assets/sounds/SOURCES.md`。
+勾选“使用默认音效”，预览与视频导出使用随软件提供的参考原声。也可以导入自己的音效文件，单文件不超过 50 MiB；导入后自动取消默认音效。取消勾选时，有自定义文件就播放该文件，没有文件则静音。移除自定义文件后保持静音；重新勾选默认音效会清除自定义文件。
+
+选中的音效跟随播放、暂停、重新开始和拖动时间线，预览与成片使用同一音效，只播放一次，较长视频的剩余时间保持静音。MP4 和透明 MOV 包含音效；PNG 序列不含声音。MP4 的实景原声可与音效混合。运镜与音效目前使用实时画质；关闭推进、取消默认音效并移除自定义文件后可选择写实画质。默认音效来源见 [音效记录](assets/sounds/SOURCES.md)。
+
+“层纹”和“细节强度”已合并到右侧“材质”区域，可与耗材颜色和表面质感一起调整。
+
+购买成功后可在“导出已解锁”中查看订单号、设备标识和授权恢复码，并复制恢复码或保存购买凭据。升级保留原安装目录；若同设备授权记录失效，可联网输入原恢复码恢复，无需重新购买，年付到期时间沿用原授权。

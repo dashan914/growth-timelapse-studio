@@ -1,58 +1,225 @@
 name: Publish verified runtime release
 on:
   push:
+    branches:
+      - 'codex/release-beta6'
     tags:
-      - 'v1.2.0-beta.5'
+      - 'v1.2.0-beta.6'
+  create:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: publish-v1.2.0-beta.6
+  cancel-in-progress: false
 jobs:
+  windows-export:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'create' && github.event.ref_type == 'branch' && github.event.ref == 'codex/release-beta6') ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/codex/release-beta6' || github.ref == 'refs/tags/v1.2.0-beta.6'))
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - name: Prepare Windows FFmpeg and Python
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $growthFFmpeg = Get-Command ffmpeg -ErrorAction SilentlyContinue
+          if (-not $growthFFmpeg) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'FFmpeg installation failed' }
+            $growthFFmpeg = Get-Command ffmpeg -ErrorAction SilentlyContinue
+          }
+          $growthFFmpegPath = if ($growthFFmpeg) { $growthFFmpeg.Source } else {
+            (Get-ChildItem "$env:ProgramData\chocolatey\lib\ffmpeg\tools" -Filter ffmpeg.exe -Recurse | Select-Object -First 1).FullName
+          }
+          if (-not $growthFFmpegPath -or -not (Test-Path -LiteralPath $growthFFmpegPath)) { throw 'FFmpeg executable was not found' }
+          & $growthFFmpegPath -version
+          if ($LASTEXITCODE -ne 0) { throw 'FFmpeg could not start' }
+          "FFMPEG_PATH=$growthFFmpegPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $growthPythonPath = (Get-Command python -ErrorAction Stop).Source
+          & $growthPythonPath --version
+          if ($LASTEXITCODE -ne 0) { throw 'Python could not start' }
+          "PYTHON_PATH=$growthPythonPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Test actual Windows free and audio exports
+        shell: pwsh
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
+          $growthExportTests = @('tests/free-watermark.test.mjs', 'tests/backend.test.mjs')
+          if (Test-Path tests/export-codecs.test.mjs) { $growthExportTests += 'tests/export-codecs.test.mjs' }
+          node --test --test-concurrency=1 @growthExportTests
+          if ($LASTEXITCODE -ne 0) { throw 'Windows export tests failed; release remains unpublished' }
   release:
+    needs: windows-export
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'create' && github.event.ref_type == 'branch' && github.event.ref == 'codex/release-beta6') ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/codex/release-beta6' || github.ref == 'refs/tags/v1.2.0-beta.6'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      SOURCE_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Check fixed release version
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - name: Check fixed release version and source commit
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           node --input-type=module - <<'JS'
           import fs from 'node:fs';
           const pkg = JSON.parse(fs.readFileSync('package.json'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json'));
+          const config = JSON.parse(fs.readFileSync('beta-config.json'));
           const manifest = JSON.parse(fs.readFileSync('install-manifest.json'));
-          if (process.env.GITHUB_REF_NAME !== `v${pkg.version}` || manifest.release.version !== pkg.version || manifest.release.tag !== process.env.GITHUB_REF_NAME || manifest.release.published) throw new Error('Release version mismatch');
+          const { APP_VERSION, BETA_PRODUCT_ID } = await import('./beta-activation.mjs');
+          if (pkg.version !== '1.2.0-beta.6' || lock.version !== pkg.version || lock.packages[''].version !== pkg.version ||
+              APP_VERSION !== pkg.version || config.appVersion !== pkg.version || config.productId !== BETA_PRODUCT_ID ||
+              manifest.release.version !== pkg.version || manifest.release.tag !== `v${pkg.version}` ||
+              manifest.release.repository !== process.env.GH_REPO || manifest.release.published !== false) throw new Error('Release version mismatch');
+          fs.appendFileSync(process.env.GITHUB_ENV, `RELEASE_VERSION=${pkg.version}\nRELEASE_TAG=${manifest.release.tag}\nRUNTIME_ZIP=${pkg.name}-${pkg.version}-runtime.zip\n`);
           JS
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
+      - name: Install dependencies and test source plus transformed runtime
+        run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install --yes ffmpeg
+          fi
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
       - name: Build runtime archive and external checksum manifest
         run: |
-          python3 -B -m unittest discover -s tests -p 'test_cleanup_old_release_assets.py' -v
-          npm ci --ignore-scripts --no-audit --no-fund
           node scripts/build-runtime-release.mjs --output release
-          node scripts/finalize-install-manifest.mjs --archive release/growth-timelapse-studio-1.2.0-beta.5-runtime.zip --repository dashan914/growth-timelapse-studio
+          node scripts/finalize-install-manifest.mjs --archive "release/$RUNTIME_ZIP" --repository "$GH_REPO"
           cp INSTALL_AGENT.md release/INSTALL_AGENT.md
           cd release
           sha256sum -c SHA256SUMS.txt
-      - name: Publish complete prerelease
+      - name: Create or resume the matching draft and publish complete assets
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
         run: |
-          cat > release-notes.md <<'NOTES'
-          导入单盘 3MF / STL，按真实切片路径生成模型逐层生长视频。支持多色模型、背景预设、自定义图片背景、底板透视对齐、阴影调节、色彩匹配与镜头设置。
-
-          ![当前工作台界面](https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.5/docs/media/current-workbench.gif)
-
-          [功能与演示 GIF](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/README.md) · [安装指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/INSTALL_AGENT.md) · [图文操作教程](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.5/docs/UI_GUIDE.md)
-
-          本版展示当前工作台界面，保留 PR #1 的 Windows 与 Blender/NVIDIA 兼容修复，以及拓竹 14 型号 × 4 喷嘴的切片兼容。
-
-          安装使用本页 runtime.zip 与同版本外部 install-manifest.json，核对 SHA256 后安装。升级保留原作品和设置。运行包轻量压缩、混淆原创 JavaScript，无 source map；使用文档、演示素材与第三方许可保留，源码仓库与 MIT 许可保留。
-          NOTES
-          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" release/growth-timelapse-studio-1.2.0-beta.5-runtime.zip release/SHA256SUMS.txt release/install-manifest.json release/INSTALL_AGENT.md --verify-tag --draft --prerelease --title '打印延时一键生成 1.2.0-beta.5' --notes-file release-notes.md
+          set -euo pipefail
+          if gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" > release-tag.json 2> release-tag-error.txt; then
+            node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          const ref = JSON.parse(fs.readFileSync('release-tag.json'));
+          if (ref.object.type !== 'commit' || ref.object.sha !== process.env.SOURCE_SHA) throw new Error('Existing release tag targets a different source; refusing to change it');
+          JS
+          else
+            if ! grep -q 'HTTP 404' release-tag-error.txt; then cat release-tag-error.txt; exit 1; fi
+            gh api --method POST "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$SOURCE_SHA" > release-tag.json
           fi
-          gh release edit "$GITHUB_REF_NAME" --draft=false
-      - name: Verify public downloads before removing fixed old Releases and tags
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          if gh release view "$RELEASE_TAG" --json isDraft,targetCommitish,tagName > release-state.json 2> release-state-error.txt; then
+            state=$(node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          const release = JSON.parse(fs.readFileSync('release-state.json'));
+          if (release.tagName !== process.env.RELEASE_TAG) throw new Error('Unexpected release tag');
+          if (release.isDraft && release.targetCommitish !== process.env.SOURCE_SHA) throw new Error('Existing draft does not identify this exact source commit');
+          console.log(release.isDraft ? 'draft' : 'public');
+          JS
+          )
+          else
+            if ! grep -Eq 'release not found|HTTP 404' release-state-error.txt; then cat release-state-error.txt; exit 1; fi
+            state=missing
+          fi
+          if [ "$state" = public ]; then
+            echo 'Release is already public; preserving it and checking its published assets.'
+          else
+            cat > release-notes.md <<'NOTES'
+          增加镜头推进，可调推进幅度和用时，默认匀速；运镜与音效按钮位于镜头设置旁。
+
+          勾选“使用默认音效”使用参考原声，也可导入自定义音效。导入自动取消默认音效；取消勾选时有自定义文件则播放该文件，无文件则静音。预览与成片使用同一音效，与时间线同步，只播放一次。
+
+          层纹与细节强度合并到材质区。保留阴影调节、色彩匹配、镜头设置和原有导出权限。
+
+          购买凭据显示授权恢复码，可复制、保存；同设备升级异常可用原码联网恢复。
+
+          使用本页 runtime.zip 和同版本外部 install-manifest.json，核对 SHA256 后安装到原目录；无需删除重装，升级保留作品、订单和有效付费授权。先保存工程并停止旧版后台服务。
+
+          [安装与升级指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.6/INSTALL_AGENT.md)
+          NOTES
+            if [ "$state" = missing ]; then
+              gh release create "$RELEASE_TAG" --verify-tag --target "$SOURCE_SHA" --draft --prerelease --title "打印延时一键生成 $RELEASE_VERSION" --notes-file release-notes.md
+            fi
+            gh release upload "$RELEASE_TAG" "release/$RUNTIME_ZIP" release/SHA256SUMS.txt release/install-manifest.json release/INSTALL_AGENT.md --clobber
+            gh release view "$RELEASE_TAG" --json assets > release-assets.json
+            node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          const names = JSON.parse(fs.readFileSync('release-assets.json')).assets.map(asset => asset.name).sort();
+          const expected = [process.env.RUNTIME_ZIP, 'SHA256SUMS.txt', 'install-manifest.json', 'INSTALL_AGENT.md'].sort();
+          if (JSON.stringify(names) !== JSON.stringify(expected)) throw new Error('Draft assets are incomplete or unexpected');
+          JS
+            mkdir draft-verified
+            gh release download "$RELEASE_TAG" --dir draft-verified
+            (cd draft-verified && sha256sum -c SHA256SUMS.txt)
+            for name in "$RUNTIME_ZIP" SHA256SUMS.txt install-manifest.json INSTALL_AGENT.md; do cmp "release/$name" "draft-verified/$name"; done
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease
+          fi
+      - name: Verify anonymous public downloads and installation manifest
         run: |
-          python3 -B scripts/cleanup-old-release-assets.py --dry-run
-          python3 -B scripts/cleanup-old-release-assets.py --apply
+          python3 -B - <<'PY'
+          import hashlib, json, os, pathlib, time, urllib.error, urllib.parse, urllib.request, zipfile
+          repository, tag, version, archive_name = (os.environ[key] for key in ('GH_REPO', 'RELEASE_TAG', 'RELEASE_VERSION', 'RUNTIME_ZIP'))
+          required = [archive_name, 'SHA256SUMS.txt', 'install-manifest.json', 'INSTALL_AGENT.md']
+          def get(url):
+              # No Authorization header or gh credentials are used for public verification.
+              request = urllib.request.Request(url, headers={'User-Agent': 'growth-public-release-verification', 'Cache-Control': 'no-cache'})
+              for attempt in range(6):
+                  try:
+                      with urllib.request.urlopen(request, timeout=120) as response:
+                          return response.read()
+                  except (urllib.error.URLError, TimeoutError):
+                      if attempt == 5: raise
+                      time.sleep(5)
+          release = json.loads(get(f'https://api.github.com/repos/{repository}/releases/tags/{tag}'))
+          assert release['tag_name'] == tag and not release['draft'] and release['prerelease']
+          assets = {asset['name']: asset for asset in release['assets']}
+          assert set(assets) == set(required), 'Public release assets differ from the four expected files'
+          directory = pathlib.Path('public-verified'); directory.mkdir()
+          for name in required:
+              url = f'https://github.com/{repository}/releases/download/{tag}/{urllib.parse.quote(name)}'
+              assert assets[name]['browser_download_url'] == url
+              payload = get(url)
+              (directory / name).write_bytes(payload)
+              assert payload == (pathlib.Path('release') / name).read_bytes(), f'Published {name} differs from the verified build'
+          manifest = json.loads((directory / 'install-manifest.json').read_text())['release']
+          digest = hashlib.sha256((directory / archive_name).read_bytes()).hexdigest()
+          assert manifest['published'] is True and manifest['kind'] == 'runtime'
+          assert manifest['version'] == version and manifest['tag'] == tag and manifest['repository'] == repository
+          assert manifest['sha256'] == digest and manifest['url'] == assets[archive_name]['browser_download_url']
+          assert (directory / 'SHA256SUMS.txt').read_text().strip() == f'{digest}  {archive_name}'
+          with zipfile.ZipFile(directory / archive_name) as archive:
+              prefix = 'growth-timelapse-studio/'
+              names = archive.namelist()
+              assert all(name.startswith(prefix) and '..' not in name.split('/') for name in names)
+              runtime = json.loads(archive.read(prefix + 'RUNTIME_MANIFEST.json'))
+              assert runtime['version'] == version and runtime['kind'] == 'runtime'
+              assert json.loads(archive.read(prefix + 'install-manifest.json'))['release']['published'] is False
+              for item in runtime['files']:
+                  payload = archive.read(prefix + item['path'])
+                  assert len(payload) == item['bytes'] and hashlib.sha256(payload).hexdigest() == item['sha256'], item['path']
+              for name in ['export-sound.mjs', 'src/camera-motion.js', 'src/preview-sound-player.js', 'src/sound-effects.js', 'assets/sounds/reference-original.wav']:
+                  assert prefix + name in names, name
+          print(f'Public release verified: https://github.com/{repository}/releases/tag/{tag}')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write(f'Published and anonymously verified [{tag}](https://github.com/{repository}/releases/tag/{tag}).\n\nZIP SHA256: `{digest}`.\n\nExisting releases and tags were preserved.\n')
+          PY

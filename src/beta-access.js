@@ -1,5 +1,6 @@
 // The workbench opens freely; explicit exports verify the local signed license.
-export function createExportUnlockController({ document, request = globalThis.fetch, loadApp = () => import('./app.js') }) {
+export function createExportUnlockController({ document, request = globalThis.fetch, loadApp = () => import('./app.js'),
+  clipboard = globalThis.navigator?.clipboard, saveReceipt } = {}) {
   const $ = id => document.getElementById(id);
   const dialog = $('beta-gate'), form = $('beta-form'), input = $('beta-code');
   const activate = $('beta-activate'), retry = $('beta-retry'), message = $('beta-message');
@@ -7,6 +8,18 @@ export function createExportUnlockController({ document, request = globalThis.fe
   let workspacePromise, pending = null, busy = false, verified = false;
   let session = 0, statusRevision = 0, activeRequest = null, returnFocus = null;
   let paymentTimer = null, paymentBusy = false, paymentBackBusy = false, paymentChoosing = false;
+  let receiptInfo = null;
+  const recoveryCode = /^GTB1-[A-Z0-9-]{20,64}$/;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  const downloadReceipt = saveReceipt || (({ text, filename }) => {
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = filename;
+    document.body.appendChild(link);
+    try { link.click(); }
+    finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 0); }
+  });
 
   function feedback(text, { error = false, fieldError = false } = {}) {
     message.textContent = text;
@@ -30,12 +43,16 @@ export function createExportUnlockController({ document, request = globalThis.fe
     document.body.dataset.exportState = verified ? 'unlocked' : 'free';
     toolbar.dataset.exportState = verified ? 'unlocked' : 'locked';
     label.textContent = verified ? '导出已解锁' : '导出解锁';
-    toolbar.title = verified ? '查看导出权限；每次导出前会重新验证。' : '免费可导出水印视频；兑换码解锁无水印图片与视频。';
+    toolbar.title = verified ? '查看导出权限、授权恢复码与购买凭据；每次导出前会重新验证。' : '免费可导出水印视频；兑换码或授权恢复码解锁无水印图片与视频。';
     if (/^https?:\/\//i.test(status?.redemptionUrl || '')) $('beta-redeem').href = status.redemptionUrl;
   }
 
   async function requestJson(url, options = {}, abortController = new AbortController()) {
-    const timeout = setTimeout(() => abortController.abort(), url.endsWith('/activate') ? 25000 : 10000);
+    // Payment lookup may spend 15 s querying the server, then activate for 15 s.
+    // Let it return its local cached receipt before aborting the browser request.
+    const timeoutMs = url === '/api/beta/payment/order' ? options.method === 'POST' ? 50000 : 35000
+      : url.endsWith('/activate') || url === '/api/beta/payment/unbind' ? 25000 : 10000;
+    const timeout = setTimeout(() => abortController.abort(), timeoutMs);
     try {
       const response = await request(url, { ...options, signal: abortController.signal });
       const result = await response.json().catch(() => ({}));
@@ -65,7 +82,7 @@ export function createExportUnlockController({ document, request = globalThis.fe
     if (['BETA_EXPIRED', 'LICENSE_EXPIRED'].includes(status.reason)) return '导出权限已到期，请查看兑换记录或联系管理员。导入、编辑和预览仍可免费使用。';
     if (status.configured === false) return '兑换服务尚未配置，请稍后重试。你可以关闭窗口，继续免费导入、编辑和预览。';
     if (status.reason && status.reason !== 'ACTIVATION_REQUIRED') return status.message || '导出权限暂不可用，请查看兑换记录、重新检查，或联系管理员。';
-    return '输入兑换码解锁无水印视频、图片和透明序列导出。首次解锁需联网，成功后有效期内可离线导出。';
+    return '输入兑换码或购买时保存的授权恢复码，解锁无水印视频、图片和透明序列。恢复需联网并沿用原设备数据；成功后有效期内可离线导出。';
   }
 
   function finish(allowed) {
@@ -156,29 +173,43 @@ export function createExportUnlockController({ document, request = globalThis.fe
     if ($('beta-acquire-options')) $('beta-acquire-options').hidden = !paymentChoosing && (order.status === 'PENDING' && !expired || order.status === 'PAID' && (!order.licenseExpiresAt || Date.parse(order.licenseExpiresAt) > Date.now()));
     if ($('beta-payment-choice-note')) $('beta-payment-choice-note').hidden = !paymentChoosing;
     if ($('beta-payment-back')) $('beta-payment-back').hidden = paymentChoosing || order.status !== 'PENDING' || expired;
-    $('beta-order-title').textContent = `${order.planName} · ¥${(order.amountCents / 100).toFixed(2)} · 订单 ${order.orderNo}`;
+    const planName = order.plan === 'LIFETIME' ? '永久授权' : order.plan === 'YEAR' ? '一年授权' : '软件授权';
+    const amount = Number.isSafeInteger(order.amountCents) && order.amountCents >= 0 && order.amountCents <= 100_000_000 ? ` · ¥${(order.amountCents / 100).toFixed(2)}` : '';
+    const orderNo = typeof order.orderNo === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(order.orderNo) ? order.orderNo : uuid.test(order.id || '') ? order.id : '未记录';
+    $('beta-order-title').textContent = `${planName}${amount} · 订单 ${orderNo}`;
     const image = $('beta-order-qr');
     image.hidden = paymentChoosing || expired || order.status !== 'PENDING' || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(order.qrImage || '');
     if (!image.hidden) image.src = order.qrImage;
     $('beta-order-state').textContent = order.status === 'PAID' ? '支付成功，正在确认导出权限…' : ['CLOSED', 'FAILED'].includes(order.status) ? '订单已关闭或未完成付款，请重新选择授权方案。' : expired ? '支付二维码已超时。若已付款，请点击查询支付结果，勿重复付款。' : '请使用手机扫码付款。支付成功后会自动解锁。';
     $('beta-unbind').hidden = order.status !== 'PAID' || !verified;
-    if ($('beta-paid-receipt')) $('beta-paid-receipt').hidden = order.status !== 'PAID' || !order.code;
-    if (order.code && $('beta-paid-code')) $('beta-paid-code').value = order.code;
+    receiptInfo = order.status === 'PAID' && uuid.test(order.id || '') && typeof order.code === 'string' && recoveryCode.test(order.code)
+      ? { id: order.id, code: order.code, orderNo, planName,
+        installationId: uuid.test(order.installationId || '') ? order.installationId : null,
+        amount, expiresAt: typeof order.licenseExpiresAt === 'string' && order.licenseExpiresAt.length <= 40 && Number.isFinite(Date.parse(order.licenseExpiresAt))
+          ? order.licenseExpiresAt : order.plan === 'LIFETIME' && order.licenseExpiresAt === null ? '永久' : '以授权状态为准' } : null;
+    if ($('beta-paid-receipt')) $('beta-paid-receipt').hidden = !receiptInfo;
+    if ($('beta-paid-code')) $('beta-paid-code').value = receiptInfo?.code || '';
+    if ($('beta-paid-order')) $('beta-paid-order').value = receiptInfo?.orderNo || '';
+    if ($('beta-paid-device')) $('beta-paid-device').value = receiptInfo?.installationId || '未记录';
   }
   async function applyPaymentResult(result) {
     if (!dialog.open) return;
     if (!result.order) return;
     showOrder(result.order);
-    if (result.unbound) $('beta-order-state').textContent = '已解除当前设备绑定。复制下方兑换码后，在新设备激活。';
+    if (result.unbound) $('beta-order-state').textContent = '已解除当前设备绑定。保留授权恢复码，在新设备联网激活。';
+    else if (result.receiptOnly) $('beta-order-state').textContent = '购买服务暂不可用，显示本机保存的购买凭据；导出权限以本机授权为准。';
     if (result.activated === true) {
       const fresh = await readStatus();
       if (!dialog.open || fresh.activated !== true) return;
       updateToolbar(fresh); setBusy(false);
       $('beta-unbind').hidden = Boolean(result.unbound);
-      if (result.order) $('beta-order-state').textContent = '支付成功，当前设备已解锁无水印导出。';
+      if (result.order) $('beta-order-state').textContent = result.receiptOnly
+        ? '当前设备授权有效，显示本机保存的购买凭据。请保存授权恢复码。'
+        : '支付成功，当前设备已解锁无水印导出。请保存授权恢复码；以后可点击“导出已解锁”查看。';
       if (pending) { finish(true); return; }
       feedback(statusMessage(result));
-    } else if (result.activationError) feedback('支付成功，但自动激活未完成：' + result.activationError, { error: true });
+    } else if (result.activationError) feedback('购买已完成，但授权恢复未完成：' + result.activationError + '。请保留恢复码，联网后在下方输入；无需重新购买。', { error: true });
+    else if (result.receiptOnly && !result.unbound) feedback('购买凭据已保留。当前未解锁，请联网后用下方授权恢复码恢复；不要重复付款。');
     schedulePaymentCheck(result.order);
   }
   function schedulePaymentCheck(order) {
@@ -188,7 +219,13 @@ export function createExportUnlockController({ document, request = globalThis.fe
   async function refreshPayment() {
     clearTimeout(paymentTimer); paymentTimer = null;
     if (!dialog.open || !$('beta-checkout')) return;
+    const current = session;
     const result = await requestJson('/api/beta/payment/order', { cache: 'no-store' });
+    if (!dialog.open || current !== session) return;
+    if (!result.order) {
+      receiptInfo = null; $('beta-checkout').hidden = true;
+      if ($('beta-paid-receipt')) $('beta-paid-receipt').hidden = true;
+    }
     await applyPaymentResult(result);
   }
   async function returnToPlans() {
@@ -239,15 +276,28 @@ export function createExportUnlockController({ document, request = globalThis.fe
   $('beta-payment-refresh')?.addEventListener('click', () => { void refreshPayment().catch(error => feedback(error.message, { error: true })); });
   $('beta-payment-back')?.addEventListener('click', returnToPlans);
   $('beta-copy-code')?.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText($('beta-paid-code').value); feedback('兑换码已复制，请保留购买记录；换机前先解除旧设备绑定。'); }
-    catch { $('beta-paid-code').select(); feedback('请手动复制已选中的兑换码。'); }
+    if (!receiptInfo) return;
+    try { await clipboard.writeText(receiptInfo.code); feedback('授权恢复码已复制。同一设备升级后可联网恢复，无需重新购买；请保存购买凭据。'); }
+    catch { $('beta-paid-code').focus(); $('beta-paid-code').select(); feedback('请手动复制已选中的授权恢复码。'); }
+  });
+  $('beta-save-receipt')?.addEventListener('click', async () => {
+    if (!receiptInfo) return;
+    const receipt = receiptInfo;
+    const text = ['打印延时一键生成 · 购买凭据', `订单号：${receipt.orderNo}`, `授权方案：${receipt.planName}${receipt.amount}`,
+      `购买设备标识：${receipt.installationId || '未记录'}`, `授权到期：${receipt.expiresAt}`, `授权恢复码：${receipt.code}`, '',
+      '请保留此文件。升级使用原安装目录；若授权丢失，在“导出解锁 → 已有兑换码 / 授权恢复码”中输入恢复码并联网恢复。',
+      '恢复沿用原设备数据，不延长年付到期时间。换机前先解除旧设备绑定。订单号与设备标识用于核对购买记录，不能单独解锁。', ''].join('\n');
+    try {
+      await downloadReceipt({ text, filename: `打印延时-购买凭据-${receipt.orderNo}.txt` });
+      feedback('购买凭据已生成下载，请保留其中的授权恢复码。');
+    } catch { feedback('购买凭据未能下载，请先复制授权恢复码并保留订单号。', { error: true }); }
   });
   $('beta-unbind')?.addEventListener('click', async () => {
     if (!globalThis.confirm('解除绑定后，本机将恢复免费水印导出。确认要换机并解除当前设备绑定？')) return;
     try {
       const result = await requestJson('/api/beta/payment/unbind', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       updateToolbar(result); $('beta-unbind').hidden = true;
-      feedback('当前设备已解除绑定。请保留购买记录和兑换码，在新设备激活。');
+      feedback('当前设备已解除绑定。请保留购买凭据和授权恢复码，在新设备联网激活。');
     } catch (error) { feedback(error.message, { error: true }); }
   });
   $('beta-close').addEventListener('click', () => finish(false));
@@ -267,10 +317,10 @@ export function createExportUnlockController({ document, request = globalThis.fe
     event.preventDefault();
     if (busy || verified) return;
     if ($('beta-code-entry')) $('beta-code-entry').open = true;
-    if (!input.value.trim()) { feedback('请先粘贴兑换码。', { error: true, fieldError: true }); input.focus(); return; }
+    if (!input.value.trim()) { feedback('请先粘贴兑换码或授权恢复码。', { error: true, fieldError: true }); input.focus(); return; }
     const current = session;
     activeRequest = new AbortController();
-    setBusy(true, true); feedback('正在验证兑换码…');
+    setBusy(true, true); feedback('正在联网验证兑换码或授权恢复码…');
     try {
       const result = await requestJson('/api/beta/activate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: input.value.trim() })

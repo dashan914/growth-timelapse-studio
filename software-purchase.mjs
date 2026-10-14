@@ -5,7 +5,22 @@ import path from 'node:path';
 import { APP_VERSION, BetaActivationError, growthDataDirectory } from './beta-activation.mjs';
 
 const config = JSON.parse(readFileSync(process.env.GROWTH_BETA_CONFIG || new URL('./beta-config.json', import.meta.url), 'utf8'));
-const uuid = /^[0-9a-f-]{36}$/i;
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const recoveryCode = /^GTB1-[A-Z0-9-]{20,64}$/;
+const planNames = { YEAR: '一年授权', LIFETIME: '永久授权' };
+// A receipt is display/recovery information, never proof of export permission.
+function paidReceipt(order, { id, plan, installationId } = {}) {
+  if (!order || order.status !== 'PAID' || !uuid.test(order.id || '') || order.id !== id
+      || typeof order.code !== 'string' || !recoveryCode.test(order.code)
+      || !Object.hasOwn(planNames, plan)) return null;
+  const receipt = { id, status: 'PAID', code: order.code, plan, planName: planNames[plan],
+    orderNo: typeof order.orderNo === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(order.orderNo) ? order.orderNo : id,
+    installationId: uuid.test(order.installationId || '') ? order.installationId : uuid.test(installationId || '') ? installationId : null,
+    licenseExpiresAt: order.licenseExpiresAt === null ? null
+      : typeof order.licenseExpiresAt === 'string' && order.licenseExpiresAt.length <= 40 && Number.isFinite(Date.parse(order.licenseExpiresAt)) ? order.licenseExpiresAt : null };
+  if (Number.isSafeInteger(order.amountCents) && order.amountCents >= 0 && order.amountCents <= 100_000_000) receipt.amountCents = order.amountCents;
+  return receipt;
+}
 export function createSoftwarePurchaseService({ betaService, directory = growthDataDirectory(), fetchImpl = fetch, serverUrl = config.serverUrl } = {}) {
   const origin = new URL(serverUrl);
   if (origin.username || origin.password || origin.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(origin.hostname)) throw new Error('Invalid payment server');
@@ -13,7 +28,12 @@ export function createSoftwarePurchaseService({ betaService, directory = growthD
   let current, loaded = false, busy = false;
   async function initialize() {
     if (!loaded) {
-      try { current = JSON.parse(await readFile(file, 'utf8')); } catch { current = null; }
+      try {
+        const text = await readFile(file, 'utf8');
+        if (text.length > 64 * 1024) throw new Error('Purchase record too large');
+        current = JSON.parse(text);
+        if (current?.receipt) current.receipt = paidReceipt(current.receipt, current);
+      } catch { current = null; }
       loaded = true;
     }
   }
@@ -62,18 +82,34 @@ export function createSoftwarePurchaseService({ betaService, directory = growthD
       const order = await request('orders', { method: 'POST', body: JSON.stringify({ plan, payMethod,
         token: current.token, installationId: status.installationId, appVersion: APP_VERSION }) });
       if (!uuid.test(order.id || '')) throw new BetaActivationError('INVALID_PAYMENT_RESPONSE', '购买订单返回无效数据。', 502);
-      current = { ...current, id: order.id, status: order.status, licenseExpiresAt: order.licenseExpiresAt }; await save();
+      current = { ...current, id: order.id, status: order.status, installationId: status.installationId, licenseExpiresAt: order.licenseExpiresAt };
+      const receipt = paidReceipt(order, current);
+      if (receipt) current.receipt = receipt;
+      await save();
       return order;
     } finally { busy = false; }
   }
   async function status() {
     await initialize();
     if (!current?.id) return { order: null, ...(await betaService.status()) };
-    const order = await request('orders/' + current.id, { headers: { Authorization: 'Bearer ' + current.token } });
+    let order;
+    try { order = await request('orders/' + current.id, { headers: { Authorization: 'Bearer ' + current.token } }); }
+    catch (error) {
+      const receipt = paidReceipt(current.receipt, current);
+      if (!receipt) throw error;
+      // Offline viewing never activates a code, including after device unbinding.
+      return { order: receipt, ...(await betaService.status()), receiptOnly: true,
+        paymentError: error.message, unbound: current.status === 'UNBOUND' };
+    }
+    if (!uuid.test(order?.id || '') || order.id !== current.id) throw new BetaActivationError('INVALID_PAYMENT_RESPONSE', '购买订单返回无效数据。', 502);
     const unbound = current.status === 'UNBOUND';
-    current.status = unbound ? 'UNBOUND' : order.status; current.licenseExpiresAt = order.licenseExpiresAt; await save();
+    current.status = unbound ? 'UNBOUND' : order.status; current.licenseExpiresAt = order.licenseExpiresAt;
+    const localStatus = await betaService.status();
+    const receipt = paidReceipt(order, { ...current, installationId: current.installationId || localStatus.installationId });
+    if (receipt) current.receipt = receipt;
+    await save();
     let activationError = null;
-    if (!unbound && order.status === 'PAID' && order.code && (!current.activated || !(await betaService.status()).activated)) {
+    if (!unbound && receipt && (!current.activated || !localStatus.activated)) {
       try { await betaService.activate(order.code); current.activated = true; await save(); } catch (error) { activationError = error.message; }
     }
     return { order, ...(await betaService.status()), activationError, unbound };

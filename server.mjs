@@ -25,6 +25,8 @@ const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const FINISH_TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_PNG_BYTES = 40 * 1024 * 1024;
 const MAX_BACKGROUND_BYTES = 512 * 1024 * 1024;
+const MAX_CUSTOM_SOUND_BYTES = 50 * 1024 * 1024;
+const MAX_CUSTOM_SOUND_SECONDS = 600;
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -126,12 +128,12 @@ async function readJson(request) {
   catch { throw new ApiError(400, 'INVALID_JSON', '导出设置不是有效的 JSON。'); }
 }
 
-/** Stream a large source video to disk without retaining it in server memory. */
-function receiveBackground(request, filename, job) {
+/** Stream source media to disk without retaining it in server memory. */
+function receiveSource(request, filename, job, { maximum, label, emptyCode, writeCode, abortKey }) {
   const declared = request.headers['content-length'];
-  if (declared !== undefined && (!/^\d+$/.test(declared) || Number(declared) > MAX_BACKGROUND_BYTES)) {
+  if (declared !== undefined && (!/^\d+$/.test(declared) || Number(declared) > maximum)) {
     request.resume();
-    return Promise.reject(new ApiError(413, 'BODY_TOO_LARGE', '实景视频不能超过 512 MB。'));
+    return Promise.reject(new ApiError(413, 'BODY_TOO_LARGE', `${label}不能超过 ${maximum / 1024 / 1024} MB。`));
   }
   return new Promise((resolve, reject) => {
     const output = createWriteStream(filename, { flags: 'wx', mode: 0o600 });
@@ -144,7 +146,7 @@ function receiveBackground(request, filename, job) {
       request.off('aborted', onAbort);
       request.off('error', onAbort);
       output.off('drain', onDrain);
-      job.abortBackgroundUpload = null;
+      job[abortKey] = null;
     };
     const fail = error => {
       if (failure || finished) return;
@@ -157,16 +159,16 @@ function receiveBackground(request, filename, job) {
     const onData = chunk => {
       bytes += chunk.length;
       job.touchedAt = Date.now();
-      if (bytes > MAX_BACKGROUND_BYTES) {
-        fail(new ApiError(413, 'BODY_TOO_LARGE', '实景视频不能超过 512 MB。'));
+      if (bytes > maximum) {
+        fail(new ApiError(413, 'BODY_TOO_LARGE', `${label}不能超过 ${maximum / 1024 / 1024} MB。`));
       } else if (!output.write(chunk)) request.pause();
     };
     const onEnd = () => {
-      if (!bytes) { fail(new ApiError(400, 'EMPTY_BACKGROUND', '实景视频为空，请重新选择文件。')); return; }
+      if (!bytes) { fail(new ApiError(400, emptyCode, `${label}为空，请重新选择文件。`)); return; }
       output.end();
     };
-    const onAbort = () => fail(new ApiError(400, 'INCOMPLETE_UPLOAD', '实景视频上传中断，请重试。'));
-    job.abortBackgroundUpload = () => fail(new ApiError(409, 'EXPORT_NOT_ACTIVE', job.failure || '导出已取消。'));
+    const onAbort = () => fail(new ApiError(400, 'INCOMPLETE_UPLOAD', `${label}上传中断，请重试。`));
+    job[abortKey] = () => fail(new ApiError(409, 'EXPORT_NOT_ACTIVE', job.failure || '导出已取消。'));
     output.once('error', error => fail(error));
     output.once('finish', () => { finished = true; cleanup(); });
     // Wait for the file descriptor to close before allowing cancellation to remove it.
@@ -174,7 +176,7 @@ function receiveBackground(request, filename, job) {
       cleanup();
       if (failure) reject(failure);
       else if (finished) resolve(bytes);
-      else reject(new ApiError(500, 'BACKGROUND_WRITE_FAILED', '实景视频保存失败，请重试。'));
+      else reject(new ApiError(500, writeCode, `${label}保存失败，请重试。`));
     });
     output.on('drain', onDrain);
     request.on('data', onData);
@@ -182,6 +184,16 @@ function receiveBackground(request, filename, job) {
     request.once('aborted', onAbort);
     request.once('error', onAbort);
   });
+}
+
+function receiveBackground(request, filename, job) {
+  return receiveSource(request, filename, job, { maximum: MAX_BACKGROUND_BYTES, label: '实景视频',
+    emptyCode: 'EMPTY_BACKGROUND', writeCode: 'BACKGROUND_WRITE_FAILED', abortKey: 'abortBackgroundUpload' });
+}
+
+function receiveSound(request, filename, job) {
+  return receiveSource(request, filename, job, { maximum: MAX_CUSTOM_SOUND_BYTES, label: '音效文件',
+    emptyCode: 'EMPTY_CUSTOM_SOUND', writeCode: 'CUSTOM_SOUND_WRITE_FAILED', abortKey: 'abortSoundUpload' });
 }
 
 function validatePng(buffer, options) {
@@ -279,6 +291,8 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
     job.failure = message;
     if (activeJob === job) activeJob = null;
     job.abortBackgroundUpload?.();
+    job.abortSoundUpload?.();
+    job.abortSoundNormalization?.();
     job.child?.stdin.destroy();
     if (job.child && job.child.exitCode === null && !job.child.killed) {
       job.child.kill('SIGTERM');
@@ -288,6 +302,7 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
     // The child must close its output before cleanup, including on Windows.
     await job.completion;
     await job.backgroundUpload?.catch(() => {});
+    await job.soundUpload?.catch(() => {});
     await cleanupJobFiles(job);
   }
 
@@ -296,6 +311,8 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
     if (job.muxPath) await rm(job.muxPath, { force: true }).catch(() => {});
     if (job.soundMuxPath) await rm(job.soundMuxPath, { force: true }).catch(() => {});
     if (job.backgroundPath) await rm(job.backgroundPath, { force: true }).catch(() => {});
+    if (job.customSoundInputPath) await rm(job.customSoundInputPath, { force: true }).catch(() => {});
+    if (job.customSoundPath) await rm(job.customSoundPath, { force: true }).catch(() => {});
     if (job.frameDirectory) await rm(job.frameDirectory, { recursive: true, force: true }).catch(() => {});
   }
 
@@ -368,7 +385,9 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
           job.status = 'failed';
           if (activeJob === job) activeJob = null;
           job.abortBackgroundUpload?.();
-          Promise.resolve(job.backgroundUpload).catch(() => {}).then(() => cleanupJobFiles(job)).catch(() => {});
+          job.abortSoundUpload?.();
+          job.abortSoundNormalization?.();
+          Promise.allSettled([job.backgroundUpload, job.soundUpload]).then(() => cleanupJobFiles(job)).catch(() => {});
         }
         resolve({ code, signal });
       });
@@ -376,6 +395,91 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
     child.stderr.on('data', chunk => { job.stderr = (job.stderr + chunk.toString()).slice(-8000); });
     // Prevent an unhandled EPIPE when an encoder rejects its input.
     child.stdin.on('error', () => {});
+  }
+
+  function normalizeCustomSound(job) {
+    // Restrict formats and protocols so uploaded playlists cannot read other files
+    // or make network requests. Decode the actual audio, never trust its MIME/name.
+    const child = spawn(ffmpegPath, [
+      '-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-xerror',
+      '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'wav,mp3,mov,ogg,flac,aac,aiff,matroska,webm',
+      '-i', job.customSoundInputPath, '-map', '0:a:0', '-vn', '-sn', '-dn', '-map_metadata', '-1',
+      '-t', String(MAX_CUSTOM_SOUND_SECONDS + 1), '-ac', '1', '-ar', '44100', '-c:a', 'pcm_s16le',
+      '-progress', 'pipe:1', '-f', 'wav', job.customSoundPath,
+    ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, shell: false });
+    return new Promise((resolve, reject) => {
+      let failure, progress = '', duration = 0;
+      const abort = error => {
+        failure ||= error;
+        child.kill('SIGTERM');
+        const killTimer = setTimeout(() => { if (child.exitCode === null) child.kill('SIGKILL'); }, 1500);
+        killTimer.unref();
+      };
+      const timer = setTimeout(() => abort(new ApiError(503, 'CUSTOM_SOUND_TIMEOUT', '音效解码超时，请使用较短的音效文件。')), 60_000);
+      timer.unref();
+      job.abortSoundNormalization = () => abort(new ApiError(409, 'EXPORT_NOT_ACTIVE', job.failure || '导出已取消。'));
+      child.stdout.on('data', chunk => {
+        progress = (progress + chunk.toString()).slice(-8192);
+        for (const match of progress.matchAll(/(?:^|\n)out_time_us=(\d+)/g)) duration = Math.max(duration, Number(match[1]) / 1e6);
+      });
+      child.stderr.on('data', () => {});
+      child.once('error', error => { failure ||= new ApiError(503, 'CUSTOM_SOUND_DECODER_UNAVAILABLE', `音效解码器无法启动：${error.message}`); });
+      // Wait for close, rather than exit, before cleanup on Windows.
+      child.once('close', code => {
+        clearTimeout(timer);
+        job.abortSoundNormalization = null;
+        if (failure) reject(failure);
+        else if (code !== 0 || !duration) reject(new ApiError(400, 'INVALID_CUSTOM_SOUND', '无法读取音效，请选择有效的 MP3、WAV、M4A 或其他音频文件。'));
+        else if (duration > MAX_CUSTOM_SOUND_SECONDS + 1 / 44100) reject(new ApiError(400, 'CUSTOM_SOUND_TOO_LONG', '音效最长支持 10 分钟，请先裁剪后导入。'));
+        else resolve(duration);
+      });
+    });
+  }
+
+  async function uploadSound(job, request, response) {
+    assertEncoding(job);
+    if (job.options.format === 'png-sequence' || job.options.soundEffect !== 'custom') {
+      request.resume();
+      throw new ApiError(409, 'CUSTOM_SOUND_NOT_SELECTED', '请先选择自定义音效并使用视频格式导出。');
+    }
+    if (job.busy) { request.resume(); throw new ApiError(409, 'FRAME_IN_PROGRESS', '请等待正在上传的文件完成。'); }
+    if (job.customSoundUploaded) { request.resume(); throw new ApiError(409, 'CUSTOM_SOUND_ALREADY_UPLOADED', '本次导出的音效已上传。'); }
+    if (job.received) { request.resume(); throw new ApiError(409, 'CUSTOM_SOUND_UPLOAD_TOO_LATE', '请在上传画面之前准备音效。'); }
+    const type = (request.headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
+    if (type !== 'application/octet-stream' && !/^audio\/[a-z0-9.+-]+$/.test(type)) {
+      request.resume(); throw new ApiError(415, 'INVALID_CONTENT_TYPE', '音效文件须使用 application/octet-stream 或 audio/*。');
+    }
+    job.busy = true;
+    job.touchedAt = Date.now();
+    job.customSoundInputPath = path.join(outputDirectory, `${job.id}.sound-upload`);
+    job.customSoundPath = path.join(outputDirectory, `${job.id}.custom.wav`);
+    let prepared;
+    try {
+      job.soundUpload = (async () => {
+        const bytes = await receiveSound(request, job.customSoundInputPath, job);
+        assertEncoding(job);
+        const duration = await normalizeCustomSound(job);
+        assertEncoding(job);
+        return { bytes, duration };
+      })();
+      prepared = await job.soundUpload;
+      assertEncoding(job);
+      job.customSoundUploaded = true;
+      job.touchedAt = Date.now();
+    } catch (error) {
+      await rm(job.customSoundPath, { force: true }).catch(() => {});
+      if (['ENOSPC', 'EACCES', 'EIO'].includes(error.code)) {
+        const message = error.code === 'ENOSPC' ? '磁盘空间不足，导出已取消。' : '音效保存失败，导出已取消。';
+        await stopJob(job, 'failed', message);
+        throw new ApiError(500, 'CUSTOM_SOUND_WRITE_FAILED', message);
+      }
+      throw error;
+    } finally {
+      await rm(job.customSoundInputPath, { force: true }).catch(() => {});
+      job.soundUpload = null;
+      job.busy = false;
+    }
+    json(response, 200, { uploaded: true, ...prepared });
   }
 
   async function uploadBackground(job, request, response) {
@@ -473,6 +577,11 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
     if (job.received !== job.options.frames) {
       throw new ApiError(409, 'FRAMES_MISSING', `应上传 ${job.options.frames} 帧，现已收到 ${job.received} 帧。`);
     }
+    if (job.options.format !== 'png-sequence' && job.options.soundEffect === 'custom' && !job.customSoundUploaded) {
+      const message = '自定义音效尚未上传，请重新导出或改用默认音效。';
+      await stopJob(job, 'failed', message);
+      throw new ApiError(400, 'CUSTOM_SOUND_MISSING', message);
+    }
     job.status = 'finishing';
     job.touchedAt = Date.now();
     if (job.options.format === 'png-sequence') {
@@ -516,7 +625,7 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
         }
         const extension = job.options.format === 'mp4' ? 'mp4' : 'mov';
         job.soundMuxPath = path.join(outputDirectory, `${job.id}.sound.${extension}`);
-        startEncoder(job, ffmpegPath, soundMuxArguments({ root, input: completedPath, output: job.soundMuxPath, options: job.options, hasAudio }));
+        startEncoder(job, ffmpegPath, soundMuxArguments({ root, input: completedPath, output: job.soundMuxPath, options: job.options, hasAudio, customSoundPath: job.customSoundPath }));
         job.child.stdin.end();
         const soundResult = await job.completion;
         if (soundResult.code !== 0 || job.status !== 'finishing') {
@@ -676,10 +785,11 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
         await createExport(request, response);
         return;
       }
-      const match = /^\/api\/exports\/([0-9a-f-]{36})(?:\/(frames|finish|file|background))?$/.exec(url.pathname);
+      const match = /^\/api\/exports\/([0-9a-f-]{36})(?:\/(frames|finish|file|background|sound))?$/.exec(url.pathname);
       if (match) {
         const job = getJob(match[1]);
         if (request.method === 'POST' && match[2] === 'background') { await uploadBackground(job, request, response); return; }
+        if (request.method === 'POST' && match[2] === 'sound') { await uploadSound(job, request, response); return; }
         if (request.method === 'POST' && match[2] === 'frames') { await uploadFrame(job, request, response, url); return; }
         if (request.method === 'POST' && match[2] === 'finish') { await finishExport(job, request, response); return; }
         if (['GET', 'HEAD'].includes(request.method) && match[2] === 'file') {

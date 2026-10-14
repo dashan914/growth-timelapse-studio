@@ -50,7 +50,7 @@ function fixture(){
     endExport(){},lockPreviewCamera(){}};
   const context=vm.createContext({studio,$:get,window:new Target(),document,timelineState,outputSize,exportRenderPlan,outputFormat,alphaVideoAvailable:true,
     cameraMotionScale,applyFramePush,syncEffectAudio(){},stopEffectAudio(){},transformMode:null,playing:false,previewPlaybackActive:false,exporting:false,exportAuthorizing:false,loading:false,snapshotting:false,alignBusy:false,calibrationMode:false,cropEditing:false,
-    perspectiveMode:false,dragPerspective:null,time:3,photoPreview:null,modelRevision:1,calibrationDragIndex:null,calibrationUprightDrag:null,gridDrag:null,cropDrag:null,
+    perspectiveMode:false,dragPerspective:null,time:3,photoPreview:null,modelRevision:1,pendingSoundImport:null,calibrationDragIndex:null,calibrationUprightDrag:null,gridDrag:null,cropDrag:null,
     settings:()=>({...config}),syncCameraFields(){},queueProjectState(){},syncDofStatus(){},syncRealisticPreview(){},lastRealisticPreviewCheck:0,say(){},lockWorkspace(){},
     updateSettings(){calls.push('updateSettings');},ensureExportUnlocked:async()=>true,settingIds:['lighting-exposure','dof-strength','floor','export-quality'],
     syncLightingControls(){},updateStageBounds(){},ensureModelSlice:async()=>true,ffmpegAvailable:true,
@@ -263,4 +263,46 @@ test('older test fixtures without performance hooks remain compatible',()=>{
   const f=fixture();delete f.studio.beginPreviewInteraction;delete f.studio.endPreviewInteraction;
   f.context.touchPreviewInteraction();f.context.playing=true;f.context.showTime();f.context.playing=false;f.context.showTime();
   assert.equal(f.context.previewPlaybackActive,false);
+});
+
+test('custom audio uploads once before frames for video and is omitted from PNG sequence export',async t=>{
+  for(const format of ['mp4','mov-alpha','png-sequence'])await t.test(format,async()=>{
+    const f=fixture(),requests=[],file=new File(['custom-audio'],'自定义.mp3',{type:'audio/mpeg'});
+    Object.assign(f.config,{format,quality:'realtime',duration:.1,soundEffect:'custom',soundVolume:1});
+    Object.assign(f.context,{customSoundFile:file,AbortController,DOMException,performance,backgroundFile:null,updateReferenceView(){},
+      api:async(url,options)=>{requests.push({url,options});return url==='/api/exports'?{id:'custom-job'}:url.endsWith('/finish')?{url:'/custom-output',filename:'custom-output',bytes:1024}:{};}});
+    Object.assign(f.get('export-dialog'),{showModal(){},removeAttribute(){}});
+    await f.context.exportVideo();
+    assert.equal(JSON.parse(requests[0].options.body).soundEffect,'custom');
+    const uploads=requests.filter(item=>item.url.endsWith('/sound'));
+    assert.equal(uploads.length,format==='png-sequence'?0:1);
+    if(uploads.length){
+      assert.equal(uploads[0].options.body,file);assert.equal(uploads[0].options.headers['Content-Type'],'application/octet-stream');
+      assert.ok(uploads[0].options.signal instanceof AbortSignal);
+      assert.ok(requests.indexOf(uploads[0])<requests.findIndex(item=>item.url.includes('/frames?')));
+    }
+    assert.equal(requests.filter(item=>item.url.includes('/frames?')).length,3);
+  });
+});
+
+test('custom audio upload failure cleans up the created export before any frame capture',async()=>{
+  const f=fixture(),requests=[];
+  Object.assign(f.config,{quality:'realtime',duration:.1,soundEffect:'custom',soundVolume:1});
+  Object.assign(f.context,{customSoundFile:new File(['audio'],'sample.wav'),AbortController,DOMException,performance,backgroundFile:null,updateReferenceView(){},
+    api:async(url,options)=>{requests.push({url,options});if(url.endsWith('/sound'))throw new Error('unsupported audio');return url==='/api/exports'?{id:'failed-sound'}:{};}});
+  Object.assign(f.get('export-dialog'),{showModal(){},removeAttribute(){}});
+  await f.context.exportVideo();
+  assert.ok(requests.some(item=>item.url==='/api/exports/failed-sound'&&item.options.method==='DELETE'));
+  assert.equal(requests.some(item=>item.url.includes('/frames?')),false);
+  assert.equal(f.calls.some(call=>Array.isArray(call)&&call[0]==='capture'),false);
+  assert.equal(f.context.exporting,false);
+});
+
+test('an undecoded custom import cannot silently export the previous sound selection',async()=>{
+  const f=fixture(),messages=[];let authorizations=0,requests=0;
+  f.context.pendingSoundImport={};f.context.say=text=>messages.push(text);
+  f.context.ensureExportUnlocked=async()=>{authorizations++;return true;};f.context.api=async()=>{requests++;};
+  await f.context.exportVideo();
+  assert.equal(authorizations,0);assert.equal(requests,0);assert.match(messages[0],/音效正在载入/);
+  assert.equal(f.context.exportAuthorizing,false);
 });

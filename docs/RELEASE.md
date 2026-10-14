@@ -1,40 +1,43 @@
 # 发布维护
 
-新用户安装使用 [main 分支的简洁安装指南](../INSTALL_AGENT.md)，AI 读取入口为 `https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/main/INSTALL_AGENT.md`。原安装指南全文保留在 [安装维护历史参考](INSTALL_MAINTAINER.md)，维护、保护、发布和授权说明不再放入新用户安装入口。
+本轮目标为软件 **1.2.0-beta.6**，固定 tag **v1.2.0-beta.6**，官方运行包为 `growth-timelapse-studio-1.2.0-beta.6-runtime.zip`。本轮新增匀速镜头推进、参考原声音效及缓存同步播放，整理工具栏与材质调节，并补齐安装器对音效文件的复制。
 
-此次只更新 main 分支文档，不产生新软件发行，不修改已固定的 beta.5 tag、Release 附件或 ZIP。
+新用户安装与老用户升级共用 [安装指南](../INSTALL_AGENT.md)。beta.6 的固定 AI 读取入口为 `https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.6/INSTALL_AGENT.md`；持续维护入口仍为 `https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/main/INSTALL_AGENT.md`。老用户使用原安装目录，保留 `beta/` 中的设备授权、订单、订单历史以及 `exports/` 作品；年付到期时间不变，永久授权继续有效。软件没有自动更新器。
 
-当前固定目标：软件 **1.2.0-beta.5**，tag **v1.2.0-beta.5**。本轮 4 个新版 UI GIF 已完成实际录制与媒体核验；完整软件测试 897 项（879 通过、18 环境跳过、0 失败）、运行包回归和旧下载清理脚本 7 项测试通过，公开发行与外部清理结果待实际执行后记录。山地造物网站 **1.15.1** 已部署。
+公开仓库继续保留 MIT 源码、测试和开发打包流程。官方运行包延续轻量压缩与混淆、第三方许可和 `RUNTIME_MANIFEST.json`，不改变原签名产品 `growth-timelapse-beta`、可信公钥、购买价格、星光兑换及离线授权逻辑。beta.5 的 tag、Release 和下载文件保留；本轮建立独立 beta.6 发行，不覆盖旧版本附件，也不清理旧版本。
 
-公开仓库继续保留 MIT 源码、测试和开发打包流程。官方 ZIP 为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`，延续轻量压缩与混淆、第三方许可和 `RUNTIME_MANIFEST.json`。本轮只更新当前 UI 的实际操作媒体与固定安装文档，不改变授权、价格、星光和离线逻辑。已保存的旧源码 ZIP 与清单仍兼容，旧下载入口按下面顺序清理。
+## 发布步骤
 
-1. 更新版本号、README、操作指南与演示素材；新增依赖或素材时同步 [第三方来源记录](../THIRD_PARTY_NOTICES.md)。核对 `package.json`、锁文件、`APP_VERSION`、`beta-config.json` 与安装清单版本一致；保留现有 `growth-timelapse-beta` 产品及可信公钥。
-2. 执行 `npm ci`、`npm run doctor` 和 `npm test`，制作流程有改动时再运行 `npm run test:native-slicing`。
-3. 使用当前版本实际录制工作台、背景、摆放、色彩与镜头操作，生成 `current-workbench.gif`、`current-backgrounds.gif`、`current-transform.gif` 和 `current-color-lens.gif`；检查动图完整帧、时长、真实按钮与操作对应，README 和 UI 指南不得引用旧布局 GIF。录屏完成后再记录实际验证结果。在原源码和独立运行包完成回归、doctor、启动与真实小案例切片检查，历史计数不替代本轮结果。
-4. 构建官方运行包，发行目录示例：
+1. 核对 `package.json`、锁文件、`APP_VERSION`、`beta-config.json`、安装清单模板和当前下载文档均为 beta.6；保留产品 ID、可信公钥和本机数据路径。新增依赖或素材同步 [第三方来源记录](../THIRD_PARTY_NOTICES.md)。历史 GIF 在 beta.5 录制，README 和 UI 指南已明确其录制版本，不将其作为 beta.6 新控件的录屏证据。
+2. 执行 `npm ci`、`npm run doctor` 和 `npm test`，核对安装器保留授权、订单与作品的升级回归，以及运行包内音效存在、可供浏览器和 FFmpeg 使用。需要时运行 `npm run test:native-slicing`。本轮实际结果写入 [验证记录](VERIFICATION.md)，历史测试计数不替代 beta.6 的结果。
+3. 构建官方运行包：
 
 ```sh
-node scripts/build-runtime-release.mjs --output "release/runtime-1.2.0-beta.5"
+node scripts/build-runtime-release.mjs --output "release/runtime-1.2.0-beta.6"
 ```
 
-公开源码的开发打包命令继续保留，生成独立 `-source.zip`：
+源码开发包仍可独立生成，使用自己的 `SOURCE_MANIFEST.json`：
 
 ```sh
 python3 scripts/package-release.py
 ```
 
-5. 在新目录解压官方运行 ZIP，核对 `RUNTIME_MANIFEST.json` 的实际运行文件哈希，检查无 source map、测试和开发构建资料，第三方文件与许可保留；执行安装、doctor 和启动验证。未激活可导入、编辑并进行无水印实时预览，选择免费 MP4 后只在导出成片写入动态水印；无水印视频、透明 MOV、PNG 序列与预览图片需激活。验证实时与写实免费成片水印、已解锁成片无水印、学员原星光兑换、软件内购买和已有兑换码。购买价格仍为一年 ¥19.90（365 天）或永久 ¥39.90，仅绑定一台设备，换机先解绑；安装升级保留作品、订单和授权。新官方运行包与旧源码包各使用对应 ZIP 的清单、哈希和安装入口，不将一种包的校验值用于另一种。
-6. 对已完成的 ZIP 生成外部安装清单，ZIP 内模板保持 `published: false`：
+4. 在独立目录解压运行 ZIP，核对 `RUNTIME_MANIFEST.json` 的实际文件哈希，确认不含 source map、测试、用户数据及开发构建资料，且第三方文件、许可与参考原声音效保留。检查安装、doctor、启动与实际模型导入；确认“运镜与音效”紧邻“镜头设置”、推进幅度和用时可调、勾选音效同步播放、拖动时间线和连续开关不丢失播放、较长视频音效不循环。检查层纹和细节强度位于“材质”。
+5. 回归原授权与水印流程：工作台实时预览无水印；免费 MP4 成片具有动态水印，已解锁成片无水印；无水印视频、透明 MOV、PNG 序列及预览图片保持解锁限制。确认原年付、永久、学员星光和兑换码逻辑，使用合成授权完成回归，不能把它当作真实扣款验收。升级模拟应在同一数据根目录进行，比较 `beta/` 原文件和导出作品，保留旧 `releases/` 与启动入口。
+6. 为冻结的 ZIP 生成外部安装清单，源码和 ZIP 内模板保持 `published: false`：
 
 ```sh
-node scripts/finalize-install-manifest.mjs --archive "release/runtime-1.2.0-beta.5/growth-timelapse-studio-1.2.0-beta.5-runtime.zip" --repository dashan914/growth-timelapse-studio
+node scripts/finalize-install-manifest.mjs --archive "release/runtime-1.2.0-beta.6/growth-timelapse-studio-1.2.0-beta.6-runtime.zip" --repository dashan914/growth-timelapse-studio
 ```
 
-7. 将官方运行 ZIP、`SHA256SUMS.txt`、外部 `install-manifest.json` 和 `INSTALL_AGENT.md` 上传到固定 `v1.2.0-beta.5` 的 GitHub Release。先验证新版匿名下载、外部清单、ZIP SHA256、包内媒体和 `RUNTIME_MANIFEST.json`；只有通过后，按用户最新授权清理已知旧 Release、旧包附件和旧 tag refs（包括 1.1 下载标记），保留 commit 源码历史，不重写提交。记录实际删除对象和结果，不提前宣称清理完成。源码开发包继续使用自己的 `SOURCE_MANIFEST.json`，不混用两类哈希。
-8. 网站安装指南指向持续维护的用户入口 `https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md`；指南内的 ZIP 与外部清单仍固定到已验证的 beta.5 Release，外部清单为 `https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.5/install-manifest.json`。网站配置更新按自己的 `AGENTS.md` 执行，原课程支付保持关闭。原支付、签名与星光逻辑不变，详情见 [软件购买](SOFTWARE_PURCHASE.md)。
+7. 发布独立 `v1.2.0-beta.6` GitHub 预发布，将官方运行 ZIP、`SHA256SUMS.txt`、外部 `install-manifest.json` 和 `INSTALL_AGENT.md` 作为附件。发布后匿名下载核对外部清单、ZIP SHA256、tag 指向与包内 `RUNTIME_MANIFEST.json`；只有实际上传与公开校验通过后，才记录“已公开发布”。任何打包文件变动均须重建 ZIP、SHA256 和外部清单，不在固定 Release 附件上仅修改清单。
 
-beta.3 与 beta.4 的历史结果保留在 [验证记录](VERIFICATION.md)，beta.5 的录屏、本地完整测试与运行包回归结果已记录；最终公开 ZIP、SHA256、外部清单和旧下载标记清理结果仍需在执行后补录。56 项拓竹矩阵为历史软件验证，未逐台实体打印，范围见 [兼容性报告](BAMBU_PRINTER_COMPATIBILITY.md)。
+固定下载地址：
 
-公开源码仓库保留源码、案例、文档、背景和测试；官方运行包保留运行文件、使用文档、演示媒体与许可，压缩与混淆仅提高阅读改动成本。依赖仍通过 `npm ci` 安装，本机切片器与编码器按 [快速开始](QUICK_START.md) 准备。运行缓存和用户导出文件由 `.gitignore` 排除。
+- [beta.6 Release](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.6)
+- [运行 ZIP](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.6/growth-timelapse-studio-1.2.0-beta.6-runtime.zip)
+- [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.6/install-manifest.json)
 
-本次固定 `v1.2.0-beta.5` 先完成新版实际录屏与本地运行验证，再构建、发布和公开校验。清理旧下载标记前先核对计划，严格限于用户已授权的旧 Release、附件和 tag refs；commit 源码历史不改写。仓库与包内安装模板保持 `published: false`，实际安装使用发布后的外部清单。
+安装器在同一根目录的 `releases/` 下准备新版本，检查通过后才切换 `installation.json` 和启动入口。准备阶段失败时保留已选旧版本；升级时不得删除整个根目录、重建 `beta/`、解除设备绑定或要求重新付款。启动服务前后以 `/api/health` 和本机解锁状态检查实际选中的版本，PID 停止流程见安装指南。
+
+beta.5 及更早的实测记录保留在 [验证记录](VERIFICATION.md)。56 项拓竹矩阵属于历史软件验证，未逐台实体打印，范围见 [兼容性报告](BAMBU_PRINTER_COMPATIBILITY.md)。Windows x64 与 Intel Mac 的完整安装仍须按对应实机结果记录。课程网站是独立项目；本轮软件发行不修改网站、价格或支付配置。

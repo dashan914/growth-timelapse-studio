@@ -5,8 +5,8 @@ export const SOURCE_BLOB_LIMIT = 512 * 1024 * 1024;
 const DATABASE_NAME = 'growth-timelapse-studio';
 const STORE_NAME = 'project';
 const SIZE_KEY = '__sourceBytes';
-const SOURCE_KEYS = ['modelFiles', 'backgroundFile', 'referenceFile', 'supportGcode', 'supportFile'];
-const PROJECT_KEYS = [...SOURCE_KEYS, 'backgroundPreset', 'settings', 'camera'];
+const SOURCE_KEYS = ['modelFiles', 'backgroundFile', 'referenceFile', 'supportGcode', 'supportFile', 'customSoundFile'];
+const PROJECT_KEYS = [...SOURCE_KEYS, 'backgroundPreset', 'settings', 'camera', 'soundMode'];
 let databasePromise;
 
 function isBlob(value) {
@@ -32,9 +32,11 @@ export function validateCachePatch(patch, previousSourceBytes = {}) {
     if (key === 'modelFiles' && (!Array.isArray(value) || value.some(file => !isBlob(file)))) {
       throw new TypeError('模型缓存需要一个文件数组。');
     }
-    if ((key === 'backgroundFile' || key === 'referenceFile' || key === 'supportFile') && value !== null && !isBlob(value)) {
+    if ((key === 'backgroundFile' || key === 'referenceFile' || key === 'supportFile' || key === 'customSoundFile') && value !== null && !isBlob(value)) {
       throw new TypeError('背景和对照照片缓存需要文件或 null。');
     }
+    if (key === 'customSoundFile' && value?.size > 50 * 1024 * 1024) throw new RangeError('自定义音效不能超过 50 MiB。');
+    if (key === 'soundMode' && !['reference', 'custom', 'none'].includes(value)) throw new TypeError('音效缓存模式无效。');
     if ((key === 'supportGcode' || key === 'backgroundPreset') && value !== null && typeof value !== 'string') {
       throw new TypeError('支撑代码和背景预设缓存需要文字或 null。');
     }
@@ -106,7 +108,7 @@ export async function saveProjectFiles(patch) {
   if (!keys.length) return;
   // Wrapping Files does not read or encode their contents.
   const records = Object.fromEntries(keys.map(key => [key, key === 'modelFiles' ? patch[key].map(wrapFile)
-    : key === 'backgroundFile' || key === 'referenceFile' || key === 'supportFile' ? wrapFile(patch[key]) : patch[key]]));
+    : key === 'backgroundFile' || key === 'referenceFile' || key === 'supportFile' || key === 'customSoundFile' ? wrapFile(patch[key]) : patch[key]]));
   const database = await openDatabase();
   await new Promise((resolve, reject) => {
     const transaction = database.transaction(STORE_NAME, 'readwrite');
@@ -151,7 +153,7 @@ export async function loadProjectFiles() {
   });
   if (!Object.keys(records).length) return null;
   if (records.modelFiles) records.modelFiles = records.modelFiles.map(normalizeFile);
-  for (const key of ['backgroundFile', 'referenceFile', 'supportFile']) {
+  for (const key of ['backgroundFile', 'referenceFile', 'supportFile', 'customSoundFile']) {
     if (records[key] != null) records[key] = normalizeFile(records[key]);
   }
   return records;

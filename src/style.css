@@ -299,3 +299,4 @@ dialog{background:#2c3340;color:#dde7f6;border:1px solid #5c6e89;border-radius:9
 @media(max-width:520px){.motion-popup{width:240px;right:10px}}
 
 .camera-tool-pair{display:flex;align-items:center;gap:2px;flex:0 0 auto}
+.custom-sound-row{display:flex;align-items:center;gap:8px;margin:8px 0}.custom-sound-row[hidden]{display:none}.custom-sound-row span{min-width:0;flex:1;overflow-wrap:anywhere;color:var(--muted);font-size:12px}.custom-sound-row .icon-button{flex:0 0 44px;min-height:44px}

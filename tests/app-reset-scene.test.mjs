@@ -108,7 +108,7 @@ function fixture({id='blue-grey',hasModel=true,background=true,calibrated=backgr
   const context=vm.createContext({studio,$:get,printerPresets:BACKGROUND_PRESETS,backgroundPreset:id,DEFAULT_MODEL_POSE:defaults,
     SURFACE_PRESETS:['auto','pla','matte','silk','petg'],modelColorFields:['tint','shadows','highlights','contrast','saturation'],
     normalizeLighting,lightingProfile:normalizeLighting({keyIntensity:1.3,ambientIntensity:.8,fillIntensity:.4}),
-    scene:'studio',sceneColors:{studio:'#30333a'},toolColors:{0:'#efdb5b',1:'#28517b'},
+    scene:'studio',sceneColors:{studio:'#30333a'},customSoundFile:null,toolColors:{0:'#efdb5b',1:'#28517b'},
     time:2,playing:true,transformMode:'rotate',perspectiveMode:true,activeCalibration:originalCalibration,
     cropRect:{x:.12,y:.05,width:.77,height:.81,sourceAspect:3/4},cropBeforeEdit:{x:.2,y:.1,width:.6,height:.7,sourceAspect:3/4},
     cropDrag:{handle:'move'},cropEditing,calibrationMode,exporting:false,restoringProject:false,loading:false,alphaVideoAvailable:true,

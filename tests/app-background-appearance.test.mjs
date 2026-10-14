@@ -76,7 +76,7 @@ function fixture({savedLocal=null,restoring=false}={}){
     getPresetDof,normalizeDof,migratePresetDof,DOF_PRESET_REVISION,getPresetCalibration,
     SURFACE_PRESETS:['auto','pla','matte','silk','petg'],modelColorFields:colorFields,DEFAULT_MODEL_POSE:poseDefaults,
     lightingProfile:normalizeLighting(DEFAULT_LIGHTING),backgroundAppearances:{},restoredSettingsData:null,backgroundLoadSequence:0,
-    backgroundPreset:'',backgroundFile:null,scene:'studio',sceneColors:{studio:'#30333a',paper:'#eceff3',blue:'#171b24'},
+    backgroundPreset:'',backgroundFile:null,customSoundFile:null,scene:'studio',sceneColors:{studio:'#30333a',paper:'#eceff3',blue:'#171b24'},
     restoringProject:restoring,calibrationMode:false,loading:false,exporting:false,alignBusy:false,cacheTimer:null,
     activeCalibration:null,manualSupportMapping:null,modelSourceKey:'model-source',posePlacement:null,sliceReadyJob:null,
     CAMERA_METRIC_REVISION:2,toolColors:{0:'#eebd32',1:'#245699'},cropRect:null,cropEditing:false,time:8,playing:false,
