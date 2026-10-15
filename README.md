@@ -80,8 +80,8 @@
 复制下面这段给能操作你电脑的 AI：
 
 ```text
-请帮我安装并启动“打印延时一键生成”1.2.0-beta.7，按照这个官方指南操作。有旧版时使用原安装目录并保留配置和作品；没有旧版时，Windows 安装前先询问我安装到哪个盘。自动检查环境、安装缺失依赖，完成后打开软件并验证导入和预览：
-https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.7/INSTALL_AGENT.md
+请帮我安装并启动最新版本的“打印延时一键生成”，按照这个官方指南操作。有旧版时使用原安装目录并保留配置和作品；没有旧版时，Windows 安装前先询问我安装到哪个盘。自动检查环境、安装缺失依赖，完成后打开软件并验证导入和预览：
+https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/main/INSTALL_AGENT.md
 ```
 
 已有安装请使用 [Agent 升级指令](INSTALL_AGENT.md#老用户升级)，安装到原目录即可，无需删除重装。原配置、已有工程和导出作品继续保留。当前没有软件内自动更新。

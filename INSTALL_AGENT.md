@@ -3,7 +3,7 @@
 复制下面这句话给能操作本机的 AI：
 
 ```text
-请读取 https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.7/INSTALL_AGENT.md，安装 1.2.0-beta.7。有旧版时按“老用户升级”使用原安装目录；没有旧版时，Windows 安装前先询问我安装到哪个盘。自动检查环境、补齐缺失依赖并安装启动，确认模型导入和预览正常，告诉我下次如何打开。
+请读取 https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/main/INSTALL_AGENT.md，安装最新版本的“打印延时一键生成”。有旧版时按“老用户升级”使用原安装目录；没有旧版时，Windows 安装前先询问我安装到哪个盘。自动检查环境、补齐缺失依赖并安装启动，确认模型导入和预览正常，告诉我下次如何打开。
 ```
 
 ## 安装 AI 执行步骤
@@ -53,7 +53,7 @@ Windows 所选目录用于软件、导出文件和本机授权数据；Python、
 复制下面这段给能操作本机的 Agent：
 
 ```text
-请按 https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.7/INSTALL_AGENT.md 的“老用户升级”，把“打印延时一键生成”升级到 1.2.0-beta.7。先找到原安装目录，保留授权、订单和导出作品；核验固定版本的外部安装清单与运行 ZIP 的 SHA256，再用平台安装器安装到原目录。确认旧服务属于这个安装后再停止，不要删除整个安装目录、解除绑定或重新激活。完成后检查版本、原付费解锁状态及模型预览，告诉我软件地址和原启动入口。只有找不到已有安装时才询问安装目录。
+请读取 https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/main/INSTALL_AGENT.md，按其中的“老用户升级”指引，将本机已安装的“打印延时一键生成”平滑无损升级到最新版本。先找到原安装目录，保留配置、授权和导出作品；核验最新版本的外部安装清单与运行 ZIP 的 SHA256，再用平台安装器安装到原目录。确认旧服务属于这个安装后再停止，不要删除整个安装目录、解除绑定或重新激活。升级完成后检查版本并验证导入和预览，告诉我软件地址和启动入口。只有找不到已有安装时才询问安装目录。
 ```
 
 Agent 按以下步骤执行：
