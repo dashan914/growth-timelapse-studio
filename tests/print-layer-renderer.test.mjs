@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import { parsePrintLayerGCode, PRINTER_MM_TO_THREE_MM, PRINT_FEATURE } from '../src/print-layer.js';
-import { PrintLayerRenderer, IndexedSupportRenderer, buildPrintLayerPacket, printLayerProgressState, validatePrintLayerMapping, printLayerPacketTransferables, createStadiumGeometry, printBeadRatio, installStadiumExtrusion } from '../src/print-layer-renderer.js';
+import { PrintLayerRenderer, IndexedSupportRenderer, buildPrintLayerPacket, printLayerProgressState, validatePrintLayerMapping, printLayerPacketTransferables, createStadiumGeometry, printBeadRatio, installStadiumExtrusion, installPrintLayerDepthLighting } from '../src/print-layer-renderer.js';
 import { GrowthStudio } from '../src/studio.js';
 
 const fixture = `; filament_colour = #f0e8d6;#23599c;#c89e59
@@ -137,6 +137,24 @@ test('real layer renderer uses continuous extruded meshes, caches a layer, honor
   renderer.dispose();
   assert.equal(renderer.root.children.length, 0);
 });
+
+test('PrintLayerRenderer renders deep infill down to infillDepthMm while keeping top perimeter', () => {
+  const parsed = parsePrintLayerGCode(fixture, { includeAuxiliary: true });
+  const renderer = new PrintLayerRenderer(parsed, {
+    printerToSource: axis(),
+    infillDepthMm: 0.5,
+    historicalOuterWall: false,
+    includeOuterWall: true,
+  });
+  renderer.update(2 / 3, { includeSupport: false });
+  assert.equal(renderer.packet.instanceCount, 8);
+  assert.equal(renderer.packet.roleCounts.outerWall, undefined);
+  assert.equal(renderer.packet.roleCounts.innerWall, 4);
+  assert.equal(renderer.packet.roleCounts.sparseInfill, 2);
+  assert.equal(renderer.packet.roleCounts.topSurface, 2);
+  renderer.dispose();
+});
+
 
 function studioFixture() {
   const studio = Object.create(GrowthStudio.prototype);
@@ -352,6 +370,21 @@ test('stadium roads have flat physical contact, rounded sides, correct transform
   assert.match(shader.vertexShader, /objectNormal.x \/= max\(instanceBeadRatio/);
   assert.match(shader.vertexShader, /0.5 \* \(1.0 - beadRatio\) \* beadCrossSide/);
   assert.equal(material.defaultAttributeValues.beadCrossEnabled[0], 0, 'non-bead CAD vertices remain untouched under generic analysis overrides');
+
+  const depthShader = { vertexShader: '#include <begin_vertex>', fragmentShader: '#include <lights_fragment_end>' };
+  const depthMaterial = installPrintLayerDepthLighting(new THREE.MeshStandardMaterial());
+  depthMaterial.onBeforeCompile(depthShader);
+  assert.match(depthShader.vertexShader, /attribute float instanceDepth;/);
+  assert.match(depthShader.fragmentShader, /beadDepthMm/);
+  assert.match(depthShader.fragmentShader, /reflectedLight\.directDiffuse \*= directFactor;/);
+  assert.equal(depthMaterial.defaultAttributeValues.instanceDepth[0], 0);
+
+  // Verify packet includes depths and transferables include depths
+  const parsedFixture = parsePrintLayerGCode(fixture, { includeSupport: true });
+  const packetWithDepths = buildPrintLayerPacket(parsedFixture, { layerIndex: 1, historyLayers: 2, printerToSource: axis() });
+  assert.ok(packetWithDepths.depths instanceof Float32Array);
+  assert.equal(packetWithDepths.depths.length, packetWithDepths.instanceCount);
+  assert.ok(printLayerPacketTransferables(packetWithDepths).includes(packetWithDepths.depths.buffer));
 });
 
 test('actual user project parses all paths and conserves selected layer windows without simplification', { skip: !process.env.GROWTH_PRINT_GCODE }, async () => {

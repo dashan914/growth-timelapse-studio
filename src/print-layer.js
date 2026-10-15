@@ -400,14 +400,39 @@ export function printLayerAtHeight(parsed, heightMm) {
  * Selection is O(paths in selected layers), not O(all paths) per video frame.
  * Historical voids remain voids: only actual extrusion segments are selected.
  */
-export function selectPrintLayerSegments(parsed, { layerIndex, historyLayers = 1, includeSupport = false } = {}) {
+export function selectPrintLayerSegments(parsed, {
+  layerIndex, historyLayers = 1, infillDepthMm = 0, includeSupport = false,
+  includeOuterWall = true, historicalOuterWall = true, historicalInnerWall = true,
+} = {}) {
   if (!Number.isInteger(layerIndex) || layerIndex < -1 || layerIndex >= parsed.layerHeights.length) throw new RangeError('打印层索引无效。');
   if (!Number.isInteger(historyLayers) || historyLayers < 1 || historyLayers > parsed.layerHeights.length + 1) throw new RangeError('打印层历史范围无效。');
+  if (infillDepthMm !== undefined && (!Number.isFinite(infillDepthMm) || infillDepthMm < 0)) throw new RangeError('打印层填充深度必须是非负数。');
   if (layerIndex === -1) return new Uint32Array(0);
-  const first = Math.max(0, layerIndex - historyLayers + 1), result = [];
+  let first = Math.max(0, layerIndex - historyLayers + 1);
+  if (Number.isFinite(infillDepthMm) && infillDepthMm > 0) {
+    const currentZ = parsed.layerHeights[layerIndex];
+    const targetZ = currentZ - infillDepthMm;
+    let infillFirst = layerIndex;
+    while (infillFirst > 0 && parsed.layerHeights[infillFirst - 1] >= targetZ - 1e-4) {
+      infillFirst--;
+    }
+    first = Math.min(first, infillFirst);
+  }
+  const result = [];
   for (let layer = first; layer <= layerIndex; layer++) {
+    const isTopLayer = layer === layerIndex;
     for (let i = parsed.layerOffsets[layer]; i < parsed.layerOffsets[layer + 1]; i++) {
       const segment = parsed.layerSegments[i], feature = parsed.features[segment];
+      const isOuter = (feature === PRINT_FEATURE.outerWall || feature === PRINT_FEATURE.overhangWall);
+      const isInner = (feature === PRINT_FEATURE.innerWall);
+      if (isOuter) {
+        if (isTopLayer) {
+          if (!includeOuterWall) continue;
+        } else {
+          if (!historicalOuterWall) continue;
+        }
+      }
+      if (isInner && !isTopLayer && !historicalInnerWall) continue;
       if (MODEL_FEATURES.has(feature) || (includeSupport && SUPPORT_FEATURES.has(feature))) result.push(segment);
     }
   }
@@ -421,10 +446,16 @@ export function selectPrintLayerSegments(parsed, { layerIndex, historyLayers = 1
  * An explicit known printer→source affine transform is mandatory. It may be
  * identity for an unchanged 3MF build placement. It must never be an auto fit.
  */
-export function buildPrintLayerInstances(parsed, { layerIndex, historyLayers = 1, includeSupport = false,
-  printerToSource, toolColors = parsed.toolColors, strictColors = true } = {}) {
+export function buildPrintLayerInstances(parsed, {
+  layerIndex, historyLayers = 1, infillDepthMm = 0, includeSupport = false,
+  includeOuterWall = true, historicalOuterWall = true, historicalInnerWall = true,
+  printerToSource, toolColors = parsed.toolColors, strictColors = true,
+} = {}) {
   const transform = matrixElements(printerToSource);
-  const segments = selectPrintLayerSegments(parsed, { layerIndex, historyLayers, includeSupport });
+  const segments = selectPrintLayerSegments(parsed, {
+    layerIndex, historyLayers, infillDepthMm, includeSupport,
+    includeOuterWall, historicalOuterWall, historicalInnerWall,
+  });
   const matrices = new Float32Array(segments.length * 16), tools = new Uint16Array(segments.length), features = new Uint8Array(segments.length);
   const colors = [], missingColors = new Set();
   for (let i = 0; i < segments.length; i++) {
@@ -446,7 +477,8 @@ export function buildPrintLayerInstances(parsed, { layerIndex, historyLayers = 1
   }
   if (strictColors && missingColors.size) throw new Error(`缺少耗材 ${[...missingColors].map(tool => tool + 1).join('、')} 的原始颜色，不能把所有填充猜成一种颜色。`);
   return { matrices, tools, features, colors, segments, instanceCount: segments.length,
-    layerIndex, heightMm: layerIndex < 0 ? null : parsed.layerHeights[layerIndex], coordinates: 'explicit-source-affine',
+    layerIndex, heightMm: layerIndex < 0 ? null : parsed.layerHeights[layerIndex],
+    historyLayers, infillDepthMm, historicalOuterWall, historicalInnerWall, coordinates: 'explicit-source-affine',
     missingColors: [...missingColors], source: 'sliced-gcode', exactLinearPaths: true, arcToleranceMm: parsed.arcToleranceMm };
 }
 

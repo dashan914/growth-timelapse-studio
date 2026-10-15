@@ -1,10 +1,10 @@
 # 软件授权购买与免费水印导出
 
-日期：2026-10-14。网站 **1.15.1 已部署**。本轮固定目标为 **1.2.0-beta.6**，官方安装资产为 `growth-timelapse-studio-1.2.0-beta.6-runtime.zip`；软件内增加购买凭据的查看、复制和本机保存，沿用既有付费授权码、签名、公钥、价格、星光兑换和离线逻辑。实际发行与验证结果见 [验证记录](VERIFICATION.md)。
+日期：2026-10-15。网站 **1.15.1 已部署**。本轮固定目标为 **1.2.0-beta.7**，官方安装资产为 `growth-timelapse-studio-1.2.0-beta.7-runtime.zip`；软件内增加购买凭据的查看、复制和本机保存，沿用既有付费授权码、签名、公钥、价格、星光兑换和离线逻辑。实际发行与验证结果见 [验证记录](VERIFICATION.md)。
 
 用户已确认开发：软件内扫码支付，网站提供购买页；一年 19.90 元（365 天）、永久 39.90 元；购买授权绑定一台设备，激活后可离线，换机先解绑。学员继续原星光兑换，不变更资格、扣星光和原设备规则。
 
-用户入口：[山地造物购买页](https://ai3dclass.cn/software/checkout) · [学员原星光兑换页](https://ai3dclass.cn/points) · [本轮固定目标 v1.2.0-beta.6](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.6)。发行后使用 [同版本安装指南及完整 AI 提示词](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.6/INSTALL_AGENT.md) 和 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.6/install-manifest.json)。固定链接经公开验证后使用；已保存的旧 ZIP 仍兼容，公开源码开发打包保留。
+用户入口：[山地造物购买页](https://ai3dclass.cn/software/checkout) · [学员原星光兑换页](https://ai3dclass.cn/points) · [本轮固定目标 v1.2.0-beta.7](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.7)。发行后使用 [同版本安装指南及完整 AI 提示词](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.7/INSTALL_AGENT.md) 和 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.7/install-manifest.json)。固定链接经公开验证后使用；已保存的旧 ZIP 仍兼容，公开源码开发打包保留。
 
 ## 保存购买凭据与恢复授权
 
@@ -49,7 +49,7 @@
 - 网站支付、原星光兑换和简付接口测试 57/57 通过；TypeScript 与 Next 生产构建通过。
 - 实时/写实两路用真实 FFmpeg 验证动态品牌烙进每帧，并保留完整帧数。
 - 模拟扫码支付在软件内自动解锁；网站恢复订单、显示复制码与手机布局已验收。
-- 学员入口文案按用户最新要求改为“山地造物学员 / 跳转课程页面免费兑换”，沿用原学院兑换页面。
+- 学员入口文案按用户最新要求改为“成为山地造物学员 · 免费兑换软件 / 报名 AI + Nomad 潮玩造物课程，享本软件免费兑换与更多福利 →”，跳转山地造物主页 (https://ai3dclass.cn)。
 - 拓竹 14 个机型 × 4 种喷嘴的 56 项真实切片与路径解析全部通过；未逐台实体打印，也未在本轮重新进行 Windows 实机验证。见 [兼容性报告](BAMBU_PRINTER_COMPATIBILITY.md)。
 - 桌面/手机截图：工作区 integration-work/review/software-payment-20261013/。
 - 本轮固定目标为 v1.2.0-beta.5，官方资产名为 `growth-timelapse-studio-1.2.0-beta.5-runtime.zip`；4 个实际操作 GIF 逐帧核验、完整软件 897 项测试（879 通过、18 环境跳过、0 失败）、运行包回归和清理脚本 7 项测试通过。最终公开 ZIP 与外部 SHA256 验证后再执行旧下载标记清理，脚本测试通过不代表外部删除已完成。本地支付预览仍只使用合成数据和假网关。

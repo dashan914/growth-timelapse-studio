@@ -13,7 +13,7 @@ FILES = (
     'server.mjs', 'runtime-paths.mjs', 'bambu-engine.mjs', 'slicer-engine.mjs',
     'slice-jobs.mjs', 'support-jobs.mjs', 'realistic-render.mjs',
     'photo-calibration.mjs', 'export-codecs.mjs', 'export-sound.mjs',
-    'beta-activation.mjs', 'software-purchase.mjs', 'free-watermark.mjs', 'beta-config.json', 'INSTALL_AGENT.md', 'install-manifest.json', 'start.cmd',
+    'beta-activation.mjs', 'software-purchase.mjs', 'free-watermark.mjs', 'version-check.mjs', 'beta-config.json', 'INSTALL_AGENT.md', 'install-manifest.json', 'start.cmd',
     'assets/shandi-logo.svg', 'assets/free-watermark.png',
     'assets/sounds/reference-original.wav', 'assets/sounds/SOURCES.md',
 )

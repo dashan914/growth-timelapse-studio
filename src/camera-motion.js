@@ -1,8 +1,8 @@
 // A frame-wide push keeps a photographed bed and its registered model aligned.
-export function cameraMotionScale(time, { motion = 'fixed', pushAmount = 20, pushDuration = 8 } = {}) {
+export function cameraMotionScale(time, { motion = 'fixed', pushAmount = 20, pushDuration = 4 } = {}) {
   if (motion !== 'push') return 1;
   const amount = Number.isFinite(Number(pushAmount)) ? Math.min(100, Math.max(0, Number(pushAmount))) / 100 : .2;
-  const duration = Number.isFinite(Number(pushDuration)) ? Math.max(.1, Number(pushDuration)) : 8;
+  const duration = Number.isFinite(Number(pushDuration)) ? Math.max(.1, Number(pushDuration)) : 4;
   const t = Math.min(1, Math.max(0, Number(time) || 0) / duration);
   return 1 + amount * t;
 }

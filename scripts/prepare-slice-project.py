@@ -90,6 +90,17 @@ def official_process(preset):
     return values
 
 
+def parse_extruder_offset(value):
+    if not value:
+        return 0.0, 0.0
+    if isinstance(value, list) and value:
+        value = value[0]
+    match = re.match(r'^\s*(-?\d+(?:\.\d+)?)\s*[xX,]\s*(-?\d+(?:\.\d+)?)\s*$', str(value))
+    if match:
+        return float(match.group(1)), float(match.group(2))
+    return 0.0, 0.0
+
+
 def inert_settings(settings, corrections):
     for key in ('post_process', 'post_process_scripts', 'post_processing_script', 'gcode_post_process'):
         if settings.get(key):
@@ -107,6 +118,21 @@ def inert_settings(settings, corrections):
                 settings[key] = cleaned
                 corrections.append({'field': key, 'before': value, 'after': cleaned,
                                     'reason': 'Removed a file display label from a native preset ID.'})
+    # Machine hardware nozzle offset shifts G-code toolpaths relative to nominal 3MF CAD mesh.
+    # In visualization slicing, all extruders must use 0x0 offset for exact 1:1 CAD alignment.
+    if 'extruder_offset' in settings:
+        offsets = settings['extruder_offset']
+        count = len(offsets) if isinstance(offsets, list) else 1
+        zero_offsets = ['0x0'] * count
+        if offsets != zero_offsets:
+            settings['extruder_offset'] = zero_offsets
+            corrections.append({'field': 'extruder_offset', 'before': offsets, 'after': zero_offsets,
+                                'reason': 'Normalized physical machine nozzle offset to 0x0 for exact 1:1 CAD visualization alignment.'})
+    else:
+        palette_len = len(settings.get('filament_colour', settings.get('filament_color', [])))
+        nozzle_len = len(settings.get('nozzle_diameter', []))
+        count = palette_len or nozzle_len or 1
+        settings['extruder_offset'] = ['0x0'] * count
 
 
 def read_project_settings(archive, names):
@@ -200,6 +226,10 @@ def native_fallback(destination, settings, defaults, preset, colors, resources=N
                     'printable_area': ['0x0', f'{bed[0]:g}x0', f'{bed[0]:g}x{bed[1]:g}', f'0x{bed[1]:g}'],
                     'printer_settings_id': f'Growth Studio {native_machine_name}'})
     machine.pop('setting_id', None)
+    if 'extruder_offset' in machine:
+        offsets = machine['extruder_offset']
+        count = len(offsets) if isinstance(offsets, list) else 1
+        machine['extruder_offset'] = ['0x0'] * count
     # A geometry-only project has no saved prime-tower position. Bambu's CLI
     # default x=15 lies outside H2C's second extruder area (minimum x=25).
     # Supply a default within the common nozzle area without moving models or
@@ -504,6 +534,12 @@ def prepare_3mf(source, destination, report, options, defaults):
                         hashes[entry.filename] = {'sha256': digest.hexdigest(), 'bytes': entry.file_size, 'unchanged': True}
             if out_settings not in names:
                 prepared.writestr(out_settings, json.dumps(settings, ensure_ascii=False, indent=2).encode())
+        printer_to_source = AXIS.copy()
+        if embedded and 'extruder_offset' in before:
+            x_off, y_off = parse_extruder_offset(before['extruder_offset'])
+            if x_off != 0.0 or y_off != 0.0:
+                printer_to_source[12] = x_off
+                printer_to_source[14] = -y_off
         report.update({'sourceType': '3mf', 'settingsEntry': settings_name, 'rawSettings': settings,
                        'fieldSources': sources, 'corrections': corrections, 'savedSupportFields': support_before,
                        'objectSettings': object_settings,
@@ -514,7 +550,7 @@ def prepare_3mf(source, destination, report, options, defaults):
                        'geometrySimplified': False, 'preservedMembers': hashes,
                        'changedZipEntries': ([out_settings] if settings != before or out_settings not in names else []) + removed_members,
                        'sourceCoordinateSystem': 'printer-z-up', 'sourceUnits': '3MF declared units, preserved',
-                       'stagingTransform': IDENTITY, 'printerToSource': AXIS,
+                       'stagingTransform': IDENTITY, 'printerToSource': printer_to_source,
                        'fallbackEngineProfiles': engine,
                        'toolColors': settings.get('filament_colour', settings.get('filament_color', options.get('toolColors', [])))})
 

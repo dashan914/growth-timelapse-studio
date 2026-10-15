@@ -17,9 +17,9 @@ import urllib.request
 import zipfile
 
 REPOSITORY = "dashan914/growth-timelapse-studio"
-CURRENT_TAG = "v1.2.0-beta.5"
+CURRENT_TAG = "v1.2.0-beta.7"
 APPLICATION = "growth-timelapse-studio"
-OLD_TAGS = frozenset({"v1.1.0-beta.1", "v1.2.0-beta.1", "v1.2.0-beta.2", "v1.2.0-beta.3", "v1.2.0-beta.4"})
+OLD_TAGS = frozenset({"v1.1.0-beta.1", "v1.2.0-beta.1", "v1.2.0-beta.2", "v1.2.0-beta.3", "v1.2.0-beta.4", "v1.2.0-beta.5", "v1.2.0-beta.6"})
 CURRENT_ZIP = f"{APPLICATION}-{CURRENT_TAG[1:]}-runtime.zip"
 REQUIRED_ASSETS = (CURRENT_ZIP, "SHA256SUMS.txt", "install-manifest.json", "INSTALL_AGENT.md")
 CURRENT_PAGE = f"https://github.com/{REPOSITORY}/releases/tag/{CURRENT_TAG}"

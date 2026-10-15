@@ -3,7 +3,7 @@
 复制下面这句话给能操作本机的 AI：
 
 ```text
-请读取 https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.6/INSTALL_AGENT.md，安装 1.2.0-beta.6。有旧版时按“老用户升级”使用原安装目录；没有旧版时，Windows 安装前先询问我安装到哪个盘。自动检查环境、补齐缺失依赖并安装启动，确认模型导入和预览正常，告诉我下次如何打开。
+请读取 https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.7/INSTALL_AGENT.md，安装 1.2.0-beta.7。有旧版时按“老用户升级”使用原安装目录；没有旧版时，Windows 安装前先询问我安装到哪个盘。自动检查环境、补齐缺失依赖并安装启动，确认模型导入和预览正常，告诉我下次如何打开。
 ```
 
 ## 安装 AI 执行步骤
@@ -13,10 +13,10 @@
 3. 检查必需依赖是否存在：Node.js 24+、Python 3、FFmpeg，以及 Bambu Studio / OrcaSlicer / Flash Studio 中的一种切片器。缺失项由第 5 步安装器补齐。Blender、OpenCV、NumPy 为可选项，不自动安装。
 4. 下载官方固定版本文件并核验：
 
-   - [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.6/install-manifest.json)
-   - [运行包 ZIP](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.6/growth-timelapse-studio-1.2.0-beta.6-runtime.zip)
+   - [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.7/install-manifest.json)
+   - [运行包 ZIP](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.7/growth-timelapse-studio-1.2.0-beta.7-runtime.zip)
 
-   外部清单须满足 `release.published=true`、`release.version=1.2.0-beta.6`、`release.tag=v1.2.0-beta.6`、仓库为 `dashan914/growth-timelapse-studio`，下载 URL 固定到同一 tag。ZIP 的 SHA256 必须与 `release.sha256` 一致。仓库或 ZIP 内的 `published:false` 模板不能替代外部清单；文件不可用或校验失败时停止。
+   外部清单须满足 `release.published=true`、`release.version=1.2.0-beta.7`、`release.tag=v1.2.0-beta.7`、仓库为 `dashan914/growth-timelapse-studio`，下载 URL 固定到同一 tag。ZIP 的 SHA256 必须与 `release.sha256` 一致。仓库或 ZIP 内的 `published:false` 模板不能替代外部清单；文件不可用或校验失败时停止。
 
 5. 解压核验后的 ZIP，进入其中的 `growth-timelapse-studio` 文件夹，执行对应安装器，并传入已下载的外部清单完整路径。Windows 还须传入用户选择的完整安装目录。
 

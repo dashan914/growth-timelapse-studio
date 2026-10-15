@@ -9,7 +9,7 @@ import JavaScriptObfuscator from 'javascript-obfuscator';
 const execute = promisify(execFile);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeScripts = new Set(['install.mjs', 'install.sh', 'install.ps1', 'launch.mjs', 'check-runtime.mjs', 'windows-runtime.mjs', 'capture-cli.mjs', 'prepare-slice-project.py', 'prepare-support-project.py', 'render-cycles.py', 'calibration-uprights.py', 'zip-png-sequence.py']);
-const guardedModules = new Set(['server.mjs', 'beta-activation.mjs', 'software-purchase.mjs', 'free-watermark.mjs', 'realistic-render.mjs', 'src/beta-access.js']);
+const guardedModules = new Set(['server.mjs', 'beta-activation.mjs', 'software-purchase.mjs', 'free-watermark.mjs', 'realistic-render.mjs', 'version-check.mjs', 'src/beta-access.js']);
 const digest = value => createHash('sha256').update(value).digest('hex');
 
 function selected(relative) {

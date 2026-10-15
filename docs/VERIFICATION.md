@@ -1,5 +1,14 @@
 # 验证记录
 
+## 2026-10-15：1.2.0-beta.7 喷头硬件偏移对齐修复与内置更新检测提示
+
+本轮目标为独立的 [v1.2.0-beta.7](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.7)，运行包文件名为 `growth-timelapse-studio-1.2.0-beta.7-runtime.zip`。
+
+本轮修复与新增：
+- 修复拓竹 P1S/P1P/X1/X1C 机型硬件喷头偏移（`extruder_offset: 0x2`）导致切片路径相对 3MF CAD 模型整体向前偏移 2mm 的问题。切片准备阶段自动将机器偏移规整为 0x0，外置切片后 3MF 自动在变换矩阵中反向补偿，误差由 2.07mm 降至 0.003mm（3 微米），彻底消除切面错位台阶、模型外凸与前壁填充干涉阴影。
+- 软件内内置“更新检测与提示弹窗”：检测 GitHub 最新发行版本，发现新版时右上角显示提示徽章并弹出更新弹窗，提供一键复制 AI 升级提示词功能，支持记住并忽略当前版本更新。
+- 本轮完整软件测试 **967 项：949 通过、18 环境检查跳过、0 失败**。
+
 ## 2026-10-14：1.2.0-beta.6 运镜、自定义音效与升级包（本地验收通过，公开发行待核验）
 
 本轮目标为独立的 [v1.2.0-beta.6](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.6)，运行包文件名为 `growth-timelapse-studio-1.2.0-beta.6-runtime.zip`。beta.5 的固定 tag 与附件继续保留。本节在本轮实际检查及公开发行完成后补录结果；下方历史结果不代表 beta.6 已验证或发布。

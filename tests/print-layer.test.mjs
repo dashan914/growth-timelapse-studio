@@ -203,3 +203,70 @@ test('parse progress measures source characters and indexed segments without cha
   }
   assert.equal(progress.find(event=>event.phase==='configuration').progress,null);
 });
+
+test('infillDepthMm and historicalOuterWall select deep internal infill while capping top outer perimeter', () => {
+  const gcode = `; filament_colour = #f0e8d6
+G21
+G90
+M82
+G1 X0 Y0 Z0.2
+;TYPE:Outer wall
+G1 X10 Y0 E1
+;TYPE:Inner wall
+G1 X10 Y10 E2
+;TYPE:Internal infill
+G1 X0 Y10 E3
+G1 Z0.4
+;TYPE:Outer wall
+G1 X10 Y0 E4
+;TYPE:Inner wall
+G1 X10 Y10 E5
+;TYPE:Internal infill
+G1 X0 Y10 E6
+G1 Z0.6
+;TYPE:Outer wall
+G1 X10 Y0 E7
+;TYPE:Inner wall
+G1 X10 Y10 E8
+;TYPE:Internal infill
+G1 X0 Y10 E9
+`;
+  const parsed = parsePrintLayerGCode(gcode);
+  assert.equal(parsed.layerHeights.length, 3);
+
+  // At layer 2 (0.6mm), with infillDepthMm = 0.3mm:
+  // targetZ = 0.6 - 0.3 = 0.3mm. Layers included: layer 1 (0.4mm) and layer 2 (0.6mm).
+  // With historicalOuterWall: false, includeOuterWall: true:
+  // Layer 2 (top) includes Outer wall, Inner wall, Internal infill (3 segments)
+  // Layer 1 (historical) excludes Outer wall, includes Inner wall, Internal infill (2 segments)
+  // Total: 5 segments
+  const selected = selectPrintLayerSegments(parsed, {
+    layerIndex: 2,
+    historyLayers: 1,
+    infillDepthMm: 0.3,
+    includeOuterWall: true,
+    historicalOuterWall: false,
+  });
+  assert.equal(selected.length, 5);
+  assert.ok(!selected.includes(3), 'historical outer wall must be skipped');
+  assert.ok(selected.includes(6), 'top layer outer wall must be included to cap perimeter');
+  assert.ok(selected.includes(4) && selected.includes(5), 'historical inner wall and infill must be included');
+
+  // Verify historicalInnerWall: false excludes both outer and inner walls from historical layers:
+  const infillOnly = selectPrintLayerSegments(parsed, {
+    layerIndex: 2,
+    historyLayers: 1,
+    infillDepthMm: 0.5,
+    includeOuterWall: true,
+    historicalOuterWall: false,
+    historicalInnerWall: false,
+  });
+  // Top layer: segments 6, 7, 8 (3 segments). Historical layers: only internal infill (segments 2, 5). Total = 5.
+  assert.equal(infillOnly.length, 5);
+  assert.ok(!infillOnly.includes(0) && !infillOnly.includes(3), 'historical outer walls excluded');
+  assert.ok(!infillOnly.includes(1) && !infillOnly.includes(4), 'historical inner walls excluded');
+  assert.ok(infillOnly.includes(2) && infillOnly.includes(5), 'historical infill preserved');
+  assert.ok(infillOnly.includes(6) && infillOnly.includes(7) && infillOnly.includes(8), 'top layer walls and infill preserved');
+});
+
+

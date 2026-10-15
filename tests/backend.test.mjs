@@ -170,6 +170,45 @@ test('rejects foreign origins, cross-site fetches, and DNS-rebinding Host header
   assert.equal((await fetch(`${base}/api/health`, { headers: { Origin: base } })).status, 200);
 });
 
+test('external links may open the entry document while cross-site APIs and embedded requests remain blocked', async t => {
+  const { base } = await fixture(t);
+  // fetch assigns its own Sec-Fetch-Mode. Use HTTP so navigation metadata
+  // reaches the server exactly as it would from a browser document request.
+  const request = (route, method, headers) => new Promise((resolve, reject) => {
+    const client = http.request(base + route, { method, headers }, response => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; });
+      response.once('end', () => resolve({ status: response.statusCode, headers: response.headers, body }));
+    });
+    client.once('error', reject);
+    client.end();
+  });
+  const navigation = { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+  for (const route of ['/', '/index.html', '/?from=link']) {
+    const response = await request(route, 'GET', navigation);
+    assert.equal(response.status, 200, route);
+    assert.match(response.headers['content-type'], /^text\/html/);
+    assert.equal(response.headers['x-frame-options'], 'DENY');
+  }
+  assert.equal((await request('/', 'HEAD', navigation)).status, 200);
+  for (const [route, method, headers] of [
+    ['/api/health', 'GET', navigation],
+    ['/api/exports', 'POST', navigation],
+    ['/', 'POST', navigation],
+    ['/', 'GET', { ...navigation, Origin: 'https://example.com' }],
+    ['/', 'GET', { ...navigation, Origin: 'null' }],
+    ['/', 'GET', { ...navigation, 'Sec-Fetch-Dest': 'iframe' }],
+    ['/', 'GET', { ...navigation, 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty' }],
+    ['/', 'GET', { 'Sec-Fetch-Site': 'cross-site' }],
+    ['/src/test.js', 'GET', { ...navigation, 'Sec-Fetch-Mode': 'no-cors', 'Sec-Fetch-Dest': 'script' }],
+  ]) {
+    const response = await request(route, method, headers);
+    assert.equal(response.status, 403, `${method} ${route} ${JSON.stringify(headers)}`);
+    assert.equal(JSON.parse(response.body).error.code, 'INVALID_ORIGIN');
+  }
+});
+
 test('local upright API accepts bounded canonical images and propagates detection failures without interpreting filenames', async t => {
   const image = png();
   let calls = 0;
@@ -776,4 +815,25 @@ test('a disconnected custom uploader removes its partial file and allows a fresh
   assert.equal(retried.status, 200, await retried.clone().text());
   await cancel(base, id);
   assert.deepEqual(await readdir(path.join(root, 'exports')), []);
+});
+
+test('GET /api/version/check returns version check data from service', async t => {
+  const mockService = {
+    check: async ({ force }) => ({
+      ok: true,
+      currentVersion: '1.2.0-beta.6',
+      latestVersion: '1.2.1',
+      hasUpdate: true,
+      forceChecked: Boolean(force),
+      changelog: ['全新更新检测与弹窗提示'],
+    }),
+  };
+  const { base } = await fixture(t, { versionCheckService: mockService });
+  const response = await fetch(`${base}/api/version/check?force=true`);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.ok, true);
+  assert.equal(data.hasUpdate, true);
+  assert.equal(data.latestVersion, '1.2.1');
+  assert.equal(data.forceChecked, true);
 });

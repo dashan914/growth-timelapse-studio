@@ -215,8 +215,32 @@ export async function parseSlicedThreeMF(input, { fileName='sliced.3mf', signal,
     const preview=zipSync(previewEntries,{level:3});
     cadPreviewFile=typeof File==='function'?new File([preview],cadPreviewFileName,{type:'model/3mf'}):new Blob([preview],{type:'model/3mf'});
   }
+  let printerToSource = [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1];
+  const settingsBytes = previewEntries['Metadata/project_settings.config'] || previewEntries['Metadata/Slic3r_PE.config'];
+  if (settingsBytes) {
+    try {
+      const text = utf8().decode(settingsBytes);
+      let offsetStr = null;
+      if (text.trim().startsWith('{')) {
+        const json = JSON.parse(text);
+        offsetStr = Array.isArray(json.extruder_offset) ? json.extruder_offset[0] : json.extruder_offset;
+      } else {
+        const match = text.match(/^\s*(?:;\s*)?extruder_offset\s*=\s*(.*?)\s*$/m);
+        if (match) offsetStr = match[1];
+      }
+      if (offsetStr) {
+        const parts = String(offsetStr).match(/^\s*(-?\d+(?:\.\d+)?)\s*[xX,]\s*(-?\d+(?:\.\d+)?)\s*$/);
+        if (parts) {
+          const xOff = Number(parts[1]), yOff = Number(parts[2]);
+          if (Number.isFinite(xOff) && Number.isFinite(yOff) && (xOff !== 0 || yOff !== 0)) {
+            printerToSource = [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, xOff, 0, -yOff, 1];
+          }
+        }
+      }
+    } catch {}
+  }
   emit(onProgress,'complete',1,1,'result',{segmentCount:parsed.segmentCount});
-  return {parsed,gcodeFile,gcodeFileName:gcodeName,cadPreviewFile,cadPreviewFileName,cadPreviewMembers:hasCad?cadPreviewMembers:[],hasCad,pathOnly:!hasCad,archiveEntry:selected.name,sourceHash,gcodeHash,sourceBytes:bytes.length,gcodeBytesLength:gcodeBytes.length,expandedBytes:inspected.expanded,modelEntries,plateCount:1,toolColors:[...parsed.toolColors],usedTools:[...parsed.usedTools],reSliced:false,pathSource:'original-embedded-text-gcode',zipCRCValidated:true,
+  return {parsed,gcodeFile,gcodeFileName:gcodeName,cadPreviewFile,cadPreviewFileName,cadPreviewMembers:hasCad?cadPreviewMembers:[],hasCad,pathOnly:!hasCad,archiveEntry:selected.name,sourceHash,gcodeHash,sourceBytes:bytes.length,gcodeBytesLength:gcodeBytes.length,expandedBytes:inspected.expanded,modelEntries,plateCount:1,toolColors:[...parsed.toolColors],usedTools:[...parsed.usedTools],reSliced:false,pathSource:'original-embedded-text-gcode',zipCRCValidated:true,printerToSource,
     colorConfirmationRequired:parsed.usedTools.some(tool=>!/^#[\da-f]{6}$/i.test(parsed.toolColors[tool]||''))};
 }
 

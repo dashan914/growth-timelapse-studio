@@ -16,6 +16,8 @@ import * as THREE from 'three';
 import { createSceneRenderPackage } from '../src/scene-package.js';
 import { createRealisticRenderService } from '../realistic-render.mjs';
 import { createExportUnlockController } from '../src/beta-access.js';
+import { cameraMotionScale } from '../src/camera-motion.js';
+import { timelineState } from '../src/timeline.js';
 
 const execFileAsync = promisify(execFile);
 const FFMPEG = findFFmpegPath();
@@ -147,11 +149,48 @@ test('brand asset is a PNG and watermark rejects invalid output dimensions', asy
   }
 });
 
-test('the served workbench and permission controller start without preview branding for both free and activated users', async t => {
+test('preview decoration follows output framing and push without becoming canvas content', async () => {
+  const source=await readFile(new URL('../src/app.js',import.meta.url),'utf8');
+  const actualFunction=name=>{
+    const start=source.indexOf(`function ${name}(`);
+    assert.ok(start>=0);
+    return source.slice(start,source.indexOf('\n}',start)+2);
+  };
+  const nodes=new Map(),get=id=>{
+    if(!nodes.has(id))nodes.set(id,{style:{},value:'',textContent:'',setAttribute(){},replaceChildren(){},append(){},querySelector:()=>({setAttribute(){}})});
+    return nodes.get(id);
+  };
+  Object.assign(get('viewport'),{clientWidth:1000,clientHeight:600});
+  const config={ratio:'16:9',duration:4,hold:0,motion:'push',pushAmount:20,pushDuration:4};
+  const context=vm.createContext({$:get,settings:()=>config,time:2,playing:false,studio:null,photoPreview:null,
+    exporting:false,calibrationMode:false,cropEditing:false,transformMode:null,perspectiveMode:false,
+    cameraMotionScale,timelineState,drawCalibration(){},drawCrop(){},syncEffectAudio(){},syncPreviewPlaybackInteraction(){},syncRealisticPreview(){},syncDofStatus(){},
+    document:{createTextNode:()=>({}),createElement:()=>({})}});
+  vm.runInContext(actualFunction('updateStageBounds')+'\n'+actualFunction('showTime'),context);
+  for(const ratio of ['16:9','9:16','1:1']){
+    config.ratio=ratio;context.updateStageBounds();context.showTime();
+    assert.deepEqual(get('preview-watermark').style,get('stage').style,`${ratio}: letterboxing and zoom crop stay aligned with the output`);
+    assert.equal(get('preview-watermark').style.transform,'scale(1.1)');
+  }
+  context.cropEditing=true;context.showTime();
+  assert.equal(get('preview-watermark').style.transform,'');
+  assert.equal(get('preview-watermark').style.clipPath,'');
+  assert.doesNotMatch(actualFunction('saveSnapshot'), /preview-watermark/);
+  assert.doesNotMatch(actualFunction('exportVideo'), /preview-watermark/);
+});
+
+test('free state shows decorative preview watermark, while unlocked state hides it without adding to rendered previews', async t => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   const styles = await Promise.all(['style.css', 'beta-access.css'].map(name => readFile(new URL('../src/' + name, import.meta.url), 'utf8')));
-  assert.equal(/free-watermark(?:-preview|\.png)/i.test(html), false, 'the actual workbench HTML must contain no preview branding image, including before any license check');
-  for (const css of styles) assert.equal(/free-watermark(?:-preview|-[xy]|\.png)/i.test(css), false, 'preview branding must not survive as a conditional style or generated background');
+  const decoration=html.match(/<div id="preview-watermark"[^>]*>([\s\S]*?)<\/div>/);
+  assert.ok(decoration, 'the preview decoration belongs to the viewport, outside the stage canvas');
+  assert.match(decoration[0], /aria-hidden="true" inert/);
+  assert.equal((decoration[1].match(/山地造物 · 预览/g)||[]).length,3);
+  assert.doesNotMatch(decoration[0], /<(?:canvas|img|button)|tabindex=/);
+  assert.match(styles[0], /\.preview-watermark\{[^}]*pointer-events:none[^}]*opacity:\.1\}/);
+  assert.match(styles[0], /body\[data-export-state="unlocked"\] \.preview-watermark\{display:none\}/);
+  assert.equal(/free-watermark(?:-preview|\.png)/i.test(html), false, 'the preview must not label activated users as free users');
+  for (const css of styles) assert.equal(/free-watermark(?:-preview|-[xy]|\.png)/i.test(css), false, 'preview decoration is independent of the free-export brand image');
   for (const activated of [false, true]) {
     const f = await fixture(t, { activated });
     await writeFile(path.join(f.root, 'index.html'), html);
@@ -195,8 +234,8 @@ test('the served workbench and permission controller start without preview brand
     assert.equal(document.body.dataset.exportState, expected);
     assert.equal(nodes.get('export-unlock-button').dataset.exportState, activated ? 'unlocked' : 'locked');
     assert.equal(nodes.get('beta-gate').open, false, 'starting the preview does not force an activation dialog');
-    assert.equal([...nodes.keys()].some(id => /(?:preview.*watermark|watermark.*preview)/i.test(id)), false);
-    assert.equal(/free-watermark(?:-preview|\.png)/i.test(served), false, 'both permission states keep the same unmarked preview markup');
+    assert.equal(nodes.get('preview-watermark').hidden, activated, 'unlocked users automatically hide the preview watermark, while free users see it');
+    assert.equal(/free-watermark(?:-preview|\.png)/i.test(served), false, 'both permission states keep the same neutral preview markup');
   }
 });
 

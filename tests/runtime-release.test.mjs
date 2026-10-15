@@ -197,7 +197,7 @@ test('transformed purchase code preserves durable idempotency and the year/perma
   assert.equal(receipt.id, ids[0]); assert.equal(receipt.token, requests[0].token); assert.equal(receipt.plan, 'YEAR');
 });
 
-test('the unpacked transformed server starts and retains free preview, branded free export and unbranded paid export', async t => {
+test('the unpacked server retains the decorative preview layer, branded free export and unbranded paid export', async t => {
   const { activation, server } = await runtimeModules(), signing = signer(activation.BETA_PRODUCT_ID);
   const dataDirectory = path.join(directory, 'synthetic-server-license');
   const config = { productId: activation.BETA_PRODUCT_ID, serverUrl: 'https://synthetic-license.invalid', redemptionUrl: 'https://synthetic-license.invalid/points', publicKeys: signing.publicKeys };
@@ -220,7 +220,10 @@ test('the unpacked transformed server starts and retains free preview, branded f
     ...(body === undefined ? {} : { body: Buffer.isBuffer(body) ? body : JSON.stringify(body) }),
   });
   const page = await request('/'); assert.equal(page.status, 200);
-  assert.equal(/free-watermark(?:-preview|\.png)/.test(await page.text()), false);
+  const pageMarkup=await page.text();
+  assert.match(pageMarkup, /id="preview-watermark"[^>]*aria-hidden="true" inert/);
+  assert.match(pageMarkup, /山地造物 · 预览/);
+  assert.equal(/free-watermark(?:-preview|\.png)/.test(pageMarkup), false);
   assert.equal((await request('/src/beta-access.js')).status, 200);
   assert.equal((await request('/assets/free-watermark.png')).status, 200);
   const health = await (await request('/api/health')).json();

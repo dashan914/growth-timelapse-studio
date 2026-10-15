@@ -133,24 +133,29 @@ varying vec3 vFDMPrintPosition;
 
 float fdmFrequencyVisibility( float cyclesPerPixel ) {
   // Fade before the Nyquist boundary, rather than drawing unresolved black bands.
-  return 1.0 - smoothstep( 0.15, 0.5, cyclesPerPixel * fdmFootprintScale );
+  return 1.0 - smoothstep( 0.08, 0.28, cyclesPerPixel * fdmFootprintScale );
 }
 vec3 fdmSurfaceGradient( vec3 p, vec3 dx, vec3 dy ) {
   vec3 printNormal = normalize( cross( dx, dy ) );
-  float top = smoothstep( 0.72, 0.94, abs( printNormal.y ) );
+  float top = smoothstep( 0.88, 0.98, abs( printNormal.y ) );
   top = mix( top, 1.0, fdmTopOnly );
   float firstHeight = fdmFirstLayerHeight > 0.0 ? fdmFirstLayerHeight : fdmLayerHeight;
   float localHeight = p.y < firstHeight ? firstHeight : fdmLayerHeight;
   float layerCoordinate = p.y < firstHeight ? p.y : p.y - firstHeight;
-  float layerPhase = 6.28318530718 * layerCoordinate / localHeight;
   float sideVisibility = fdmFrequencyVisibility( ( abs( dx.y ) + abs( dy.y ) ) / localHeight );
-  float sideSlope = -6.28318530718 * fdmBeadDepth * sin( layerPhase ) * sideVisibility * ( 1.0 - top );
-  // Parallel top grooves are an APPROXIMATE surface finish, not a slicer's
-  // actual perimeter/infill path. Their direction stays in printing XZ space.
+  // Real FDM side layers: smooth cylindrical bead face with clean micro-seam at layer boundaries
+  float layerFrac = abs( fract( layerCoordinate / localHeight ) - 0.5 );
+  float sideSeam = smoothstep( 0.36, 0.49, layerFrac );
+  float sideDepthRatio = fdmBeadDepth / 0.04;
+  float sideSlope = -0.16 * sideDepthRatio * sign( fract( layerCoordinate / localHeight ) - 0.5 ) * sideSeam * sideVisibility * ( 1.0 - top );
+  // Real FDM lines: parallel beads along 45 degrees with clean flat contact
   vec3 grooveDirection = vec3( 0.70710678, 0.0, 0.70710678 );
   float groove = dot( p, grooveDirection ) / fdmLineWidth;
   float grooveVisibility = fdmFrequencyVisibility( ( abs( dot( dx, grooveDirection ) ) + abs( dot( dy, grooveDirection ) ) ) / fdmLineWidth );
-  float topSlope = -0.10 * sin( 6.28318530718 * groove ) * grooveVisibility * top;
+  // Clean flat bead with seam transition instead of raw sine wave to prevent aliasing sawteeth
+  float beadFrac = abs( fract( groove ) - 0.5 );
+  float seam = smoothstep( 0.36, 0.49, beadFrac );
+  float topSlope = -0.15 * sign( fract( groove ) - 0.5 ) * seam * grooveVisibility * top;
   return fdmDetail * ( vec3( 0.0, sideSlope, 0.0 ) + grooveDirection * topSlope );
 }
 vec3 fdmPerturbNormal( vec3 n, vec3 printGradient, vec3 printDx, vec3 printDy ) {
@@ -173,7 +178,7 @@ float fdmRoughnessVariation( vec3 p, vec3 dx, vec3 dy ) {
   vec3 frequency = vec3( 31.7, 47.3, 29.9 );
   float phase = dot( p, frequency );
   float visible = fdmFrequencyVisibility( ( abs( dot( dx, frequency ) ) + abs( dot( dy, frequency ) ) ) / 6.28318530718 );
-  return fdmDetail * fdmGrain * sin( phase ) * visible;
+  return fdmDetail * fdmGrain * 0.3 * sin( phase ) * visible;
 }
 `;
 
@@ -216,7 +221,7 @@ export function installFDMSurface(material, options = {}) {
     return profile;
   } };
   material.onBeforeCompile = function(shader, renderer) { previousCompile.call(this, shader, renderer); injectFDMSurfaceShader(shader, uniforms); };
-  material.customProgramCacheKey = function() { return `${previousKey.call(this)}|fdm-mm-surface-v2`; };
+  material.customProgramCacheKey = function() { return `${previousKey.call(this)}|fdm-mm-surface-v3`; };
   installed.set(material, handle); handle.update(); material.needsUpdate = true;
   return handle;
 }

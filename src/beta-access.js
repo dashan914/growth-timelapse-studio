@@ -45,6 +45,8 @@ export function createExportUnlockController({ document, request = globalThis.fe
     label.textContent = verified ? '导出已解锁' : '导出解锁';
     toolbar.title = verified ? '查看导出权限、授权恢复码与购买凭据；每次导出前会重新验证。' : '免费可导出水印视频；兑换码或授权恢复码解锁无水印图片与视频。';
     if (/^https?:\/\//i.test(status?.redemptionUrl || '')) $('beta-redeem').href = status.redemptionUrl;
+    const previewWatermark = $('preview-watermark');
+    if (previewWatermark) previewWatermark.hidden = verified;
   }
 
   async function requestJson(url, options = {}, abortController = new AbortController()) {

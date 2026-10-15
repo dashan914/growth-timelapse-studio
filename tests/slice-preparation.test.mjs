@@ -109,3 +109,17 @@ test('selected Flash registry uses its native profiles and identity with an expl
   const originalFlash=zipSync({'3D/3dmodel.model':strToU8(model),'Metadata/model_settings.config':strToU8(meta),'Metadata/project_settings.config':strToU8(JSON.stringify({...settings,printer_model:'Flashforge Creator 5',printer_settings_id:'Saved Flash custom'}))});
   const preserved=await stage(directory,'native-flash',originalFlash,{engineId:'flash',profileVendor:'Flashforge',slicerResources:'/unused-complete-project-resources',forceReslice:true});assert.equal(preserved.report.fallbackEngineProfiles,null);assert.equal(preserved.report.rawSettings.printer_settings_id,'Saved Flash custom');assert.equal(preserved.report.rawSettings.printer_model,'Flashforge Creator 5');
 });
+
+test('extruder_offset is normalized to 0x0 for re-slicing and compensated in printerToSource for embedded gcode',async t=>{
+  const directory=await fs.mkdtemp(path.join(tmpdir(),'extruder-offset-alignment-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));
+  const settings={printer_model:'Bambu Lab P1S',printer_settings_id:'Bambu Lab P1S 0.4 nozzle',layer_height:'0.2',extruder_offset:['0x2'],filament_colour:['#112233']};
+  const entriesReslice={'3D/3dmodel.model':strToU8(model),'Metadata/model_settings.config':strToU8(meta),'Metadata/project_settings.config':strToU8(JSON.stringify(settings))};
+  const rReslice=await stage(directory,'reslice',zipSync(entriesReslice),{forceReslice:true,slicerResources:'/missing-unused'});
+  assert.deepEqual(rReslice.report.rawSettings.extruder_offset,['0x0']);
+  assert.deepEqual(rReslice.report.printerToSource,[1,0,0,0,0,0,-1,0,0,1,0,0,0,0,0,1]);
+  assert.ok(rReslice.report.corrections.some(c=>c.field==='extruder_offset'&&c.after[0]==='0x0'));
+
+  const entriesEmbedded={'3D/3dmodel.model':strToU8(model),'Metadata/model_settings.config':strToU8(meta),'Metadata/project_settings.config':strToU8(JSON.stringify(settings)),'Metadata/plate_1.gcode':strToU8('G1 X10 Y20 Z0.2 E1\n')};
+  const rEmbedded=await stage(directory,'embedded',zipSync(entriesEmbedded),{forceReslice:false,slicerResources:'/missing-unused'});
+  assert.deepEqual(rEmbedded.report.printerToSource,[1,0,0,0,0,0,-1,0,0,1,0,0,0,0,-2,1]);
+});

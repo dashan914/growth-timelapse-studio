@@ -35,7 +35,7 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 const sceneColors = {studio:'#30333a', paper:'#eceff3', blue:'#171b24'};
 let studio;
 let scene = 'studio';
-let time = 8;
+let time = 4;
 let playing = false;
 let previewPlaybackActive = false;
 let lastTick = 0;
@@ -151,7 +151,7 @@ function say(message, error = false) {
 
 function settings() {
   const rawGrowth=Number($('growth-duration').value);
-  const growth=Math.min(600,Math.max(.1,Number.isFinite(rawGrowth)?rawGrowth:8));
+  const growth=Math.min(600,Math.max(.1,Number.isFinite(rawGrowth)?rawGrowth:4));
   const hold=Math.min(10,Math.max(0,Number($('hold').value)||0));
   return {
     growth,duration:growth+hold,hold,
@@ -385,7 +385,7 @@ function showTime() {
   time = Math.min(duration, Math.max(0, time));
   const state = timelineState(time, duration, hold, motion);
   const scale = calibrationMode || cropEditing || transformMode || perspectiveMode ? 1 : cameraMotionScale(time,config);
-  for (const id of ['stage','realistic-preview-layer','photo-growth-layer','reference-layer']) {
+  for (const id of ['stage','realistic-preview-layer','photo-growth-layer','reference-layer','preview-watermark']) {
     $(id).style.transform = scale === 1 ? '' : `scale(${scale})`;
     $(id).style.clipPath = scale === 1 ? '' : `inset(${(1-1/scale)*50}%)`;
   }
@@ -437,6 +437,7 @@ function updateStageBounds() {
   const ref=$('reference-layer');Object.assign(ref.style,{width:host.style.width,height:host.style.height,left:host.style.left,top:host.style.top});
   Object.assign($('photo-growth-layer').style,{width:host.style.width,height:host.style.height,left:host.style.left,top:host.style.top});
   Object.assign($('realistic-preview-layer').style,{width:host.style.width,height:host.style.height,left:host.style.left,top:host.style.top});
+  Object.assign($('preview-watermark').style,{width:host.style.width,height:host.style.height,left:host.style.left,top:host.style.top});
 }
 
 function realisticEligibility(config=settings()) {

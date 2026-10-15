@@ -77,6 +77,36 @@ export function installStadiumExtrusion(material) {
   return material;
 }
 
+export function installPrintLayerDepthLighting(material) {
+  const before = material.onBeforeCompile, key = material.customProgramCacheKey.bind(material);
+  material.defaultAttributeValues = { ...(material.defaultAttributeValues || {}), instanceDepth: [0] };
+  material.onBeforeCompile = (shader, renderer) => {
+    before.call(material, shader, renderer);
+    shader.vertexShader = 'attribute float instanceDepth;\nvarying float vBeadDepth;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvBeadDepth = instanceDepth;\n');
+    shader.fragmentShader = 'varying float vBeadDepth;\n' + shader.fragmentShader;
+    const lightHook = '#include <lights_fragment_end>';
+    if (shader.fragmentShader.includes(lightHook)) {
+      shader.fragmentShader = shader.fragmentShader.replace(lightHook, lightHook + `
+      float beadDepthMm = max(0.0, vBeadDepth);
+      if (beadDepthMm > 0.02) {
+        float depthNorm = clamp(beadDepthMm / 5.0, 0.0, 1.0);
+        float directFactor = pow(1.0 - depthNorm, 1.35);
+        float ambientFactor = mix(1.0, 0.28, pow(depthNorm, 0.7));
+        float upLight = max(0.0, normal.y) * 0.16 * (1.0 - depthNorm);
+        reflectedLight.directDiffuse *= directFactor;
+        reflectedLight.directSpecular *= directFactor * directFactor;
+        reflectedLight.indirectDiffuse = reflectedLight.indirectDiffuse * ambientFactor + diffuseColor.rgb * upLight;
+        reflectedLight.indirectSpecular *= directFactor;
+      }
+      `);
+    }
+  };
+  material.customProgramCacheKey = () => `${key()}|print-layer-depth-light-v1`;
+  material.needsUpdate = true;
+  return material;
+}
+
 /** Fully average at Nyquist (2 pixels/layer); retain all original normals once
  * the output resolves 5 pixels/layer, including the bead profile's harmonics. */
 export function supportLayerFilterWeight(layerHeight, heightPerPixel, eligible = true) {
@@ -208,8 +238,23 @@ if (supportLayerFilter > 0.0) {
 }
 
 function stadiumDepthMaterial(material) {
-  return installStadiumExtrusion(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide,
-    clippingPlanes: material.clippingPlanes, clipShadows: material.clipShadows }));
+  const depthMaterial = installStadiumExtrusion(new THREE.MeshDepthMaterial({
+    depthPacking: THREE.RGBADepthPacking, side: THREE.FrontSide,
+    clippingPlanes: material.clippingPlanes, clipShadows: material.clipShadows,
+  }));
+  const before = depthMaterial.onBeforeCompile, key = depthMaterial.customProgramCacheKey.bind(depthMaterial);
+  depthMaterial.defaultAttributeValues = { ...(depthMaterial.defaultAttributeValues || {}), instanceFeature: [0] };
+  depthMaterial.onBeforeCompile = (shader, renderer) => {
+    before.call(depthMaterial, shader, renderer);
+    shader.vertexShader = 'attribute float instanceFeature;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+if (instanceFeature > 2.5 && instanceFeature < 3.5) {
+  transformed = vec3(0.0);
+  gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+}`);
+  };
+  depthMaterial.customProgramCacheKey = () => `${key()}|sparse-infill-shadow-filter-v1`;
+  return depthMaterial;
 }
 
 /** Coordinates are explicit. Source means the GrowthStudio orientation group's
@@ -287,19 +332,22 @@ export function printLayerProgressState(parsed, progress) {
  * unmodified and permit a physical renderer to reproduce the same window.
  * No path merging, simplification, polygon decimation or color quantization. */
 export function buildPrintLayerPacket(parsed, {
-  layerIndex, historyLayers = 3, includeSupport = false, printerToSource,
+  layerIndex, historyLayers = 3, infillDepthMm = 0, includeSupport = false,
+  includeOuterWall = true, historicalOuterWall = true, historicalInnerWall = true, printerToSource,
   toolColors = parsed.toolColors,
 } = {}) {
   validatePrintLayerData(parsed);
   const mapping = validatePrintLayerMapping(printerToSource);
   const paletteHex = resolvePrintLayerPalette(parsed, toolColors);
   const instance = buildPrintLayerInstances(parsed, {
-    layerIndex, historyLayers, includeSupport, printerToSource: mapping.elements,
+    layerIndex, historyLayers, infillDepthMm, includeSupport,
+    includeOuterWall, historicalOuterWall, historicalInnerWall, printerToSource: mapping.elements,
     toolColors: paletteHex, strictColors: true,
   });
   const count = instance.instanceCount;
   const positions = new Float32Array(count * 6), widths = new Float32Array(count), heights = new Float32Array(count);
   const layers = new Uint32Array(count), strokes = new Uint32Array(count), sectionRatios = new Float32Array(count);
+  const depths = new Float32Array(count);
   const crossSectionFallbacks = { bridge: 0, widthBelowHeight: 0 };
   const palette = (parsed.usedTools || [...new Set(parsed.tools)]).map(tool => ({
     tool, color: paletteHex[tool], linearRGB: new THREE.Color(paletteHex[tool]).toArray(),
@@ -307,6 +355,7 @@ export function buildPrintLayerPacket(parsed, {
   const paletteIds = new Map(palette.map((item, index) => [item.tool, index]));
   const colorIndices = new Uint16Array(count), roleCounts = {};
   const matrix = new THREE.Matrix4();
+  const currentZ = instance.heightMm ?? (layerIndex >= 0 ? parsed.layerHeights[layerIndex] : 0);
   for (let index = 0; index < count; index++) {
     const segment = instance.segments[index];
     if (segment >= parsed.segmentCount) throw new TypeError('真实切片的层段索引超出范围。');
@@ -314,6 +363,7 @@ export function buildPrintLayerPacket(parsed, {
     widths[index] = parsed.widths[segment]; heights[index] = parsed.heights[segment];
     layers[index] = parsed.layers[segment]; strokes[index] = parsed.strokes[segment];
     sectionRatios[index] = printBeadRatio(widths[index], heights[index], instance.features[index]);
+    depths[index] = Math.max(0, currentZ - parsed.layerHeights[parsed.layers[segment]]);
     if (instance.features[index] === 7) crossSectionFallbacks.bridge++;
     else if (widths[index] < heights[index]) crossSectionFallbacks.widthBelowHeight++;
     colorIndices[index] = paletteIds.get(instance.tools[index]);
@@ -335,31 +385,40 @@ export function buildPrintLayerPacket(parsed, {
     version: 1, source: 'sliced-gcode', exactLinearPaths: true,
     coordinates: 'explicit-source-affine', printerCoordinates: 'printer-mm-z-up',
     printerToSource: Float64Array.from(mapping.elements),
-    layerIndex, heightMm: instance.heightMm, historyLayers, includeSupport,
+    layerIndex, heightMm: instance.heightMm, historyLayers, infillDepthMm,
+    includeSupport, includeOuterWall, historicalOuterWall, historicalInnerWall,
     instanceCount: count, sourceSegmentCount: parsed.segmentCount,
     matrices: instance.matrices, segments: instance.segments, tools: instance.tools,
-    features: instance.features, positions, widths, heights, layers, strokes, sectionRatios,
+    features: instance.features, positions, widths, heights, layers, strokes, sectionRatios, depths,
     palette, colorIndices, roleCounts, arcToleranceMm: parsed.arcToleranceMm,
     crossSection: { shape: 'stadium-with-elliptical-fallback', semiSteps: 6, flatContact: true, approximate: true, fallbacks: crossSectionFallbacks },
   };
 }
 
 export function printLayerPacketTransferables(packet) {
-  return ['printerToSource', 'matrices', 'segments', 'tools', 'features', 'positions', 'widths', 'heights', 'layers', 'strokes', 'colorIndices', 'sectionRatios'].map(key => packet[key].buffer);
+  return ['printerToSource', 'matrices', 'segments', 'tools', 'features', 'positions', 'widths', 'heights', 'layers', 'strokes', 'colorIndices', 'sectionRatios', 'depths'].map(key => packet[key].buffer);
 }
 
 export class PrintLayerRenderer {
-  constructor(parsed, { printerToSource, toolColors, historyLayers = 3, prepareMaterial = material => material } = {}) {
+  constructor(parsed, {
+    printerToSource, toolColors, historyLayers = 3, infillDepthMm = 0,
+    includeOuterWall = true, historicalOuterWall = true, historicalInnerWall = true, prepareMaterial = material => material,
+  } = {}) {
     this.data = validatePrintLayerData(parsed);
     this.printerToSource = validatePrintLayerMapping(printerToSource);
     this.palette = resolvePrintLayerPalette(parsed, toolColors);
     if (!Number.isInteger(historyLayers) || historyLayers < 1 || historyLayers > parsed.layerHeights.length + 1) throw new RangeError('真实打印层的历史显示范围无效。');
+    if (infillDepthMm !== undefined && (!Number.isFinite(infillDepthMm) || infillDepthMm < 0)) throw new RangeError('真实打印层的填充深度必须是非负数。');
     this.historyLayers = historyLayers;
+    this.infillDepthMm = Number.isFinite(infillDepthMm) ? infillDepthMm : 0;
+    this.includeOuterWall = includeOuterWall !== false;
+    this.historicalOuterWall = historicalOuterWall !== false;
+    this.historicalInnerWall = historicalInnerWall !== false;
     this.prepareMaterial = prepareMaterial;
     this.root = new THREE.Group();
     this.root.name = '真实切片表面';
     this.root.userData = { growthPrintLayer: true, growthTransient: true };
-    this.geometry = createStadiumGeometry(6);
+    this.geometry = createStadiumGeometry(12);
     this.meshes = new Map();
     this.packet = null;
     this._key = null;
@@ -369,13 +428,19 @@ export class PrintLayerRenderer {
   update(progress, options = {}) {
     const state = printLayerProgressState(this.data, progress);
     const includeSupport = options.includeSupport === true;
+    const includeOuterWall = options.includeOuterWall ?? this.includeOuterWall;
+    const historicalOuterWall = options.historicalOuterWall ?? this.historicalOuterWall;
+    const historicalInnerWall = options.historicalInnerWall ?? this.historicalInnerWall;
+    const infillDepthMm = options.infillDepthMm ?? this.infillDepthMm;
+    const historyLayers = options.historyLayers ?? this.historyLayers;
     const colors = resolvePrintLayerPalette(this.data, { ...this.palette, ...(options.toolColors || {}) });
     const preserve = options.preserveMaterials !== false;
     const colorKey = colors.map((color, tool) => `${tool}:${color}`).join('|');
-    const key = `${state.layerIndex}/${this.historyLayers}/${includeSupport}/${colorKey}`;
+    const key = `${state.layerIndex}/${historyLayers}/${infillDepthMm}/${historicalOuterWall}/${historicalInnerWall}/${includeSupport}/${includeOuterWall}/${colorKey}`;
     if (key !== this._key) {
       const packet = buildPrintLayerPacket(this.data, {
-        layerIndex: state.layerIndex, historyLayers: this.historyLayers, includeSupport,
+        layerIndex: state.layerIndex, historyLayers, infillDepthMm,
+        includeSupport, includeOuterWall, historicalOuterWall, historicalInnerWall,
         printerToSource: this.printerToSource, toolColors: colors,
       });
       const byTool = new Map();
@@ -390,10 +455,12 @@ export class PrintLayerRenderer {
         let mesh = this.meshes.get(tool);
         if (!mesh || mesh.instanceMatrix.count < indices.length) {
           if (mesh) { mesh.removeFromParent(); mesh.dispose(); mesh.geometry.dispose(); mesh.material.dispose(); mesh.customDepthMaterial?.dispose(); }
-          const material = installSupportLayerFilter(installStadiumExtrusion(this.prepareMaterial(new THREE.MeshStandardMaterial({ color: colors[tool], roughness: 0.64, metalness: 0, side: THREE.DoubleSide }))));
+          const material = installPrintLayerDepthLighting(installSupportLayerFilter(installStadiumExtrusion(this.prepareMaterial(new THREE.MeshStandardMaterial({ color: colors[tool], roughness: 0.64, metalness: 0, side: THREE.DoubleSide })))));
           material.userData.printToolIndex = tool;
           const geometry = this.geometry.clone();
           geometry.setAttribute('instanceBeadRatio', new THREE.InstancedBufferAttribute(new Float32Array(indices.length), 1));
+          geometry.setAttribute('instanceFeature', new THREE.InstancedBufferAttribute(new Float32Array(indices.length), 1));
+          geometry.setAttribute('instanceDepth', new THREE.InstancedBufferAttribute(new Float32Array(indices.length), 1));
           mesh = new THREE.InstancedMesh(geometry, material, indices.length);
           mesh.customDepthMaterial = stadiumDepthMaterial(material);
           mesh.name = `真实墙与填充 · 耗材 ${tool + 1}`;
@@ -407,8 +474,12 @@ export class PrintLayerRenderer {
         for (let index = 0; index < indices.length; index++) {
           mesh.setMatrixAt(index, matrix.fromArray(packet.matrices, indices[index] * 16));
           mesh.geometry.attributes.instanceBeadRatio.array[index] = packet.sectionRatios[indices[index]];
+          mesh.geometry.attributes.instanceFeature.array[index] = packet.features[indices[index]];
+          mesh.geometry.attributes.instanceDepth.array[index] = packet.depths ? packet.depths[indices[index]] : 0;
         }
         mesh.geometry.attributes.instanceBeadRatio.needsUpdate = true;
+        mesh.geometry.attributes.instanceFeature.needsUpdate = true;
+        mesh.geometry.attributes.instanceDepth.needsUpdate = true;
         mesh.instanceMatrix.needsUpdate = true;
         mesh.count = indices.length; mesh.visible = true;
       }
@@ -436,9 +507,13 @@ export class PrintLayerRenderer {
     return buildPrintLayerPacket(this.data, {
       layerIndex: options.layerIndex ?? state.layerIndex,
       historyLayers: options.historyLayers ?? this.historyLayers,
+      infillDepthMm: options.infillDepthMm ?? this.infillDepthMm,
       includeSupport: options.includeSupport === true,
+      includeOuterWall: options.includeOuterWall ?? this.includeOuterWall,
+      historicalOuterWall: options.historicalOuterWall ?? this.historicalOuterWall,
+      historicalInnerWall: options.historicalInnerWall ?? this.historicalInnerWall,
       printerToSource: this.printerToSource,
-      toolColors: { ...this.palette, ...(options.toolColors || {}) },
+      toolColors: resolvePrintLayerPalette(this.data, { ...this.palette, ...(options.toolColors || {}) }),
     });
   }
 

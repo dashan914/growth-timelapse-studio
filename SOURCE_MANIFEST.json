@@ -1,6 +1,6 @@
 {
   "name": "growth-timelapse-studio",
-  "version": "1.2.0-beta.6",
+  "version": "1.2.0-beta.7",
   "kind": "source",
   "files": [
     {
@@ -11,7 +11,7 @@
     {
       "path": "INSTALL_AGENT.md",
       "bytes": 9673,
-      "sha256": "ab8098b03abe1427e793915a0bc87a780d0d4c85c9ecb3f06920693f0ddc5bd9"
+      "sha256": "b2c5d3a9b591aaac00b5965efc4594b97399d524375681bd50e24cfa30720c26"
     },
     {
       "path": "LICENSE",
@@ -21,7 +21,7 @@
     {
       "path": "README.md",
       "bytes": 9271,
-      "sha256": "046ef946be034af8066de568c4d2e8aee6944950426fcd71b9a1a394dbb6f2d1"
+      "sha256": "31a8c1796d47b16f3c807248883959bb655e19c1f084eab9f29d4fd670dc4127"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -86,12 +86,12 @@
     {
       "path": "beta-activation.mjs",
       "bytes": 8312,
-      "sha256": "1532d8a580d8dca61572d40fd707a84268d912e01fb253514289867d0befd4e5"
+      "sha256": "6336a686f24c21583e8fe32ca056ed4a88badfe27d0df71a911935fa5330bcac"
     },
     {
       "path": "beta-config.json",
       "bytes": 326,
-      "sha256": "087a87cd9994027aa46ecab07460ee3e8b5e5909bb08081efcdcee6e1fb52486"
+      "sha256": "e2f9f5e48bb863aa7c305fbdafc3bdaec3d4324cf7a64cab900df864fdec5ab2"
     },
     {
       "path": "docs/BAMBU_PRINTER_COMPATIBILITY.md",
@@ -110,28 +110,28 @@
     },
     {
       "path": "docs/QUICK_START.md",
-      "bytes": 6805,
-      "sha256": "d732568839189c4a77f55e85a717baa6a91c7bc657266037f6138f653b6abb44"
+      "bytes": 6826,
+      "sha256": "bb3ab84d5731c536228e3829178754e8c3c1896f5c3c8bfdcbe607d34fa6f38b"
     },
     {
       "path": "docs/RELEASE.md",
-      "bytes": 5170,
-      "sha256": "a2de27f0b65773c1ed2f68470c772859b68cde74618907bddde9507905d2584d"
+      "bytes": 4070,
+      "sha256": "878ec5ec1cb8839a2c5fccb889b03d632ffb04d93f9a0da6eec0e26be56adbfc"
     },
     {
       "path": "docs/SOFTWARE_PURCHASE.md",
-      "bytes": 10836,
-      "sha256": "08ca6e6d32077fcab8499f49f3b894039de0f4222080dcec735a310d6f7b9651"
+      "bytes": 10936,
+      "sha256": "04f34a3c1562ea7025b96c914ead35d0a414d1e5db14f68e72bb4bb2137260c9"
     },
     {
       "path": "docs/UI_GUIDE.md",
-      "bytes": 8350,
-      "sha256": "95621bd0a2896c6b390576d6ebba6b54e8da6588dafc2dc22287806e69fe2096"
+      "bytes": 8222,
+      "sha256": "0ff71b53a0de418d353556f785809cfe90247bb5016017d42da181ce3a57dae8"
     },
     {
       "path": "docs/VERIFICATION.md",
-      "bytes": 19367,
-      "sha256": "eca784ea64b181af42fdbcbb9e3946a29f4c044f1ab5e98fb2ee3834d93391c4"
+      "bytes": 20409,
+      "sha256": "1d07a8e494919df6631ead1252ea650fb46206998fb7465f36e9c83a149cb02d"
     },
     {
       "path": "docs/WINDOWS_SETUP.md",
@@ -330,23 +330,23 @@
     },
     {
       "path": "index.html",
-      "bytes": 36384,
-      "sha256": "590065bf88c4a09f1b2c2060434b184ae98f74402776ad1391b0d4c9603ab5ca"
+      "bytes": 39395,
+      "sha256": "a587deb2328cd305e45eb5fadac6c68b4a8acd900bb51822f1a5a8e55a1665c5"
     },
     {
       "path": "install-manifest.json",
       "bytes": 2324,
-      "sha256": "0bf555a622d86b7cb256749fdeed387f00edf73a6f8f385d16a0cdb8f958cd3f"
+      "sha256": "868999013cbbb26508ff5ef105f51c506aa3dd15b1998fc117d68fa33478cc11"
     },
     {
       "path": "package-lock.json",
       "bytes": 58360,
-      "sha256": "e43c414904f8a5d5a8b536633965cae8e9d21a9a5e3669e5595980e7af74957e"
+      "sha256": "9f1d62f07cc8233663670091d4820f25a83ba1efe1f119817e24e04e5e2ee3c4"
     },
     {
       "path": "package.json",
       "bytes": 749,
-      "sha256": "196e0ece04838d4328144372717b1918be38e326729384b76ee17b0c5c674e46"
+      "sha256": "c0fae1a7005e814293717d0c1929f9a88e164b1fb02b0ec679b50acac4806862"
     },
     {
       "path": "photo-calibration.mjs",
@@ -370,8 +370,8 @@
     },
     {
       "path": "scripts/build-runtime-release.mjs",
-      "bytes": 6878,
-      "sha256": "0d9bd85587f2043763bc16c498041f8fac0fc00e0b91f2e7748324df65e1fb54"
+      "bytes": 6899,
+      "sha256": "cc739f99301a40df29e466e901d76e9b6947b59924a504adc9bb78e22c91c2ba"
     },
     {
       "path": "scripts/calibration-uprights.py",
@@ -395,8 +395,8 @@
     },
     {
       "path": "scripts/cleanup-old-release-assets.py",
-      "bytes": 19236,
-      "sha256": "531911c3707685bf7f52d5b8916331c3f765551d5629adfedb84fb1d7eece899"
+      "bytes": 19270,
+      "sha256": "e66d1900b67cd2c6f9aa51c4b8de3c7850c29ddd1711ffd66bcefa98e7a24157"
     },
     {
       "path": "scripts/finalize-install-manifest.mjs",
@@ -405,8 +405,8 @@
     },
     {
       "path": "scripts/install.mjs",
-      "bytes": 25067,
-      "sha256": "8fa1107df27fca266901d4b1b238f8a412e9035554146189340fe57c498a57b3"
+      "bytes": 25088,
+      "sha256": "44f7e40bc79b72cb411260ad458b8b442f654b93a528b785d9ff6be9bd11de61"
     },
     {
       "path": "scripts/install.ps1",
@@ -425,13 +425,13 @@
     },
     {
       "path": "scripts/package-release.py",
-      "bytes": 4925,
-      "sha256": "b6e0e8e9ce7beaec56ea0db838bcd7e89d4096f288e578b040127e031c551bfb"
+      "bytes": 4946,
+      "sha256": "62b0ee06af696101419b0cc7a18aeba2640008866fb763d35d8841a811276bf9"
     },
     {
       "path": "scripts/prepare-slice-project.py",
-      "bytes": 36752,
-      "sha256": "f7f6c3bce36eb1532f2e5fd33e8a279af3da5981349b642f4c281373e78c5c0b"
+      "bytes": 38579,
+      "sha256": "cd57c2bdb22d3c5e719105e9a9a0d2e63018b340e91ec3ab3463ba2663a8ef13"
     },
     {
       "path": "scripts/prepare-support-project.py",
@@ -470,8 +470,8 @@
     },
     {
       "path": "server.mjs",
-      "bytes": 49218,
-      "sha256": "21efef7bc51ed79bd29dc7d01ae3caa3c0f37a4013a0795a07b464f56e1772e5"
+      "bytes": 50151,
+      "sha256": "b995cbacf2dd2b17935a580cd6793cc58d131aa95f701822f5a277a9fc04e49b"
     },
     {
       "path": "slice-jobs.mjs",
@@ -490,8 +490,8 @@
     },
     {
       "path": "src/app.js",
-      "bytes": 133805,
-      "sha256": "e7ac26b65f9c53e98ac8e77dd0f98aaa3396c9eaaede5ebbe0ab2f85562e12a0"
+      "bytes": 133962,
+      "sha256": "71bdc812f520a69e7b17f38a7d10d71cb2040a90d7ed85c5b80dd7e7bec90b36"
     },
     {
       "path": "src/background-appearance.js",
@@ -510,13 +510,13 @@
     },
     {
       "path": "src/beta-access.css",
-      "bytes": 5264,
-      "sha256": "c304712c08050238e7a132c44961f2a1f6954e2b0dadd6400c88a995c15c06cd"
+      "bytes": 5340,
+      "sha256": "20fb30a75c95de08746f82b3f9aacd08c6818622a404a5046cadef5a9cf435d6"
     },
     {
       "path": "src/beta-access.js",
-      "bytes": 21832,
-      "sha256": "0886899ccca769cf765c96b3b0858ff5fc2e57862e5c7df82174b80640345a89"
+      "bytes": 21947,
+      "sha256": "4245dc82c3483b2774d63476c1bf99c5d40b8bc54cf2fbc4cb1631d26fda1fa1"
     },
     {
       "path": "src/cad-display-controller.js",
@@ -546,7 +546,7 @@
     {
       "path": "src/camera-motion.js",
       "bytes": 1403,
-      "sha256": "2abff8cd6156da1331c63172487c154f6eba2130f9f4d022bb58004da6ae1ce2"
+      "sha256": "2e7d80444f65fcf9991c9ca97755cb49ee1f6983c2bf95e27dc1fc5080a71b9f"
     },
     {
       "path": "src/color-grading.js",
@@ -570,8 +570,8 @@
     },
     {
       "path": "src/fdm-surface.js",
-      "bytes": 13182,
-      "sha256": "904ccd2eeacc9a0f53093c730ed50f97fb8f0c8b52df8b1a1af34ad246369bd0"
+      "bytes": 13558,
+      "sha256": "f19874e905ddf553fe3ba5bb74ead49264864831a4746891b606f5949a63ff71"
     },
     {
       "path": "src/gcode.js",
@@ -705,8 +705,8 @@
     },
     {
       "path": "src/print-layer-renderer.js",
-      "bytes": 39363,
-      "sha256": "a9d705e26b87c034ef433cbd09bdad97149f58ec511ed02458b6cd3f6a4ae71f"
+      "bytes": 44404,
+      "sha256": "9bbad481b3e3e3c0ae74fcd4fbbd1e78260be3d2ad4eb2967f3307f48882806f"
     },
     {
       "path": "src/print-layer-texture.js",
@@ -720,13 +720,13 @@
     },
     {
       "path": "src/print-layer.js",
-      "bytes": 32250,
-      "sha256": "505debf0802398acc9c43fcd30d798f268e54dd8d7cad3174983536a24cc3821"
+      "bytes": 33593,
+      "sha256": "8149a50b0592dfa1a1eb58b3cf9042566fcb6d6b2a5408a0e45e4195ef2c9700"
     },
     {
       "path": "src/print-path-material.js",
-      "bytes": 46620,
-      "sha256": "3e96571745d7119f9d8b2a7d158109cb0d6ba15a87e78224acb2876ed293e92c"
+      "bytes": 46689,
+      "sha256": "9187f9c85de402ec85facb61f4839cf3523fa5551651e546e202dab112a1c7dd"
     },
     {
       "path": "src/print-surface-loader.js",
@@ -815,8 +815,8 @@
     },
     {
       "path": "src/sliced-3mf.js",
-      "bytes": 18000,
-      "sha256": "28415042b236c9b57c37cef06c310aee04c6ce4902799de2e299494742bf4f32"
+      "bytes": 19102,
+      "sha256": "3f57b3ec090a52e0e53f4f873a1528b00353002e9ac7ddae4a3c6ba8efa32805"
     },
     {
       "path": "src/sound-effects.js",
@@ -840,13 +840,13 @@
     },
     {
       "path": "src/studio.js",
-      "bytes": 188709,
-      "sha256": "8a05daff2bd2d9b9202ee325aef4fb4726cd9b0fada89170a1c6ee8ea93518d4"
+      "bytes": 190799,
+      "sha256": "03f7fae509b0c9dee53d4415d3a8c582d8c7f02096d2f74d7b400775ca868599"
     },
     {
       "path": "src/style.css",
-      "bytes": 39694,
-      "sha256": "23ea8cab6078d23796829a0f5d70915756849a459947adf4f4a8e7a6076516f5"
+      "bytes": 44167,
+      "sha256": "bd42ea58e096dbc6f822022db8d332403806971fb36d56e6ad4e69247976d929"
     },
     {
       "path": "src/styled-select.js",
@@ -867,6 +867,11 @@
       "path": "src/timeline.js",
       "bytes": 1769,
       "sha256": "593775504069f389ecd5c20b7e22095d99e69e5708e344cca71611104f4a6b2d"
+    },
+    {
+      "path": "src/update-check.js",
+      "bytes": 5890,
+      "sha256": "7f51a7d3846d1715e2e329cace78330e0e3fc7c5b26cd13737d88b735f7326da"
     },
     {
       "path": "start.cmd",
@@ -925,8 +930,8 @@
     },
     {
       "path": "tests/backend.test.mjs",
-      "bytes": 52398,
-      "sha256": "427771797c44e2835ffd4d5791b1387badaff05843fe5194b168878df233912a"
+      "bytes": 55219,
+      "sha256": "9292acfb58db57e4176d765f39a5128856a92e919fc699e69d9df518cf393c1d"
     },
     {
       "path": "tests/background-appearance.test.mjs",
@@ -1030,8 +1035,8 @@
     },
     {
       "path": "tests/export-unlock-ui.test.mjs",
-      "bytes": 27492,
-      "sha256": "83d4b25a2c982d65c53aa38129f2ea1e0532d55e0020fbdce660899f670c0803"
+      "bytes": 27485,
+      "sha256": "5992fc34729086bfb393da39ccb60e978cc7a0dbcfaf50ab45fce05cda759a4b"
     },
     {
       "path": "tests/fdm-surface.test.mjs",
@@ -1110,8 +1115,8 @@
     },
     {
       "path": "tests/free-watermark.test.mjs",
-      "bytes": 23294,
-      "sha256": "99e388aff0b49dcea49e948f24d495edc9696d0199195479573310a5db32f193"
+      "bytes": 25932,
+      "sha256": "bbf959d673dfa62d78ad27d37fb043eabcfa3eafce43328e0fa14e0e1cc65870"
     },
     {
       "path": "tests/gcode.test.mjs",
@@ -1250,8 +1255,8 @@
     },
     {
       "path": "tests/print-layer-renderer.test.mjs",
-      "bytes": 26337,
-      "sha256": "a04e30f0f59b488c071b65fdf33eddc6f6eb8f766ab8eb693111b15c02e5b019"
+      "bytes": 28172,
+      "sha256": "c7ebd424311dccb9ade2006bec7de5d50d8a6dd4aa646899b8d9e1fe094ba8b5"
     },
     {
       "path": "tests/print-layer-texture.test.mjs",
@@ -1260,8 +1265,8 @@
     },
     {
       "path": "tests/print-layer.test.mjs",
-      "bytes": 12272,
-      "sha256": "7d8a98a83f7ff999da8552389e91508e7bdb82482dd26c753b10415295d3b5f0"
+      "bytes": 14669,
+      "sha256": "dd97abe17c8c546f8cdd4b04cdbdc244b5c50a689187e27de5f35ac457dd87f8"
     },
     {
       "path": "tests/print-path-material.test.mjs",
@@ -1305,8 +1310,8 @@
     },
     {
       "path": "tests/runtime-release.test.mjs",
-      "bytes": 19458,
-      "sha256": "a95f7de64d663cbbfbe0adb5349122d67433273ca5bbdb74e53a7d640a17c96b"
+      "bytes": 19619,
+      "sha256": "5361082fa6c0979260eb6292d6952e23d2a8d08542eb125cdfe4714099c56c6d"
     },
     {
       "path": "tests/scene-package.test.mjs",
@@ -1340,8 +1345,8 @@
     },
     {
       "path": "tests/slice-preparation.test.mjs",
-      "bytes": 15545,
-      "sha256": "61678ca4c7e2e5660f1104e3488bbaeee33aa15bbe99a3040551755db51728b6"
+      "bytes": 17009,
+      "sha256": "51151edfc648f6fcee2b3efdbfd5526321d4c8cb4efcd0774716dc74abf31598"
     },
     {
       "path": "tests/slice-source-worker.test.mjs",
@@ -1360,8 +1365,8 @@
     },
     {
       "path": "tests/sliced-3mf.test.mjs",
-      "bytes": 10903,
-      "sha256": "b68a2196ed6eaa0b783ce0899902d66f1411169ca6bab00fbc1d14bb268d59fe"
+      "bytes": 11299,
+      "sha256": "b6c7a887ccc5c43198d728c3ae94a2c97b9eda719441daa0cefaed6f767e8b43"
     },
     {
       "path": "tests/slicer-engine.test.mjs",
@@ -1464,6 +1469,16 @@
       "sha256": "2218ac35e3e44d6c1acd4296c3a8a68ac674b2949eeb38cdb922e1459468c6f8"
     },
     {
+      "path": "tests/update-check.test.mjs",
+      "bytes": 5245,
+      "sha256": "fb9b376a5f1fe6bbfc1d7d37097eeffe6408e99f293a5ff51194388d9641fd24"
+    },
+    {
+      "path": "tests/version-check.test.mjs",
+      "bytes": 3804,
+      "sha256": "75e5a3bcc633aea97fbc5f9da4531baf21ceda657bd4cd5e42aa264f65f32964"
+    },
+    {
       "path": "tests/windows-runtime.test.mjs",
       "bytes": 2408,
       "sha256": "78d28a2548f3bcf5fe5f09cf63e49ab3825a31581ac01a1422d3e316e5089081"
@@ -1537,6 +1552,11 @@
       "path": "vendor/test-dom/worker.mjs",
       "bytes": 411521,
       "sha256": "ea9f1de69b009d210968dd8f4d3f4ecf1095bedf80d389ec83244c1713578288"
+    },
+    {
+      "path": "version-check.mjs",
+      "bytes": 5493,
+      "sha256": "eb906c2eb3c7f993c819fcc2183c2a4478a87a0cc0d0a589ce86f062e3ac9ed3"
     },
     {
       "path": "启动生长延时.command",

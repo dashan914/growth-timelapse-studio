@@ -243,7 +243,7 @@ test('the actual student entry remains visible when purchase choices collapse, a
   options.hidden = true;
   assert.equal(options.contains(student), false);
   assert.equal(student.closest('[hidden]'), null, 'collapsing the order choices cannot hide student redemption');
-  assert.equal(student.getAttribute('href'), 'https://ai3dclass.cn/points');
+  assert.equal(student.getAttribute('href'), 'https://ai3dclass.cn');
   assert.equal(document.querySelectorAll('.scene-preset[data-preset]').length, 6);
   const accepts = document.getElementById('background-input').getAttribute('accept');
   assert.match(accepts, /image\/png/); assert.match(accepts, /video\/mp4/); assert.match(accepts, /video\/quicktime/);

@@ -521,7 +521,7 @@ export class GrowthStudio {
     key.shadow.camera.right = key.shadow.camera.top = 14;
     key.shadow.camera.near = 0.5;
     key.shadow.camera.far = 50;
-    key.shadow.bias = -0.00025;
+    key.shadow.bias = 0.00008;
     key.shadow.normalBias = 0.035;
     this.scene.add(key);
     this.scene.add(key.target);
@@ -1320,6 +1320,7 @@ export class GrowthStudio {
       triangles += (mesh.geometry.index?.count ?? mesh.geometry.attributes.position?.count ?? 0) / 3;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      mesh.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.FrontSide, clippingPlanes: [this.clipPlane], clipShadows: true });
       mesh.renderOrder = 10;
       // Keep imported materials independent of application clipping and recoloring.
       const { prepared, array } = staged.get(mesh);
@@ -1403,9 +1404,20 @@ export class GrowthStudio {
       Object.assign(shader.uniforms, this._modelGradingUniforms);
       const toneFunctions = THREE.ShaderChunk.tonemapping_pars_fragment.replace('uniform float toneMappingExposure;', 'const float toneMappingExposure = 1.0;');
       shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\n' + toneFunctions + '\nuniform float modelExposure;\n' + COLOR_GRADING_GLSL);
+      const cavityHook = 'vec3 totalDiffuse = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;';
+      if (shader.fragmentShader.includes(cavityHook)) {
+        shader.fragmentShader = shader.fragmentShader.replace(cavityHook, `
+        if (!gl_FrontFacing) {
+          reflectedLight.directDiffuse = vec3(0.0);
+          reflectedLight.directSpecular = vec3(0.0);
+          reflectedLight.indirectSpecular = vec3(0.0);
+          reflectedLight.indirectDiffuse *= 0.38;
+        }
+        ` + cavityHook);
+      }
       shader.fragmentShader = shader.fragmentShader.replace('#include <tonemapping_fragment>', 'gl_FragColor.rgb = modelGradeLinearRGB(ACESFilmicToneMapping(gl_FragColor.rgb * modelExposure));');
     };
-    material.customProgramCacheKey = () => `${previousKey()}|model-tone-grade-v2`;
+    material.customProgramCacheKey = () => `${previousKey()}|model-tone-grade-v4`;
     return material;
   }
 
@@ -1842,9 +1854,14 @@ if (photoShadowScreen > 0.5 && gl_FragColor.a > 0.000001) {
     for (const [tool, color] of Object.entries(options.toolColors || {})) if (hexColor(color)) palette[tool] = color;
     let next, nextSupports, settings;
     try {
+      const isMesh = metadata.mode === 'mesh';
       next = new PrintLayerRenderer(parsed, {
         printerToSource: options.printerToSource, toolColors: palette,
-        historyLayers: options.historyLayers ?? Math.min(3, parsed.layerHeights.length),
+        historyLayers: options.historyLayers ?? (isMesh ? 1 : Math.min(3, parsed.layerHeights.length)),
+        infillDepthMm: options.infillDepthMm ?? (isMesh ? 5.0 : 0),
+        includeOuterWall: options.includeOuterWall ?? true,
+        historicalOuterWall: options.historicalOuterWall ?? !isMesh,
+        historicalInnerWall: options.historicalInnerWall ?? !isMesh,
         prepareMaterial: material => {
           installPrintReflections(material);
           if (this._environmentTexture) {
@@ -1857,6 +1874,10 @@ if (photoShadowScreen > 0.5 && gl_FragColor.a > 0.000001) {
       next.update(this.options.progress, {
         ...this.options, ...(newImport ? { toolColors: {} } : {}), materialProfiles: metadata.materialProfiles,
         includeSupport: this.options.showSupports !== false && (newImport || !this._supportOverlay),
+        includeOuterWall: options.includeOuterWall ?? true,
+        historicalOuterWall: options.historicalOuterWall ?? !isMesh,
+        historicalInnerWall: options.historicalInnerWall ?? !isMesh,
+        infillDepthMm: options.infillDepthMm ?? (isMesh ? 5.0 : 0),
         keepCompleteLayers: metadata.mode === 'gcode',
       });
       if (metadata.mode === 'mesh' && (parsed.featureCounts?.support || parsed.featureCounts?.supportInterface)) {
@@ -1982,7 +2003,7 @@ if (photoShadowScreen > 0.5 && gl_FragColor.a > 0.000001) {
    * preserves normalization and current XYZ pose for HQ renderer conversion. */
   getPrintLayerPacket(options = {}) {
     if (!this._printLayers) throw new Error('模型没有完整的真实切片数据。');
-    const packet = this._printLayers.exportPacket({ ...options, toolColors: { ...this.options.toolColors, ...(options.toolColors || {}) } });
+    const packet = this._printLayers.exportPacket({ includeOuterWall: true, ...options, toolColors: { ...this.options.toolColors, ...(options.toolColors || {}) } });
     return { ...packet, sourceToWorld: Float64Array.from(detachedWorldMatrix(this.orientation).elements) };
   }
 
@@ -1994,7 +2015,9 @@ if (photoShadowScreen > 0.5 && gl_FragColor.a > 0.000001) {
       parsed: this._printLayers.data,
       printerToSource: Float64Array.from(this._printLayers.printerToSource.elements),
       sourceToWorld: Float64Array.from(detachedWorldMatrix(this.orientation).elements),
-      toolColors: this._printLayers.palette.map((color, tool) => hexColor(this.options.toolColors?.[tool]) || color), historyLayers: this._printLayers.historyLayers,
+      toolColors: this._printLayers.palette.map((color, tool) => hexColor(this.options.toolColors?.[tool]) || color),
+      historyLayers: this._printLayers.historyLayers,
+      infillDepthMm: this._printLayers.infillDepthMm,
       provenance: { ...this._metadata.printLayer },
     };
   }
@@ -2210,11 +2233,18 @@ if (photoShadowScreen > 0.5 && gl_FragColor.a > 0.000001) {
     }
     this._updateSupportColors();
     this._updateSupportDisplay();
-    if (this._printLayers) this._printLayers.update(this.options.progress, {
-      ...this.options, materialProfiles: this._metadata.materialProfiles,
-      includeSupport: this.options.showSupports !== false && !this._supportOverlay,
-      keepCompleteLayers: this._metadata.mode === 'gcode',
-    });
+    if (this._printLayers) {
+      const isMesh = this._metadata?.mode === 'mesh';
+      this._printLayers.update(this.options.progress, {
+        ...this.options, materialProfiles: this._metadata?.materialProfiles,
+        includeSupport: this.options.showSupports !== false && !this._supportOverlay,
+        includeOuterWall: this.options.includeOuterWall ?? true,
+        historicalOuterWall: this.options.historicalOuterWall ?? !isMesh,
+        historicalInnerWall: this.options.historicalInnerWall ?? !isMesh,
+        infillDepthMm: this.options.infillDepthMm ?? (isMesh ? 5.0 : 0),
+        keepCompleteLayers: this._metadata?.mode === 'gcode',
+      });
+    }
     this._applyEnvironmentTexture();
     this._applyCameraFraming();
     this._updateBackground();
@@ -2239,10 +2269,15 @@ if (photoShadowScreen > 0.5 && gl_FragColor.a > 0.000001) {
       this.floor.position.y = this._backgroundTexture && this._photoBedSize ? -0.001 : this._bounds.min.y - 0.015;
       if (this._backgroundTexture && BACKGROUND_PRESETS[this._photoIdentity?.slice(7)]?.kind === 'photography') this._updateFloorFootprint();
       if (this._supportOverlay) this._supportOverlay.root.material.linewidth = 0.42 * this.modelWorldScale;
+      const isMesh = this._metadata?.mode === 'mesh';
       const print = this._printLayers?.update(progress, {
-        ...this.options, materialProfiles: this._metadata.materialProfiles,
+        ...this.options, materialProfiles: this._metadata?.materialProfiles,
         includeSupport: this.options.showSupports !== false && !this._supportOverlay,
-        keepCompleteLayers: this._metadata.mode === 'gcode',
+        includeOuterWall: this.options.includeOuterWall ?? true,
+        historicalOuterWall: this.options.historicalOuterWall ?? !isMesh,
+        historicalInnerWall: this.options.historicalInnerWall ?? !isMesh,
+        infillDepthMm: this.options.infillDepthMm ?? (isMesh ? 5.0 : 0),
+        keepCompleteLayers: this._metadata?.mode === 'gcode',
       });
       if (this._indexedSupports) {
         const mapping = this.orientation.matrixWorld.clone().multiply(this._indexedSupports.printerToSource);

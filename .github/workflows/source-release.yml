@@ -4,20 +4,20 @@ on:
     branches:
       - 'codex/release-beta6'
     tags:
-      - 'v1.2.0-beta.6'
+      - 'v1.2.0-beta.7'
   create:
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: publish-v1.2.0-beta.6
+  group: publish-v1.2.0-beta.7
   cancel-in-progress: false
 jobs:
   windows-export:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'create' && github.event.ref_type == 'branch' && github.event.ref == 'codex/release-beta6') ||
-      (github.event_name == 'push' && (github.ref == 'refs/heads/codex/release-beta6' || github.ref == 'refs/tags/v1.2.0-beta.6'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/codex/release-beta6' || github.ref == 'refs/tags/v1.2.0-beta.7'))
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -63,7 +63,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'create' && github.event.ref_type == 'branch' && github.event.ref == 'codex/release-beta6') ||
-      (github.event_name == 'push' && (github.ref == 'refs/heads/codex/release-beta6' || github.ref == 'refs/tags/v1.2.0-beta.6'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/codex/release-beta6' || github.ref == 'refs/tags/v1.2.0-beta.7'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -90,7 +90,7 @@ jobs:
           const config = JSON.parse(fs.readFileSync('beta-config.json'));
           const manifest = JSON.parse(fs.readFileSync('install-manifest.json'));
           const { APP_VERSION, BETA_PRODUCT_ID } = await import('./beta-activation.mjs');
-          if (pkg.version !== '1.2.0-beta.6' || lock.version !== pkg.version || lock.packages[''].version !== pkg.version ||
+          if (pkg.version !== '1.2.0-beta.7' || lock.version !== pkg.version || lock.packages[''].version !== pkg.version ||
               APP_VERSION !== pkg.version || config.appVersion !== pkg.version || config.productId !== BETA_PRODUCT_ID ||
               manifest.release.version !== pkg.version || manifest.release.tag !== `v${pkg.version}` ||
               manifest.release.repository !== process.env.GH_REPO || manifest.release.published !== false) throw new Error('Release version mismatch');
@@ -145,18 +145,18 @@ jobs:
             echo 'Release is already public; preserving it and checking its published assets.'
           else
             cat > release-notes.md <<'NOTES'
-          增加镜头推进，可调推进幅度和用时，默认匀速；运镜与音效按钮位于镜头设置旁。
+修复拓竹 P1S/X1 等机型硬件喷头偏移（extruder_offset）导致的切片与 3D CAD 模型错位、额头台阶与表面干涉条纹，将两套坐标系中心重合精度提升至 0.003 mm。
 
-          勾选“使用默认音效”使用参考原声，也可导入自定义音效。导入自动取消默认音效；取消勾选时有自定义文件则播放该文件，无文件则静音。预览与成片使用同一音效，与时间线同步，只播放一次。
+内置新版本检测与更新提示弹窗，发现新版本时右上角红点提醒，可一键复制升级提示词给 AI 助手进行全自动无损升级。
 
-          层纹与细节强度合并到材质区。保留阴影调节、色彩匹配、镜头设置和原有导出权限。
+付费解锁用户的工作台实时预览水印自动完全消失，提供纯净视口编辑体验；未解锁用户正常显示低透明度预览水印。
 
-          购买凭据显示授权恢复码，可复制、保存；同设备升级异常可用原码联网恢复。
+更新学员权益入口文案与主页跳转（https://ai3dclass.cn）。
 
-          使用本页 runtime.zip 和同版本外部 install-manifest.json，核对 SHA256 后安装到原目录；无需删除重装，升级保留作品、订单和有效付费授权。先保存工程并停止旧版后台服务。
+使用本页 runtime.zip 和同版本外部 install-manifest.json，核对 SHA256 后安装到原目录；无需删除重装，升级保留作品、订单和有效付费授权。先保存工程并停止旧版后台服务。
 
-          [安装与升级指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.6/INSTALL_AGENT.md)
-          NOTES
+[安装与升级指南](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.7/INSTALL_AGENT.md)
+NOTES
             if [ "$state" = missing ]; then
               gh release create "$RELEASE_TAG" --verify-tag --target "$SOURCE_SHA" --draft --prerelease --title "打印延时一键生成 $RELEASE_VERSION" --notes-file release-notes.md
             fi

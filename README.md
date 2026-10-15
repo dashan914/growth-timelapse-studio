@@ -71,17 +71,17 @@
 
 ## 快速安装
 
-当前固定版本为 **v1.2.0-beta.6**，官方安装文件为 `growth-timelapse-studio-1.2.0-beta.6-runtime.zip`。下载运行包和同版本外部安装清单，核对 SHA256 后安装。
+当前固定版本为 **v1.2.0-beta.7**，官方安装文件为 `growth-timelapse-studio-1.2.0-beta.7-runtime.zip`。下载运行包和同版本外部安装清单，核对 SHA256 后安装。
 
-[固定版本下载](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.6) · [直接下载官方运行包](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.6/growth-timelapse-studio-1.2.0-beta.6-runtime.zip) · [AI 一键安装](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md)
+[固定版本下载](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.7) · [直接下载官方运行包](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.7/growth-timelapse-studio-1.2.0-beta.7-runtime.zip) · [AI 一键安装](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md)
 
 可以把安装指南交给能操作本机终端的 Agent，按固定版本检查依赖、核对 SHA256、安装并启动。Windows x64 的依赖与首次检查见 [Windows 配置说明](docs/WINDOWS_SETUP.md)。
 
 复制下面这段给能操作你电脑的 AI：
 
 ```text
-请帮我安装并启动“打印延时一键生成”1.2.0-beta.6，按照这个官方指南操作。有旧版时使用原安装目录并保留授权、订单和作品；没有旧版时，Windows 安装前先询问我安装到哪个盘。自动检查环境、安装缺失依赖，完成后打开软件并验证导入和预览：
-https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.6/INSTALL_AGENT.md
+请帮我安装并启动“打印延时一键生成”1.2.0-beta.7，按照这个官方指南操作。有旧版时使用原安装目录并保留授权、订单和作品；没有旧版时，Windows 安装前先询问我安装到哪个盘。自动检查环境、安装缺失依赖，完成后打开软件并验证导入和预览：
+https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.7/INSTALL_AGENT.md
 ```
 
 已有安装请使用 [Agent 升级指令](INSTALL_AGENT.md#老用户升级)，安装到原目录即可，无需删除重装。有效授权、订单和作品继续保留；年付到期时间不变，永久授权继续有效。当前没有软件内自动更新。

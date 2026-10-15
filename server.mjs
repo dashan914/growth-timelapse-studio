@@ -17,6 +17,7 @@ import { createBetaActivationService, APP_VERSION } from './beta-activation.mjs'
 import { freeWatermarkArguments } from './free-watermark.mjs';
 import { createSoftwarePurchaseService } from './software-purchase.mjs';
 import { normalizeExportSound, soundMuxArguments } from './export-sound.mjs';
+import { createVersionCheckService } from './version-check.mjs';
 
 const execFileAsync = promisify(execFile);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -239,7 +240,15 @@ function enforceLocalRequest(request, port) {
     catch { throw new ApiError(403, 'INVALID_ORIGIN', '请求来源不受信任。'); }
     if (origin.origin !== host.origin) throw new ApiError(403, 'INVALID_ORIGIN', '请从本机工作台页面操作。');
   }
-  if (request.headers['sec-fetch-site'] === 'cross-site') {
+  // Following a link may mark the entry page as cross-site. Only permit
+  // top-level, read-only document navigation; APIs and embedded requests
+  // keep the same origin checks, as do all requests with a foreign Origin.
+  const pathname = new URL(request.url, host).pathname;
+  const entryNavigation = ['GET', 'HEAD'].includes(request.method)
+    && (pathname === '/' || pathname === '/index.html')
+    && request.headers['sec-fetch-mode'] === 'navigate'
+    && request.headers['sec-fetch-dest'] === 'document';
+  if (request.headers['sec-fetch-site'] === 'cross-site' && !entryNavigation) {
     throw new ApiError(403, 'INVALID_ORIGIN', '请从本机工作台页面操作。');
   }
 }
@@ -261,8 +270,9 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
   supportJobTimeoutMs = 15 * 60 * 1000, supportMaximumUploadBytes = 128 * 1024 * 1024,
   photoCalibrationService = { detect: detectPhotoUprights, capability: photoCalibrationCapability },
   realisticRenderService, sliceService, blenderPath = process.env.BLENDER_PATH, alphaEncoderProbe = probeMovAlphaEncoder,
-  betaService = createBetaActivationService(), paymentService, exportDirectory = process.env.GROWTH_EXPORT_DIR } = {}) {
+  betaService = createBetaActivationService(), paymentService, versionCheckService, exportDirectory = process.env.GROWTH_EXPORT_DIR } = {}) {
   const payments = paymentService || createSoftwarePurchaseService({ betaService });
+  const versionChecker = versionCheckService || createVersionCheckService();
   const supports = createSupportManager({ root, slicerPath: supportsSlicerPath, pythonPath: supportsPythonPath,
     timeoutMs: supportJobTimeoutMs, maximumUploadBytes: supportMaximumUploadBytes, spawnImpl: supportSpawnImpl });
   const realistic = realisticRenderService || createRealisticRenderService({ root, ffmpegPath, alphaEncoderProbe, ...(exportDirectory ? { exportDirectory } : {}), ...(blenderPath ? { blenderPath } : {}) });
@@ -682,6 +692,11 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
       if (url.pathname === '/api/health' && request.method === 'GET') {
         const [ffmpeg, supportsSlicer, photoCalibration, realisticRender, slicing] = await Promise.all([ffmpegInfo(), supports.health(), photoCalibrationService.capability(), realistic.health(), slices.health()]);
         json(response, 200, { ok: true, app: 'growth-timelapse-studio', version: APP_VERSION, pid: process.pid, instanceId: process.env.GROWTH_INSTANCE_ID || null, ffmpeg, supportsSlicer, photoCalibration, realisticRender, slicing, activeExport: !!activeJob || realisticRender.active });
+        return;
+      }
+      if (url.pathname === '/api/version/check' && request.method === 'GET') {
+        const force = url.searchParams.get('force') === 'true';
+        json(response, 200, await versionChecker.check({ force }));
         return;
       }
       if (url.pathname === '/api/beta/status' && request.method === 'GET') { json(response, 200, await betaService.status()); return; }

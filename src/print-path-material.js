@@ -397,7 +397,7 @@ uniform mat4 pointShadowMatrix[NUM_POINT_LIGHT_SHADOWS];
 uniform mat4 spotLightMatrix[NUM_SPOT_LIGHT_COORDS];
 #endif`);
   }
-  shader.fragmentShader = shader.fragmentShader.replace('void main() {', 'void main() {\n' + FRAGMENT_HIT + (depth || analysis ? '' : SHADOW_HIT));
+  shader.fragmentShader = shader.fragmentShader.replace('void main() {', 'void main() {\n' + (depth ? 'if (vPathRole > 2.5 && vPathRole < 3.5) discard;\n' : '') + FRAGMENT_HIT + (depth || analysis ? '' : SHADOW_HIT));
   shader.fragmentShader = shader.fragmentShader.replace('#include <logdepthbuf_fragment>', DEPTH_HIT);
   if (!depth && !analysis) shader.fragmentShader = shader.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nif (vPathRoughness >= 0.0) roughnessFactor = clamp(vPathRoughness, 0.0, 1.0);');
   if (!depth && !analysis) shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_begin>', 'float faceDirection=1.0;\nvec3 normal=pathHitNormal;\nvec3 nonPerturbedNormal=normal;');
@@ -472,7 +472,7 @@ export function createPrintPathMaterial(options = {}) {
 }
 
 export function createPrintPathDepthMaterial(options = {}) {
-  return installPrintPathImpostor(new THREE.MeshDepthMaterial({ depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide, ...options }), { depth:true });
+  return installPrintPathImpostor(new THREE.MeshDepthMaterial({ depthPacking:THREE.RGBADepthPacking, side:THREE.FrontSide, ...options }), { depth:true });
 }
 
 /** The analysis pass uses the exact intersected surface and depth, never the

@@ -121,3 +121,9 @@ test('public Worker entry keeps exactly the original File, posts no source-geome
   assert.throws(()=>validateSlicedThreeMFFile(new File([bytes],'unsliced.stl')),assertCode('SLICED_3MF_REQUIRED'));
   assert.throws(()=>validateSlicedThreeMFFile([file,file]),assertCode('SLICED_3MF_REQUIRED'));
 });
+
+test('parseSlicedThreeMF extracts extruder_offset and offsets printerToSource for alignment',async()=>{
+  const bytes=archive({'Metadata/plate_1.gcode':gcode,'3D/3dmodel.model':model,'Metadata/project_settings.config':JSON.stringify({extruder_offset:['0x2']})});
+  const result=await parseSlicedThreeMF(bytes);
+  assert.deepEqual(result.printerToSource,[1,0,0,0,0,0,-1,0,0,1,0,0,0,0,-2,1]);
+});

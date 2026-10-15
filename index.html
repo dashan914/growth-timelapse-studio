@@ -5,7 +5,7 @@
     <div class="beta-top"><h2 id="beta-title">解锁全部导出</h2><button id="beta-close" class="icon-button beta-close" type="button" aria-label="关闭导出解锁窗口"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div>
     <p id="beta-intro" class="beta-intro">导入、编辑和预览免费。MP4 可免费导出动态水印视频；兑换码解锁无水印视频、预览图片和透明序列。</p>
     <div class="beta-acquire">
-      <a id="beta-student" class="beta-student" href="https://ai3dclass.cn/points" target="_blank" rel="noopener noreferrer">山地造物学员<span>跳转课程页面免费兑换</span></a>
+      <a id="beta-student" class="beta-student" href="https://ai3dclass.cn" target="_blank" rel="noopener noreferrer">成为山地造物学员 · 免费兑换软件<span>报名 AI + Nomad 潮玩造物课程，享本软件免费兑换与更多福利 →</span></a>
       <div id="beta-acquire-options">
       <fieldset class="beta-payment-method" id="beta-pay-method"><legend>支付方式</legend><label><input id="beta-pay-alipay" type="radio" name="beta-payment-method" value="alipay" checked/>支付宝</label><label><input id="beta-pay-wx" type="radio" name="beta-payment-method" value="wx"/>微信支付</label></fieldset>
       <div class="beta-plans"><button id="beta-buy-year" class="beta-plan" type="button"><span>一年授权</span><strong>¥19.90</strong><small>有效期一年 · 绑定一台设备</small></button><button id="beta-buy-lifetime" class="beta-plan" type="button"><span>永久授权</span><strong>¥39.90</strong><small>永久解锁 · 绑定一台设备</small></button></div>
@@ -48,7 +48,7 @@
 
 <header class="app-header">
 <a class="brand" href="/" aria-label="打印延时一键生成"><svg><use href="#i-cube"/></svg><strong>打印延时一键生成</strong><span>by 张大山l</span></a><span id="project-title" class="project-title">未命名项目</span>
-<div class="header-actions"><button class="button export-unlock-button" id="export-unlock-button" type="button" data-export-state="locked" aria-haspopup="dialog" title="免费可导出水印视频；兑换码解锁无水印图片与视频。"><svg aria-hidden="true"><use href="#i-lock"/></svg><span id="export-unlock-label">导出解锁</span></button><button class="icon-button" id="help-button" aria-label="使用指南" title="使用指南"><svg><use href="#i-help"/></svg></button><button class="button primary" id="export-button"><svg><use href="#i-download"/></svg>导出视频</button></div></header>
+<div class="header-actions"><button class="button update-badge" id="update-badge" type="button" aria-haspopup="dialog" title="发现新版本，点击查看更新详情" hidden><span class="update-badge-dot" aria-hidden="true"></span><svg aria-hidden="true"><use href="#i-spark"/></svg><span id="update-badge-label">发现新版</span></button><button class="button export-unlock-button" id="export-unlock-button" type="button" data-export-state="locked" aria-haspopup="dialog" title="免费可导出水印视频；兑换码解锁无水印图片与视频。"><svg aria-hidden="true"><use href="#i-lock"/></svg><span id="export-unlock-label">导出解锁</span></button><button class="icon-button" id="help-button" aria-label="使用指南" title="使用指南"><svg><use href="#i-help"/></svg></button><button class="button primary" id="export-button"><svg><use href="#i-download"/></svg>导出视频</button></div></header>
 <main class="workspace">
 <aside class="left-panel panel">
 <div class="panel-heading">场景</div><button id="import-button" class="button file-import" aria-describedby="import-message"><svg><use href="#i-upload"/></svg>导入模型</button>
@@ -80,6 +80,7 @@
 <div class="viewport-toolbar"><span>预览</span><div class="view-controls" id="view-controls"><div class="segmented" role="group" aria-label="观察方向"><button class="active" data-view="perspective" aria-pressed="true">透视</button><button data-view="front" aria-pressed="false">正面</button><button data-view="side" aria-pressed="false">侧面</button><button data-view="top" aria-pressed="false">俯视</button></div><button class="icon-button" id="snapshot-button" aria-label="保存当前预览" title="保存当前预览"><svg><use href="#i-camera"/></svg></button></div></div>
 <div class="viewport" id="viewport"><div id="stage"></div><img id="realistic-preview-layer" class="reference-layer realistic-preview-layer" hidden alt="当前模型的写实光影预览"/>
 <svg id="crop-overlay" class="crop-overlay" hidden aria-label="自定义裁剪"><path id="crop-shade"/><rect id="crop-rectangle"/><g id="crop-handles"/></svg><canvas id="photo-growth-layer" class="reference-layer" hidden aria-label="实拍生长预览"></canvas><canvas id="reference-layer" class="reference-layer" hidden></canvas><svg id="calibration-overlay" class="calibration-overlay" hidden aria-label="打印底板四点校准"><polygon id="calibration-polygon"/><g id="calibration-grid"/><g id="calibration-points"/><g id="calibration-uprights"/></svg>
+<div id="preview-watermark" class="preview-watermark" aria-hidden="true" inert><span>山地造物 · 预览</span><span>山地造物 · 预览</span><span>山地造物 · 预览</span></div>
 <div class="viewport-topline"><span class="preview-tag" id="preview-mode" role="status">预览</span><div class="viewport-top-actions"><span id="frame-ratio" class="frame-ratio">16:9</span><button class="icon-button canvas-reset" id="reset-camera" aria-label="回正模型与视角" title="回正模型与视角 · Home"><svg><use href="#i-reset"/></svg></button></div></div>
 <div class="growth-badge"><span>生长</span><strong id="growth-percentage">100<span>%</span></strong></div><div class="viewport-bottom"><span id="gesture-hint">预览已锁定 · 选择下方工具开始调整</span><span class="axis-legend">Y ↑</span></div>
 <div class="canvas-tools" id="canvas-tools" hidden role="group" aria-label="模型编辑工具"><button id="canvas-lock" class="active" aria-pressed="true" aria-label="锁定预览" title="锁定预览 · Esc"><svg><use href="#i-lock"/></svg><span>锁定</span></button><i></i><button id="canvas-move" aria-pressed="false" title="移动 · W"><svg><use href="#i-move"/></svg><span>移动</span></button><button id="canvas-rotate" aria-pressed="false" title="旋转 · E"><svg><use href="#i-reset"/></svg><span>旋转</span></button><button id="canvas-scale" aria-pressed="false" title="缩放 · R"><svg><use href="#i-scale"/></svg><span>缩放</span></button><i></i><button id="canvas-shadow" aria-pressed="false" aria-expanded="false" aria-controls="shadow-popup" aria-label="阴影调节" title="调整阴影方向、强度与柔和度"><svg aria-hidden="true"><use href="#i-sun"/></svg><span>阴影调节</span></button><button id="canvas-color" aria-pressed="false" aria-expanded="false" aria-controls="color-popup" aria-label="色彩匹配" title="调整模型亮度与色彩，匹配背景"><svg aria-hidden="true"><use href="#i-color"/></svg><span>色彩匹配</span></button><div class="camera-tool-pair"><button id="canvas-dof" aria-pressed="false" aria-expanded="false" aria-controls="dof-popup" aria-label="镜头设置" title="调整镜头焦段、观察角度与虚化"><svg aria-hidden="true"><use href="#i-camera"/></svg><span>镜头设置</span></button><button id="canvas-motion" aria-label="运镜与音效" aria-pressed="false" aria-expanded="false" aria-controls="motion-popup" title="运镜与音效"><svg aria-hidden="true"><use href="#i-motion"/></svg><span>运镜与音效</span></button></div><button id="canvas-compare" hidden aria-pressed="false"><svg><use href="#i-camera"/></svg><span>对照</span></button></div>
@@ -102,22 +103,22 @@
 <button id="close-dof" class="button quiet small full-width">完成</button></div><div id="motion-popup" class="dof-popup motion-popup" hidden aria-label="运镜与音效设置"><strong>运镜与音效</strong>
 <label class="field-label" for="camera-motion">镜头运镜</label><select id="camera-motion"><option value="fixed">固定镜头</option><option value="push">平滑推进</option></select>
 <div id="push-controls" hidden><div class="field-label with-value"><label for="push-amount">推进幅度</label><output id="push-amount-value" for="push-amount">20%</output></div><input id="push-amount" type="range" min="0" max="100" step="1" value="20"/>
-<label class="field-label" for="push-duration">推进用时 / 秒</label><input id="push-duration" type="number" min="0.1" max="600" step="0.1" value="8"/>
+<label class="field-label" for="push-duration">推进用时 / 秒</label><input id="push-duration" type="number" min="0.1" max="600" step="0.1" value="4"/>
 <p class="field-hint">匀速推进，用时越短速度越快；推进结束后保持构图。</p></div>
 <label class="check-row"><input id="sound-enabled" type="checkbox" checked/><span>使用默认音效</span></label>
 <button id="sound-import-button" class="button small full-width" type="button">导入自定义音效</button><input id="custom-sound-input" type="file" accept=".wav,.mp3,.m4a,.aac,.ogg,.flac,audio/wav,audio/mpeg,audio/mp4,audio/aac,audio/ogg,audio/flac" hidden/>
 <div id="custom-sound-row" class="custom-sound-row" hidden><span id="custom-sound-name"></span><button id="remove-custom-sound" class="icon-button" type="button" aria-label="移除自定义音效" title="移除自定义音效">×</button></div>
 <button id="close-motion" class="button quiet small full-width" type="button">完成</button></div><div class="drop-overlay" id="drop-overlay"><svg><use href="#i-upload"/></svg>导入模型</div></div>
-<section class="timeline"><div class="timeline-heading"><strong>时间线</strong><span class="time-display"><b id="current-time">8.00</b> / <span id="total-time">8.00</span> s</span></div><div class="timeline-track"><button class="play-button" id="play-button" aria-label="播放动画"><svg><use href="#i-play"/></svg></button><div class="scrubber"><input type="range" id="timeline" min="0" max="1000" value="1000" aria-label="动画时间"/><div class="timeline-ticks"><span>0s</span><span id="mid-time">4s</span><span>完成</span></div></div><button class="icon-button" id="restart-button" aria-label="从头播放" title="从头播放"><svg><use href="#i-reset"/></svg></button><label class="loop-label"><input id="loop" type="checkbox"/>循环</label></div></section><div class="status-line" id="status-line" role="status">请选择 3MF 或 STL 模型</div>
+<section class="timeline"><div class="timeline-heading"><strong>时间线</strong><span class="time-display"><b id="current-time">4.00</b> / <span id="total-time">4.00</span> s</span></div><div class="timeline-track"><button class="play-button" id="play-button" aria-label="播放动画"><svg><use href="#i-play"/></svg></button><div class="scrubber"><input type="range" id="timeline" min="0" max="1000" value="1000" aria-label="动画时间"/><div class="timeline-ticks"><span>0s</span><span id="mid-time">2s</span><span>完成</span></div></div><button class="icon-button" id="restart-button" aria-label="从头播放" title="从头播放"><svg><use href="#i-reset"/></svg></button><label class="loop-label"><input id="loop" type="checkbox"/>循环</label></div></section><div class="status-line" id="status-line" role="status">请选择 3MF 或 STL 模型</div>
 </section>
 <aside class="right-panel panel"><div class="panel-heading">输出</div>
-<label class="field-label" for="growth-duration">生长用时</label><div class="input-unit"><input type="number" id="growth-duration" min="0.1" max="600" step="0.1" value="8"/><span>秒</span></div><input id="duration" type="hidden" value="9.5"/>
+<label class="field-label" for="growth-duration">生长用时</label><div class="input-unit"><input type="number" id="growth-duration" min="0.1" max="600" step="0.1" value="4"/><span>秒</span></div><input id="duration" type="hidden" value="4"/>
 <label class="field-label" for="ratio">比例</label><select id="ratio"><option value="16:9">16:9 横屏</option><option value="9:16">9:16 竖屏</option><option value="1:1">1:1 方形</option><option value="source" id="source-ratio" hidden>原图比例</option><option value="crop">自定义裁剪</option></select>
 <button id="edit-crop" class="button quiet small full-width" hidden>调整裁剪范围</button><label class="field-label" for="resolution">分辨率</label><select id="resolution"><option value="720">720p</option><option value="1080" selected>1080p</option><option value="2160">4K</option></select>
 <label class="field-label" for="export-quality">渲染画质</label><select id="export-quality" aria-describedby="export-quality-help"><option value="realtime" selected>实时 · 快速生成</option><option id="realistic-quality-option" value="realistic">写实 · 自然光影</option></select><p id="export-quality-help" class="field-hint">实时画面即时更新。</p>
 <label class="field-label" for="format">导出格式</label><select id="format" aria-describedby="format-help"><option value="mp4">MP4 · 带背景视频</option><option id="alpha-video-option" value="mov-alpha" disabled>MOV · 透明通道视频</option><option value="png-sequence">PNG · 透明图片序列</option></select><p id="format-help" class="field-hint">带背景的视频，适合直接播放和分享。</p>
 
-<div class="export-summary"><span id="export-format-label">MP4</span><small id="export-summary">1920 × 1080 · 8 秒</small></div><button id="export-button-bottom" hidden>导出视频</button><p id="export-hint" hidden></p>
+<div class="export-summary"><span id="export-format-label">MP4</span><small id="export-summary">1920 × 1080 · 4 秒</small></div><button id="export-button-bottom" hidden>导出视频</button><p id="export-hint" hidden></p>
 <div class="panel-divider"></div><div class="section-title">材质</div><label class="check-row"><input id="preserve-materials" type="checkbox" checked/><span>模型原色</span></label><div class="field-label with-value"><label for="model-color">统一颜色</label><input type="color" id="model-color" value="#bbc0c8" aria-label="统一模型颜色"/></div><div id="material-colors" class="material-colors" hidden><div id="material-color-list"></div></div>
 <label class="field-label" for="surface-preset">表面质感</label><select id="surface-preset"><option value="auto">自动 · 工程耗材</option><option value="pla">普通 PLA</option><option value="matte">哑光 PLA</option><option value="silk">丝绸</option><option value="petg">PETG</option></select><label class="check-row"><input id="layer-lines" type="checkbox" checked/><span>层纹</span></label><div class="field-label with-value"><label for="surface-detail">细节强度</label><output id="surface-detail-value" for="surface-detail">60%</output></div><input id="surface-detail" type="range" min="0" max="100" step="1" value="60"/><p id="surface-profile-info" class="field-hint" hidden></p>
 <select id="output-appearance" hidden aria-hidden="true" tabindex="-1"><option value="model" selected>模型渲染</option><option value="photo" disabled>实拍成品（需双照片）</option></select>
@@ -147,4 +148,47 @@
   <p id="calibration-status" class="calibration-fit-status" role="status" aria-live="polite"></p>
 </div><div id="crop-panel" class="crop-panel" hidden><span>拖动蓝框裁剪，拖四个角调整范围</span><div><button id="reset-crop" class="button quiet small">全画面</button><button id="apply-crop" class="button primary small">完成</button><button id="cancel-crop" class="button quiet small">取消</button></div></div><dialog id="export-dialog" aria-labelledby="export-title"><div class="export-dialog-content"><span class="dialog-icon"><svg><use href="#i-download"/></svg></span><h2 id="export-title">正在导出</h2><p id="export-detail" role="status" aria-live="polite">准备画面</p><progress id="export-progress" aria-label="视频生成进度" max="100" value="0"></progress><div class="export-progress-label"><span id="export-percent">0%</span><span id="export-frame-count"></span></div><div id="export-result" hidden></div><button class="button full-width" id="cancel-export">取消</button></div></dialog>
 <dialog id="help-dialog" aria-labelledby="help-title"><div class="help-content"><div class="help-top"><h2 id="help-title">使用指南</h2><button class="icon-button" id="close-help" aria-label="关闭"><svg><use href="#i-close"/></svg></button></div><ol><li><strong>导入模型</strong><p>选择包含原始模型网格的 3MF 或 STL。工具自动检测本机已安装的 Bambu Studio、OrcaSlicer 或 Flash Studio，生成真实打印路径；3MF 保留工程涂色、参数和原盘位。只有打印路径、没有模型网格的文件不能重新切片。</p></li><li><strong>摆放</strong><p>预览默认锁定；选中移动、旋转、缩放后拖动对应手柄。点锁定或按 Esc 结束调整。“阴影调节”调整阴影，“色彩匹配”调整模型亮度与颜色，“镜头设置”调整焦段、观察角度、虚化强度与焦点。右上角回正图标恢复默认位置与视角。</p></li><li><strong>合成与导出</strong><p>选择打印机或摄影背景预设会载入对应的机位、光影和景深。点击“调整底板，矫正透视”核对底板尺寸与四角，再把两条绿线贴住真实竖直立柱，确认后完成。播放预览后点右上角导出视频。在输出设置选择 MOV 透明通道视频，可移除背景并保留模型透明边缘；也可导出 PNG 透明图片序列。</p></li></ol><p class="help-note">对齐时蓝色虚框代表手动标记，实线网格是模型实际相机投影。照片没拍到的角只是估计；绿线须沿真实竖直立柱，不能简单拉成屏幕竖线。模型与支撑路径由自动检测的本机切片器生成，导入、取消或失败时保留此前的模型与场景。</p><button class="button primary full-width" id="help-done">关闭</button></div></dialog>
-<script type="module" src="/src/beta-access.js"></script></body></html>
+<dialog class="update-dialog" id="update-dialog" aria-labelledby="update-title" aria-modal="true">
+  <div class="update-card">
+    <div class="update-top">
+      <div class="update-top-title">
+        <span class="update-icon" aria-hidden="true"><svg><use href="#i-spark"/></svg></span>
+        <div>
+          <h2 id="update-title">发现新版本</h2>
+          <div class="update-version-tags">
+            <span class="update-tag current" id="update-current-tag">当前版本</span>
+            <span class="update-tag-arrow" aria-hidden="true">→</span>
+            <span class="update-tag latest" id="update-latest-tag">最新版本</span>
+          </div>
+        </div>
+      </div>
+      <button id="update-close" class="icon-button update-close" type="button" aria-label="关闭更新提示窗口"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
+    </div>
+    <div class="update-section">
+      <div class="update-section-title">✨ 更新亮点</div>
+      <ul id="update-changelog" class="update-changelog"></ul>
+    </div>
+    <div class="update-section">
+      <div class="update-section-title">🤖 一键让 AI 帮您升级</div>
+      <p class="update-help-text">复制以下指令发送给 Cursor / Claude / ChatGPT 或任意代码助手，AI 将全自动拉取新版并无损升级（保留您的授权与已导出的所有作品）：</p>
+      <div class="update-prompt-wrapper">
+        <textarea id="update-prompt-text" class="update-prompt-text" readonly rows="4" spellcheck="false"></textarea>
+        <button id="update-copy-button" class="button primary update-copy-button" type="button">
+          <svg aria-hidden="true"><use href="#i-spark"/></svg>
+          <span id="update-copy-label">复制升级指令给 AI</span>
+        </button>
+      </div>
+    </div>
+    <div class="update-footer">
+      <label class="check-row update-skip-row">
+        <input type="checkbox" id="update-skip-version"/>
+        <span>不再提示此版本</span>
+      </label>
+      <div class="update-footer-actions">
+        <a id="update-release-link" class="button quiet small" href="https://github.com/dashan914/growth-timelapse-studio/releases" target="_blank" rel="noopener noreferrer">查看 Release</a>
+        <button id="update-dismiss" class="button quiet small" type="button">关闭</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+<script type="module" src="/src/beta-access.js"></script><script type="module" src="/src/update-check.js"></script></body></html>
