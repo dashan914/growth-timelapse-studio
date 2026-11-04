@@ -3217,14 +3217,14 @@ gl_FragColor = vec4(floor(packedHeight / 256.0) / 255.0, mod(packedHeight, 256.0
     this.render(this.options.progress, Number(this.options.turntable || 0) * Math.PI / 180);
   }
 
-  async captureFrame(progress, turnRadians = 0, backgroundTime = 0, { outputPlan = null, samples = null, signal = null } = {}) {
+  async captureFrame(progress, turnRadians = 0, backgroundTime = 0, { outputPlan = null, samples = null, signal = null, format = 'image/png', quality = 0.95 } = {}) {
     const previousDisplayOutput=this._displayOutputSize;
     this._displayOutputSize=outputPlan?{width:outputPlan.width,height:outputPlan.height}:this.renderer.getSize(new THREE.Vector2());
-    try{return await this._captureFrameAtDisplaySize(progress,turnRadians,backgroundTime,{outputPlan,samples,signal});}
+    try{return await this._captureFrameAtDisplaySize(progress,turnRadians,backgroundTime,{outputPlan,samples,signal,format,quality});}
     finally{this._displayOutputSize=previousDisplayOutput;}
   }
 
-  async _captureFrameAtDisplaySize(progress, turnRadians = 0, backgroundTime = 0, { outputPlan = null, samples = null, signal = null } = {}) {
+  async _captureFrameAtDisplaySize(progress, turnRadians = 0, backgroundTime = 0, { outputPlan = null, samples = null, signal = null, format = 'image/png', quality = 0.95 } = {}) {
     if (!this._exportState) throw new Error('请先调用 startExport。');
     const cancelled = () => { if (signal?.aborted) throw new DOMException('Aborted', 'AbortError'); };
     cancelled();
@@ -3237,7 +3237,8 @@ gl_FragColor = vec4(floor(packedHeight / 256.0) / 255.0, mod(packedHeight, 256.0
       || plan.renderWidth !== sourceWidth || plan.renderHeight !== sourceHeight || plan.width * plan.scale !== sourceWidth || plan.height * plan.scale !== sourceHeight) throw new Error('空间采样尺寸必须与当前完整渲染画面一致。');
     const defaultPasses = typeof HTMLCanvasElement !== 'undefined' && this.canvas instanceof HTMLCanvasElement ? 2 : 8;
     const passes = samples ?? (this._metadata?.historicalPathSurface === 'analytic-pbr-extrusion' || this._indexedSupports?.root.visible && this.options.supportDisplay !== 'paths' ? defaultPasses : 1);
-    const blobFrom = canvas => new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('无法生成 PNG 帧，请检查模型纹理是否来自本地。')), 'image/png'));
+    const blobMime = format === 'image/jpeg' || format === 'jpeg' ? 'image/jpeg' : 'image/png';
+    const blobFrom = canvas => new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('无法生成帧画面，请检查模型纹理是否来自本地。')), blobMime, quality));
     if (passes === 1) {
       const blob = await blobFrom(this.canvas);
       cancelled();

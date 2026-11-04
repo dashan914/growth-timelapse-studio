@@ -221,6 +221,21 @@ function validatePng(buffer, options) {
   if (options.format === 'mov-alpha' && ![4, 6].includes(buffer[25])) throw new ApiError(400, 'FRAME_ALPHA_REQUIRED', '透明 MOV 需要包含透明通道的 PNG 帧。');
 }
 
+function validateJpeg(buffer, options) {
+  if (options.format === 'mov-alpha' || options.format === 'png-sequence') {
+    throw new ApiError(400, 'FRAME_ALPHA_REQUIRED', '透明导出格式需要包含透明通道的 PNG 帧。');
+  }
+  if (buffer.length < 32 || buffer[0] !== 0xFF || buffer[1] !== 0xD8) {
+    throw new ApiError(400, 'INVALID_JPEG', '请上传完整的 JPEG 图片。');
+  }
+  const tail = buffer.subarray(Math.max(0, buffer.length - 128));
+  let hasEoi = false;
+  for (let i = 0; i < tail.length - 1; i++) {
+    if (tail[i] === 0xFF && tail[i + 1] === 0xD9) { hasEoi = true; break; }
+  }
+  if (!hasEoi) throw new ApiError(400, 'INVALID_JPEG', 'JPEG 图片不完整，请重试这一帧。');
+}
+
 function loopbackHost(hostname) {
   return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '[::1]';
 }
@@ -365,12 +380,14 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
         job.frameDirectory = path.join(outputDirectory, `${id}.frames`);
         await mkdir(job.frameDirectory, { mode: 0o700 });
       } else {
+        const inputCodecArgs = options.format === 'mov-alpha' ? ['-vcodec', 'png'] : [];
+        const encoderArgs = options.format === 'mov-alpha' ? movAlphaEncoderArguments() : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-f', 'mp4'];
         startEncoder(job, ffmpegPath, [
           '-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-f', 'image2pipe',
-          '-vcodec', 'png', '-framerate', String(options.fps), '-i', 'pipe:0',
+          ...inputCodecArgs, '-framerate', String(options.fps), '-i', 'pipe:0',
           ...(watermarked ? freeWatermarkArguments(options.width, options.height) : []),
           '-frames:v', String(options.frames), '-an',
-          ...(options.format === 'mov-alpha' ? movAlphaEncoderArguments() : ['-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-f', 'mp4']), partialPath,
+          ...encoderArgs, partialPath,
         ]);
       }
       jobs.set(id, job);
@@ -543,7 +560,8 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
       throw new ApiError(409, 'TOO_MANY_FRAMES', '所有帧已上传，请完成导出。');
     }
     if (job.busy) { request.resume(); throw new ApiError(409, 'FRAME_IN_PROGRESS', '上一帧仍在处理，请逐帧上传。'); }
-    if ((request.headers['content-type'] || '').split(';')[0].trim().toLowerCase() !== 'image/png') {
+    const mime = (request.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+    if (mime !== 'image/png' && mime !== 'image/jpeg') {
       request.resume();
       throw new ApiError(415, 'INVALID_CONTENT_TYPE', '帧须使用 image/png。');
     }
@@ -551,15 +569,16 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
     job.touchedAt = Date.now();
     try {
       const maximum = Math.min(MAX_PNG_BYTES, job.options.width * job.options.height * 5 + 65536);
-      const png = await readBody(request, maximum);
-      validatePng(png, job.options);
+      const frameBuffer = await readBody(request, maximum);
+      if (mime === 'image/jpeg') validateJpeg(frameBuffer, job.options);
+      else validatePng(frameBuffer, job.options);
       assertEncoding(job);
       if (job.options.format === 'png-sequence') {
-        await writeFile(path.join(job.frameDirectory, `frame_${String(job.received).padStart(6, '0')}.png`), png, { flag: 'wx' });
+        await writeFile(path.join(job.frameDirectory, `frame_${String(job.received).padStart(6, '0')}.png`), frameBuffer, { flag: 'wx' });
       } else {
         // Awaiting the write callback applies pipe backpressure before accepting the next frame.
         await new Promise((resolve, reject) => {
-          job.child.stdin.write(png, error => error ? reject(new ApiError(500, 'ENCODER_FAILED', 'FFmpeg 停止接收画面，请重新导出。')) : resolve());
+          job.child.stdin.write(frameBuffer, error => error ? reject(new ApiError(500, 'ENCODER_FAILED', 'FFmpeg 停止接收画面，请重新导出。')) : resolve());
         });
       }
       assertEncoding(job);

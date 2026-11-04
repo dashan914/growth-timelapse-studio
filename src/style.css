@@ -349,7 +349,5 @@ body[data-export-state="unlocked"] .preview-watermark{display:none}
 .update-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);padding-top:12px}
 .update-skip-row{font-size:11px;color:var(--muted);margin:0}
 .update-footer-actions{display:flex;gap:8px}
-.secondary-button.realistic-render-button{background:linear-gradient(135deg,#283449,#1e2a3b);border-color:#4b6894;color:#d6e6ff;font-weight:550;white-space:nowrap}
-.secondary-button.realistic-render-button:hover:not(:disabled){background:linear-gradient(135deg,#31415c,#253449);border-color:#698ec4;color:#fff}
-.secondary-button.realistic-render-button.active{background:linear-gradient(135deg,#354b6e,#283a56);border-color:#7ba4e0;color:#fff;box-shadow:0 0 0 1px #7ba4e040}
-#realistic-export-button-2{margin-top:6px}
+
+

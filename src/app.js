@@ -441,19 +441,23 @@ function updateStageBounds() {
 }
 
 function realisticEligibility(config=settings()) {
-  return realisticExportAvailability({runtime:realisticRuntime,metadata:studio?.metadata,backgroundType:studio?.backgroundMetadata?.type,appearance:config.appearance,showSupports:$('show-supports').checked,supportDisplay:'solid',frames:Math.round(config.duration*config.fps)});
+  const result=realisticExportAvailability({runtime:realisticRuntime,metadata:studio?.metadata,backgroundType:studio?.backgroundMetadata?.type,appearance:config.appearance,showSupports:$('show-supports').checked,supportDisplay:'solid',frames:Math.round(config.duration*config.fps)});
+  if (realisticRuntime?.available) return { available: true, reason: result.available ? '' : result.reason, supportDisplay: result.supportDisplay || 'solid' };
+  return result;
 }
 
 function updateExportQualityUI() {
   const eligibility=realisticEligibility();
-  $('realistic-quality-option').disabled=!eligibility.available;
-  $('export-quality').value=eligibility.available?(qualityPreference||'realtime'):'realtime';
-  $('export-quality').disabled=exporting||loading;
-  $('export-quality-help').textContent=!eligibility.available?eligibility.reason:$('export-quality').value==='realistic'?'静止时计算当前帧写实预览；调整和播放时实时响应。写实导出较慢。':'画面即时更新，视频生成更快，使用相同的原模型与真实切片。';
-  const active=$('export-quality').value==='realistic';
-  for(const id of ['realistic-export-button','realistic-export-button-2']){
-    const btn=$(id);
-    if(btn){btn.classList?.toggle('active',active);btn.setAttribute?.('aria-pressed',String(active));}
+  const option=$('realistic-quality-option');
+  if(option)option.disabled=!eligibility.available;
+  const select=$('export-quality');
+  if(select){
+    select.value=eligibility.available?(qualityPreference||'realtime'):'realtime';
+    select.disabled=exporting||loading;
+  }
+  const help=$('export-quality-help');
+  if(help){
+    help.textContent=!eligibility.available?eligibility.reason:$('export-quality').value==='realistic'?'静止时计算当前帧写实预览；调整和播放时实时响应。写实导出较慢。':'画面即时更新，视频生成更快，使用相同的原模型与真实切片。';
   }
 }
 
@@ -899,7 +903,7 @@ function restoreSettings() {
 }
 
 function lockWorkspace(locked) {
-  for (const element of document.querySelectorAll('.workspace button,.workspace input,.workspace select,.header-actions #export-button,.header-actions #realistic-export-button')) {
+  for (const element of document.querySelectorAll('.workspace button,.workspace input,.workspace select,.header-actions #export-button')) {
     element.disabled = element.id === 'cancel-import' ? !importProgressUI?.cancelEnabled : locked;
   }
   const exportButton=$('export-button');
@@ -912,8 +916,7 @@ function lockWorkspace(locked) {
   exportButton.setAttribute('aria-label',loading?'模型准备中，暂不能导出':'导出视频');
   if (!locked) {
     const ready=Boolean(studio?.hasModel()&&studio?.getPrintLayerData?.());
-    for(const id of ['export-button','play-button','restart-button','timeline','snapshot-button','reset-camera','canvas-lock','canvas-move','canvas-rotate','canvas-scale','canvas-shadow','canvas-color','canvas-dof','lens-camera-drag'])$(id).disabled=!ready;
-    for(const id of ['realistic-export-button','realistic-export-button-2']){const btn=$(id);if(btn)btn.disabled=!ready;}
+    for(const id of ['export-button','export-button-bottom','play-button','restart-button','timeline','snapshot-button','reset-camera','canvas-lock','canvas-move','canvas-rotate','canvas-scale','canvas-shadow','canvas-color','canvas-dof','lens-camera-drag']){const btn=$(id);if(btn)btn.disabled=!ready;}
     const gcode = studio?.metadata?.mode === 'gcode';
     $('layers').disabled = gcode;
     $('layer-lines').disabled = gcode;
@@ -1556,17 +1559,19 @@ async function exportVideo() {
       studio.startExport(plan.renderWidth,plan.renderHeight);
       studio.setOptions({...renderOptions(),transparent:outputFormat(config.format).transparent});
       const pushCanvas=document.createElement('canvas');
+      const useJpeg = config.format === 'mp4' && !outputFormat(config.format).transparent;
+      const frameMime = useJpeg ? 'image/jpeg' : 'image/png';
       let previousUploadPromise=null;
       try {
         for (let index = 0; index < frames; index++) {
           if (cancelled) throw new DOMException('Aborted','AbortError');
           const frameTime = index / Math.max(1,frames-1) * config.duration;
           const state = timelineState(frameTime,config.duration,config.hold,config.motion);
-          let blob = await studio.captureFrame(state.progress,state.rotation,index/config.fps,{outputPlan:plan,signal});
+          let blob = await studio.captureFrame(state.progress,state.rotation,index/config.fps,{outputPlan:plan,signal,format:frameMime});
           if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo);
           blob=await applyFramePush(blob,cameraMotionScale(frameTime,config),pushCanvas);
           if(previousUploadPromise)await previousUploadPromise;
-          previousUploadPromise=api(`/api/exports/${exportId}/frames?index=${index}`,{method:'POST',headers:{'Content-Type':'image/png'},body:blob,signal});
+          previousUploadPromise=api(`/api/exports/${exportId}/frames?index=${index}`,{method:'POST',headers:{'Content-Type':frameMime},body:blob,signal});
           const pct = Math.round((index+1)/frames*95);
           $('export-progress').value = pct; $('export-percent').textContent = `${pct}%`;
           $('export-frame-count').textContent = `${index+1} / ${frames} 帧`;
@@ -1808,7 +1813,6 @@ async function init() {
   $('restart-button').addEventListener('click', () => playGrowth(true));
   $('timeline').addEventListener('input', async () => {playing=false;touchPreviewInteraction();const wanted=Number($('timeline').value)/1000*settings().duration,revision=modelRevision;if(wanted<settings().duration&&!studio.getPrintLayerData?.()){time=settings().duration;showTime();if(!await ensureModelSlice()||revision!==modelRevision)return;}time=wanted;showTime();});
   $('export-button').addEventListener('click',exportVideo);$('export-button-bottom').addEventListener('click',exportVideo);
-  $('realistic-export-button')?.addEventListener('click',triggerRealisticExport);$('realistic-export-button-2')?.addEventListener('click',triggerRealisticExport);
   $('snapshot-button').addEventListener('click',saveSnapshot);$('cancel-export').addEventListener('click',cancelExport);
   $('export-dialog').addEventListener('cancel',event => {if(exporting){event.preventDefault();cancelExport();}});
   $('help-button').addEventListener('click', () => $('help-dialog').showModal());

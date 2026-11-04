@@ -158,7 +158,7 @@ def validate_config(config_path):
         duration=finite(out.get('durationSeconds'),'output.durationSeconds',.0001,1200)
         growth=finite(out.get('growthSeconds'),'output.growthSeconds',.0001,duration)
         out['durationSeconds']=duration; out['growthSeconds']=growth
-    if out.get('samples',64) not in (64,128): raise ValueError('Samples must be 64 or 128')
+    if out.get('samples',64) not in (32,64,128): raise ValueError('Samples must be 32, 64 or 128')
     out['samples'] = out.get('samples',64)
     output_path = local_path(root, out.get('directory','frames'), 'output.directory')
     if output_path.exists() and not output_path.is_dir(): raise ValueError('Output path is not a directory')
@@ -531,7 +531,7 @@ def render(config):
     scene=bpy.context.scene; scene.render.engine='CYCLES'; scene.cycles.samples=output['samples']; scene.cycles.use_denoising=True; scene.cycles.transparent_max_bounces=12
     if hasattr(scene.cycles, 'use_adaptive_sampling'):
         scene.cycles.use_adaptive_sampling = True
-        scene.cycles.adaptive_threshold = 0.025
+        scene.cycles.adaptive_threshold = 0.035
     if hasattr(scene.cycles, 'denoising_prefilter'):
         scene.cycles.denoising_prefilter = 'FAST'
     scene.cycles.seed=5489; scene.cycles.use_animated_seed=False; scene.cycles.max_bounces=6; scene.cycles.diffuse_bounces=2
