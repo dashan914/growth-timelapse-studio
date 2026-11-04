@@ -1,5 +1,10 @@
 # 版本演进与快速回溯索引 (CHANGELOG)
 
+## v1.5.0 (2026-11-05 00:49) — `feat(update-push)`
+- **变更摘要**：向已安装客户端推送 v1.2.0-beta.8 正式更新清单与校验指纹
+- **定位文件**：`SOURCE_MANIFEST.json`, `install-manifest.json`
+- **回溯上一版**：`git checkout v1.4.0` ｜ **撤回本次**：`git revert v1.5.0`
+
 ## v1.4.0 (2026-11-05 00:43) — `feat(release)`
 - **变更摘要**：发布 1.2.0-beta.8 发行配置、写实自然光影与硬件加速导出版本说明
 - **定位文件**：`.github/workflows/source-release.yml`, `INSTALL_AGENT.md`, `README.md`, `SOURCE_MANIFEST.json`, `beta-activation.mjs`, `beta-config.json`, `docs/RELEASE.md`, `docs/SOFTWARE_PURCHASE.md` 等 15 个文件

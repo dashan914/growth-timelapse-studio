@@ -335,8 +335,8 @@
     },
     {
       "path": "install-manifest.json",
-      "bytes": 2842,
-      "sha256": "6326e846d048ce922f12d614469bfcea30678e4d045bd252af0ea7a799080f5f"
+      "bytes": 3034,
+      "sha256": "f360277f4c61c86883ebf7804dca6d3647942119d42498745aa9fb262b0c47ca"
     },
     {
       "path": "package-lock.json",

@@ -6,9 +6,9 @@
     "version": "1.2.0-beta.8",
     "tag": "v1.2.0-beta.8",
     "releaseDate": "2026-11-05",
-    "published": false,
-    "url": null,
-    "sha256": null,
+    "published": true,
+    "url": "https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.8/growth-timelapse-studio-1.2.0-beta.8-runtime.zip",
+    "sha256": "8931fa25d074fdcdac1ac3ed61d82af3f0f0c765b4607dfd9c6e8d7258534a61",
     "archiveRoot": "growth-timelapse-studio",
     "kind": "runtime",
     "highlights": [
