@@ -3249,16 +3249,36 @@ gl_FragColor = vec4(floor(packedHeight / 256.0) / 255.0, mod(packedHeight, 256.0
     const plan = outputPlan || { width: sourceWidth, height: sourceHeight, renderWidth: sourceWidth, renderHeight: sourceHeight, scale: 1 };
     if (![1, 2, 4].includes(plan.scale) || ![plan.width, plan.height].every(value => Number.isInteger(value) && value > 0)
       || plan.renderWidth !== sourceWidth || plan.renderHeight !== sourceHeight || plan.width * plan.scale !== sourceWidth || plan.height * plan.scale !== sourceHeight) throw new Error('空间采样尺寸必须与当前完整渲染画面一致。');
-    const defaultPasses = typeof HTMLCanvasElement !== 'undefined' && this.canvas instanceof HTMLCanvasElement ? 2 : 8;
+    const isBrowserCanvas = typeof HTMLCanvasElement !== 'undefined' && this.canvas instanceof HTMLCanvasElement;
+    const defaultPasses = isBrowserCanvas ? 1 : 8;
     const passes = samples ?? (this._metadata?.historicalPathSurface === 'analytic-pbr-extrusion' || this._indexedSupports?.root.visible && this.options.supportDisplay !== 'paths' ? defaultPasses : 1);
     const blobMime = format === 'image/jpeg' || format === 'jpeg' ? 'image/jpeg' : 'image/png';
     const blobFrom = canvas => new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('无法生成帧画面，请检查模型纹理是否来自本地。')), blobMime, quality));
     if (passes === 1) {
+      if (plan.scale === 1) {
+        const blob = await blobFrom(this.canvas);
+        cancelled();
+        return blob;
+      }
+      this._exportState.finalCanvas ||= this.canvas.ownerDocument.createElement('canvas');
+      const finalCanvas = this._exportState.finalCanvas;
+      if (isBrowserCanvas) {
+        if (finalCanvas.width !== plan.width) finalCanvas.width = plan.width;
+        if (finalCanvas.height !== plan.height) finalCanvas.height = plan.height;
+        const ctx = finalCanvas.getContext('2d', { alpha: blobMime === 'image/png', colorSpace: 'srgb' });
+        if (ctx && typeof ctx.drawImage === 'function') {
+          ctx.clearRect?.(0, 0, plan.width, plan.height);
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(this.canvas, 0, 0, plan.width, plan.height);
+          const finalBlob = await blobFrom(finalCanvas);
+          cancelled();
+          return finalBlob;
+        }
+      }
       const blob = await blobFrom(this.canvas);
       cancelled();
-      if (plan.scale === 1) return blob;
-      this._exportState.finalCanvas ||= this.canvas.ownerDocument.createElement('canvas');
-      const finalBlob = await downsampleExportFrame(blob, plan, this._exportState.finalCanvas);
+      const finalBlob = await downsampleExportFrame(blob, plan, finalCanvas);
       cancelled();
       return finalBlob;
     }

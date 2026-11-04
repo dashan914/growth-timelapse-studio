@@ -2,6 +2,8 @@
 // mutation. Fixed 4/8/16/32 rotated layouts reference installed Three.js
 // SSAARenderPass (MIT; three.js authors; node_modules/three/LICENSE).
 const ROTATED_LAYOUTS = Object.freeze({
+  1: [[0,0]],
+  2: [[-4,-4],[4,4]],
   4: [[-2,-6],[6,-2],[-6,2],[2,6]],
   8: [[1,-3],[-1,3],[5,1],[-3,-5],[-5,5],[-7,-1],[3,7],[7,-7]],
   16: [[1,1],[-1,-3],[-3,2],[4,-1],[-5,-2],[2,5],[5,3],[3,-5],[-2,6],[0,-7],[-4,-6],[-6,4],[-8,0],[7,-4],[6,7],[-7,-8]],

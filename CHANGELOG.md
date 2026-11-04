@@ -1,5 +1,10 @@
 # 版本演进与快速回溯索引 (CHANGELOG)
 
+## v1.3.3 (2026-11-04 23:21) — `fix(studio-export)`
+- **变更摘要**：修复卡在1%的Fixed jitter报错并启用WebGL画布零拷贝GPU直绘缩放极速导出
+- **定位文件**：`src/export-quality.js`, `src/spatial-sampling.js`, `src/studio.js`
+- **回溯上一版**：`git checkout v1.3.2` ｜ **撤回本次**：`git revert v1.3.3`
+
 ## v1.3.2 (2026-11-04 23:13) — `perf(background-video)`
 - **变更摘要**：大幅提升带背景视频MP4导出速度：优化视频Seek步进容差并打通运镜硬件加速流式管道
 - **定位文件**：`src/app.js`, `src/camera-motion.js`, `src/studio.js`

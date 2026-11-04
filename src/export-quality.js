@@ -85,8 +85,9 @@ export async function downsampleExportFrame(blob, plan, canvas, decode = createI
       context.imageSmoothingEnabled = true;
       context.imageSmoothingQuality = 'high';
       context.drawImage(bitmap, 0, 0, plan.width, plan.height);
+      const targetMime = blob?.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
       return await new Promise((resolve, reject) => canvas.toBlob(
-        result => result ? resolve(result) : reject(new Error('无法生成高清画面。')), 'image/png',
+        result => result ? resolve(result) : reject(new Error('无法生成高清画面。')), targetMime, 0.95,
       ));
     }
     let state = FRAME_CANVASES.get(canvas);
