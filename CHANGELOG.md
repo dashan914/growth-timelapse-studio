@@ -1,5 +1,10 @@
 # 版本演进与快速回溯索引 (CHANGELOG)
 
+## v1.3.4 (2026-11-04 23:56) — `fix(realistic-preview)`
+- **变更摘要**：修复写实自然光影预览被切片支撑与背景视频拦截的问题并强化预览加载反馈
+- **定位文件**：`src/app.js`, `src/studio.js`, `src/style.css`, `tests/scene-package.test.mjs`
+- **回溯上一版**：`git checkout v1.3.3` ｜ **撤回本次**：`git revert v1.3.4`
+
 ## v1.3.3 (2026-11-04 23:21) — `fix(studio-export)`
 - **变更摘要**：修复卡在1%的Fixed jitter报错并启用WebGL画布零拷贝GPU直绘缩放极速导出
 - **定位文件**：`src/export-quality.js`, `src/spatial-sampling.js`, `src/studio.js`

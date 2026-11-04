@@ -406,7 +406,7 @@ function showTime() {
   if(photoPreview){
     const options=studio.options,keys=['modelOffsetX','modelOffsetY','modelOffsetZ','modelScale','modelRotationX','modelRotationY','modelRotationZ','showSupports'];
     const key=JSON.stringify([backgroundFile?.name,backgroundFile?.lastModified,referenceFile?.name,referenceFile?.lastModified,studio.metadata?.name,keys.map(key=>options[key]),studio.orientation?.quaternion.toArray(),studio.camera.position.toArray(),studio.camera.quaternion.toArray(),studio.camera.fov,settings().ratio,cropRect]);
-    photoPreview.update({enabled:$('output-appearance').value==='photo'&&Boolean(referenceAnalysis?.usable)&&!loading&&!exporting&&!cropEditing&&!calibrationMode&&!alignBusy,key,width:$('stage').clientWidth,height:$('stage').clientHeight,progress:growthProgress(state.progress)});
+    photoPreview.update({enabled:$('export-quality').value!=='realistic'&&$('output-appearance').value==='photo'&&Boolean(referenceAnalysis?.usable)&&!loading&&!exporting&&!cropEditing&&!calibrationMode&&!alignBusy,key,width:$('stage').clientWidth,height:$('stage').clientHeight,progress:growthProgress(state.progress)});
   }
 }
 
@@ -457,7 +457,7 @@ function updateExportQualityUI() {
   }
   const help=$('export-quality-help');
   if(help){
-    help.textContent=!eligibility.available?eligibility.reason:$('export-quality').value==='realistic'?'静止时计算当前帧写实预览；调整和播放时实时响应。写实导出较慢。':'画面即时更新，视频生成更快，使用相同的原模型与真实切片。';
+    help.textContent=!eligibility.available?eligibility.reason:$('export-quality').value==='realistic'?'静止时自动计算当前帧写实光影预览；调整和播放时实时响应。':'画面即时更新，视频生成更快，使用相同的原模型与真实切片。';
   }
 }
 
@@ -469,23 +469,34 @@ function syncRealisticPreview(progress=studio?.options.progress??1) {
   const enabled=selected&&studio.hasModel()&&!busy;
   if(!enabled){
     realisticPreview.update({enabled:false});
+    $('preview-mode').removeAttribute('data-realistic-state');
     $('preview-mode').textContent=selected&&studio.hasModel()?(playing?'写实模式 · 实时播放':busy?'写实模式 · 实时调整':'实时预览'):'实时预览';
     return;
   }
   const host=$('stage'),scale=Math.min(1.5,960/Math.max(host.clientWidth,host.clientHeight,1));
   const width=Math.max(64,Math.round(host.clientWidth*scale/2)*2),height=Math.max(64,Math.round(host.clientHeight*scale/2)*2);
+  const videoFrameBucket=studio.backgroundMetadata?.type==='video'&&studio._backgroundVideo?Math.round((studio._backgroundVideo.currentTime||0)*10):null;
   const key=JSON.stringify([modelRevision,sliceReadyJob?.id,studio.metadata.supportSource,studio.metadata.supportSegments,studio.metadata.supportSurfaceTriangles,
-    backgroundPreset,backgroundFile?.name,backgroundFile?.size,backgroundFile?.lastModified,renderOptions(),
+    backgroundPreset,backgroundFile?.name,backgroundFile?.size,backgroundFile?.lastModified,videoFrameBucket,renderOptions(),
     studio.orientation?.quaternion.toArray(),studio.camera.position.toArray(),studio.camera.quaternion.toArray(),studio.camera.projectionMatrix.toArray()]);
   realisticPreview.update({enabled:true,key,width,height,progress});
 }
 
 function showRealisticPreviewState({status,error}) {
-  const labels={waiting:'写实预览 · 等待计算',preparing:'写实预览 · 准备画面',queued:'写实预览 · 等待渲染',rendering:'写实预览 · 计算光影',complete:'写实预览',error:'写实预览失败 · 当前为实时画面'};
+  if(status==='disabled'){$('preview-mode').removeAttribute('data-realistic-state');$('stage').dataset.realisticPreview=status;$('realistic-preview-layer').setAttribute('aria-busy','false');return;}
+  const labels={waiting:'写实预览 · 准备计算…',preparing:'写实预览 · 封装场景…',queued:'写实预览 · 等待渲染…',rendering:'写实预览 · 计算自然光影…',complete:'写实 · 自然光影预览',error:'写实预览暂不可用 · 当前为实时画面'};
   if(labels[status])$('preview-mode').textContent=labels[status];
+  $('preview-mode').dataset.realisticState=status;
   $('stage').dataset.realisticPreview=status;
   $('realistic-preview-layer').setAttribute('aria-busy',String(['waiting','preparing','queued','rendering'].includes(status)));
-  if(error)$('export-quality-help').textContent=`${error.message} 当前可继续实时调整，切换画质可重试。`;
+  if(status==='preparing')say('正在调用 Blender 计算当前帧写实自然光影预览…');
+  else if(status==='complete'){
+    const supportHint=studio?.metadata?.supportsAvailable&&$('show-supports').checked?'（已聚焦主体模型）':'';
+    say(`写实自然光影预览已就绪${supportHint}。拖动时间轴或调整参数时自动切回实时响应。`);
+  }else if(error){
+    $('export-quality-help').textContent=`${error.message} 当前可继续实时调整，切换画质可重试。`;
+    say(`写实预览未能生成：${error.message}`,true);
+  }
 }
 
 function nativeSliceProgress(state={}){
@@ -1472,7 +1483,7 @@ async function exportRealisticVideo(config) {
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
     if(cancelled)throw new DOMException('Aborted','AbortError');
     studio.setOptions({...renderOptions(),transparent:outputFormat(config.format).transparent});
-    const packageResult=await studio.createRenderPackage({output:{width,height,fps:config.fps,...plan,samples:64},backgroundFile,bedWidthMm:Number($('bed-width').value),bedDepthMm:Number($('bed-depth').value),cameraMode:'fixed'});
+    const packageResult=await studio.createRenderPackage({output:{width,height,fps:config.fps,...plan,samples:64},backgroundFile,bedWidthMm:Number($('bed-width').value),bedDepthMm:Number($('bed-depth').value),cameraMode:'fixed',adaptForRealistic:true});
     if(cancelled)throw new DOMException('Aborted','AbortError');
     $('export-detail').textContent='正在提交完整写实任务…';
     const parameters=new URLSearchParams({name:studio.metadata.name.replace(/\.[^.]+$/,'')+'-写实生长',format:config.format,exportMode:config.watermarked?'watermarked':'unlocked'});
@@ -1655,8 +1666,8 @@ async function init() {
     if(!loading&&modelFile&&/\.stl$/i.test(modelFile.name)&&[1,10,1000].includes(units))await loadModel([modelFile],false,{sourceUnits:units,resliceExisting:true});
   });
   photoPreview=new PhotoPreviewRenderer({canvas:$('photo-growth-layer'),studio,prepare:preparePhotoFrames,renderBase:(progress,{afterPrepare})=>{if(afterPrepare)studio.render(progress,0);return studio.canvas;},onError:error=>say(error.message,true)});
-  realisticPreview=new RealisticPreviewRenderer({image:$('realistic-preview-layer'),request:api,onState:showRealisticPreviewState,
-    prepare:({width,height,progress})=>studio.createRenderPackage({output:{width,height,fps:1,frames:1,growthFrames:1,samples:64,previewProgress:progress},backgroundFile,bedWidthMm:Number($('bed-width').value),bedDepthMm:Number($('bed-depth').value),cameraMode:'fixed'}),
+  realisticPreview=new RealisticPreviewRenderer({image:$('realistic-preview-layer'),request:api,onState:showRealisticPreviewState,debounceMs:200,
+    prepare:({width,height,progress})=>studio.createRenderPackage({output:{width,height,fps:1,frames:1,growthFrames:1,samples:64,previewProgress:progress},backgroundFile,bedWidthMm:Number($('bed-width').value),bedDepthMm:Number($('bed-depth').value),cameraMode:'fixed',adaptForRealistic:true,allowVideoFrameSnapshot:true}),
     readImage:async(url,{signal})=>{const response=await fetch(url,{signal});if(!response.ok)throw new Error('写实预览画面读取失败。');const blob=await response.blob();if(blob.type!=='image/png'||!blob.size)throw new Error('写实预览画面格式无效。');return blob;}});
   window.addEventListener('pagehide',event=>{realisticPreview.dispose();if(event.persisted)previewSoundPlayer?.pause();else{cancelSoundImport();previewSoundPlayer?.dispose();if(customSoundUrl)URL.revokeObjectURL(customSoundUrl);}});
   new ResizeObserver(updateStageBounds).observe($('viewport'));

@@ -307,3 +307,41 @@ test('user painted 3MF retains every face, material group, palette and normal in
   assert.deepEqual(exportedPalette, expectedMaterials);
   assert.equal(gltf.meshes.every(mesh => mesh.primitives.every(primitive => primitive.attributes.NORMAL !== undefined)), true);
 });
+
+test('adaptForRealistic suppresses historical support segments and snapshots video background frame for preview', async () => {
+  const { parsePrintLayerGCode, PRINTER_MM_TO_THREE_MM } = await import('../src/print-layer.js');
+  const snapshot = fixture();
+  const parsed = parsePrintLayerGCode([
+    ';filament_colour = #e8e8e8', 'G21', 'G90', 'M83',
+    ';HEIGHT:0.2', ';WIDTH:0.42', ';TYPE:Outer wall', 'T0', 'G0 X-5 Y-5 Z0.2', 'G1 X5 Y-5 E1',
+    ';TYPE:Support', 'G0 X-2 Y2 Z0.2', 'G1 X2 Y2 E0.5',
+  ].join('\n'));
+  const printLayer = { parsed, historyLayers: 3, printerToSource: Float64Array.from(PRINTER_MM_TO_THREE_MM), sourceToWorld: new THREE.Matrix4().toArray(), toolColors: parsed.toolColors };
+  const fakePng = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const studio = Object.create(GrowthStudio.prototype);
+  Object.assign(studio, {
+    options: { ...snapshot.settings, showSupports: true },
+    _metadata: { ...snapshot.metadata, mode: 'mesh', sourceUnitsToMm: 1, supportSegments: 1 },
+    modelGroup: snapshot.root,
+    normalized: snapshot.normalized,
+    camera: snapshot.camera,
+    _fullSourceFov: 48,
+    floor: new THREE.Mesh(new THREE.PlaneGeometry(40, 40)),
+    _backgroundMetadata: { type: 'video' },
+    _backgroundSize: { width: 320, height: 240 },
+    getPrintLayerData: () => printLayer,
+    _captureBackgroundVideoFrame: async () => new Blob([fakePng], { type: 'image/png' }),
+  });
+  await assert.rejects(studio.createRenderPackage({ output: { width: 320, height: 240, fps: 1, frames: 1, growthFrames: 1, samples: 64, previewProgress: 0.5 } }), /静态照片/);
+  const result = await studio.createRenderPackage({
+    output: { width: 320, height: 240, fps: 1, frames: 1, growthFrames: 1, samples: 64, previewProgress: 0.5 },
+    adaptForRealistic: true,
+    allowVideoFrameSnapshot: true,
+    dependencies: { photoEncoder: async file => ({ bytes: new Uint8Array(await file.arrayBuffer()), sourceWidth: 320, sourceHeight: 240 }) },
+  });
+  assert.equal(result.suppressedSupports, true);
+  assert.equal(studio.options.showSupports, true);
+  assert.equal(result.metadata.printLayer.includeSupport, false);
+  assert.equal(result.metadata.background.type, 'photo');
+});
+

@@ -42,6 +42,9 @@ dialog{background:#2c3340;color:#dde7f6;border:1px solid #5c6e89;border-radius:9
 .viewport{isolation:isolate}
 .reference-layer{position:absolute;z-index:2;display:block;pointer-events:none}
 .realistic-preview-layer{object-fit:fill}
+.preview-tag[data-realistic-state="waiting"],.preview-tag[data-realistic-state="preparing"],.preview-tag[data-realistic-state="queued"],.preview-tag[data-realistic-state="rendering"]{color:#dbeafe;background:#1e3a5fd9;border-color:#60a5fa}
+.preview-tag[data-realistic-state="complete"]{color:#d1fae5;background:#14382cd9;border-color:#34d399}
+.preview-tag[data-realistic-state="error"]{color:#fecaca;background:#451a1ad9;border-color:#f87171}
 .preview-watermark{position:absolute;z-index:3;overflow:hidden;container-type:inline-size;pointer-events:none;user-select:none;color:#fff;opacity:.1}
 .preview-watermark>span{position:absolute;white-space:nowrap;font-size:clamp(12px,3.4cqw,24px);font-weight:600;letter-spacing:.08em;line-height:1.5;transform:translate(-50%,-50%) rotate(-24deg);text-shadow:0 1px 2px #0008;animation:preview-watermark-drift 16s ease-in-out infinite alternate;will-change:transform}
 .preview-watermark>span:nth-child(1){left:27%;top:21%;animation-duration:18s;animation-delay:0s}

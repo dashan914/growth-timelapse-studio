@@ -3185,6 +3185,24 @@ gl_FragColor = vec4(floor(packedHeight / 256.0) / 255.0, mod(packedHeight, 256.0
     return camera;
   }
 
+  async _captureBackgroundVideoFrame() {
+    const video = this._backgroundVideo;
+    const width = video?.videoWidth || this._backgroundSize?.width || 0;
+    const height = video?.videoHeight || this._backgroundSize?.height || 0;
+    if (!video || !width || !height || !this.canvas?.ownerDocument) return null;
+    const canvas = this.canvas.ownerDocument.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
+    if (!ctx || typeof ctx.drawImage !== 'function') return null;
+    try {
+      ctx.drawImage(video, 0, 0, width, height);
+      return await new Promise(resolve => canvas.toBlob(blob => resolve(blob || null), 'image/png'));
+    } catch {
+      return null;
+    }
+  }
+
   /** Complete, detached metric scene for the local physical renderer. */
   async createRenderPackage(options = {}) {
     if (!this.hasModel()) throw new Error('请先导入模型。');
@@ -3194,17 +3212,56 @@ gl_FragColor = vec4(floor(packedHeight / 256.0) / 255.0, mod(packedHeight, 256.0
     // advance growth, change the camera, or write the project's cache.
     const camera = this._framedCameraClone(output.width / output.height);
     const size = this.floor.geometry.parameters;
-    return createSceneRenderPackage({
+    const settings = { ...this.options };
+    const printLayer = this.getPrintLayerData();
+    let backgroundType = this._backgroundMetadata?.type || null;
+    let packageOptions = { ...options, output };
+    let suppressedSupports = false;
+    if (options.adaptForRealistic) {
+      if (settings.showSupports !== false) {
+        const hasGcodeSupports = Boolean(this._metadata?.supportSegments > 0 || printLayer?.parsed?.features?.some?.(f => f === 10 || f === 11));
+        if (hasGcodeSupports || this._supportOverlay) {
+          settings.showSupports = false;
+          suppressedSupports = true;
+        }
+      }
+      if (backgroundType === 'video' && options.allowVideoFrameSnapshot) {
+        if (settings.transparent) {
+          backgroundType = null;
+        } else {
+          const frameBlob = await this._captureBackgroundVideoFrame();
+          if (frameBlob) {
+            backgroundType = 'image';
+            packageOptions = { ...packageOptions, backgroundFile: frameBlob };
+          }
+        }
+      }
+    }
+    const buildSnapshot = nextSettings => ({
       root: this.modelGroup, camera, mode: this._metadata.mode,
-      metadata: { ...this._metadata }, settings: { ...this.options },
+      metadata: { ...this._metadata }, settings: nextSettings,
       units: { calibratedBed: this._photoBedSize && { ...this._photoBedSize }, normalizedScale: this.normalized?.scale.x, sourceUnitsToMm: this._metadata.sourceUnitsToMm, sourceUnitsInferred: this._metadata.sourceUnitsInferred },
-      floor: { object: this.floor, width: size.width * this.floor.scale.x, depth: size.height * this.floor.scale.y, worldSize:true },
-      backgroundType: this._backgroundMetadata?.type || null,
+      floor: { object: this.floor, width: size.width * this.floor.scale.x, depth: size.height * this.floor.scale.y, worldSize: true },
+      backgroundType,
       photoIdentity: this.photoIdentity,
       backgroundSize: this._backgroundSize && { ...this._backgroundSize },
       focusBoundsWorld: this._completeModelFocusBounds(),
-      printLayer: this.getPrintLayerData(),
-    }, { ...options, output });
+      printLayer,
+    });
+    let result;
+    try {
+      result = await createSceneRenderPackage(buildSnapshot(settings), packageOptions, options.dependencies);
+    } catch (error) {
+      if (options.adaptForRealistic && settings.showSupports !== false && /支撑|实例/.test(error?.message || '')) {
+        settings.showSupports = false;
+        suppressedSupports = true;
+        result = await createSceneRenderPackage(buildSnapshot(settings), packageOptions, options.dependencies);
+      } else {
+        throw error;
+      }
+    }
+    if (suppressedSupports) result.suppressedSupports = true;
+    return result;
   }
 
   startExport(width, height) {
