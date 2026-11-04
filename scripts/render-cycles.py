@@ -69,11 +69,21 @@ def load_print_layer(root, manifest):
 def geometry_signature(mesh):
     """Verify source positions, topology, normals and material regions, not just count."""
     digest=hashlib.sha256()
-    for collection,field,kind,count in [(mesh.vertices,'co','f',len(mesh.vertices)*3),(mesh.loops,'vertex_index','i',len(mesh.loops)),(mesh.polygons,'material_index','i',len(mesh.polygons)),(mesh.corner_normals,'vector','f',len(mesh.corner_normals)*3)]:
+    for collection,field,kind,count in [(mesh.vertices,'co','f',len(mesh.vertices)*3),(mesh.loops,'vertex_index','i',len(mesh.loops)),(mesh.polygons,'material_index','i',len(mesh.polygons))]:
         values=array.array(kind,[0])*count
         collection.foreach_get(field,values)
         digest.update(values.tobytes())
-    for attribute in mesh.color_attributes:
+    if hasattr(mesh,'corner_normals'):
+        values=array.array('f',[0])*(len(mesh.corner_normals)*3)
+        mesh.corner_normals.foreach_get('vector',values)
+        digest.update(values.tobytes())
+    elif hasattr(mesh,'calc_normals_split'):
+        mesh.calc_normals_split()
+        normals=[tuple(loop.normal) for loop in mesh.loops]
+        values=array.array('f',[component for normal in normals for component in normal])
+        digest.update(values.tobytes())
+        if hasattr(mesh,'free_normals_split'): mesh.free_normals_split()
+    for attribute in getattr(mesh,'color_attributes',[]):
         values=array.array('f',[0])*len(attribute.data)*4; attribute.data.foreach_get('color',values); digest.update(values.tobytes())
     return digest.hexdigest()
 
@@ -161,6 +171,9 @@ def validate_config(config_path):
     if 'effectiveSensorHeightMm' in camera or 'physicalFocalLengthMm' in camera:
         sensor=finite(camera.get('effectiveSensorHeightMm'),'camera.effectiveSensorHeightMm',.001,100); lens=finite(camera.get('physicalFocalLengthMm'),'camera.physicalFocalLengthMm',.001,10000)
         if camera.get('projectionMatrix') and abs(2*lens/sensor-camera['projectionMatrix'][5])>1e-6: raise ValueError('Lens and active digital sensor do not match projection')
+    if 'motion' in camera and camera['motion'] not in ('fixed','push'): raise ValueError('camera.motion must be fixed or push')
+    if 'pushAmount' in camera: finite(camera['pushAmount'],'camera.pushAmount',0,100)
+    if 'pushDuration' in camera: finite(camera['pushDuration'],'camera.pushDuration',.1,610)
     plane = config.get('plane', {})
     finite(plane.get('widthM'), 'plane.widthM', .0001,100)
     finite(plane.get('depthM'), 'plane.depthM', .0001,100)
@@ -230,6 +243,18 @@ def set_alpha_conversion(node, mode):
     else: node.inputs['Type'].default_value='To Straight' if mode=='PREMUL_TO_STRAIGHT' else 'To Premultiplied'
 
 
+def set_bsdf_socket(bsdf, names, value):
+    for name in ([names] if isinstance(names, str) else names):
+        if name in bsdf.inputs:
+            bsdf.inputs[name].default_value = value
+            return bsdf.inputs[name]
+    return None
+
+
+def enable_gpu(scene, prefs, requested=None):
+    return select_cycles_devices(scene, prefs, requested)
+
+
 def select_cycles_devices(scene, prefs, requested=None):
     requested = (requested or os.environ.get('GROWTH_CYCLES_DEVICE', 'AUTO')).upper()
     if requested not in ('AUTO', 'CPU', 'OPTIX', 'CUDA', 'METAL', 'HIP', 'ONEAPI'):
@@ -240,7 +265,8 @@ def select_cycles_devices(scene, prefs, requested=None):
     for backend in backends:
         try:
             prefs.compute_device_type = backend
-            prefs.get_devices()
+            if hasattr(prefs, 'refresh_devices'): prefs.refresh_devices()
+            if hasattr(prefs, 'get_devices'): prefs.get_devices()
             devices = [device for device in prefs.devices if device.type == backend]
             if not devices: continue
             for device in prefs.devices: device.use = device.type == backend
@@ -250,6 +276,36 @@ def select_cycles_devices(scene, prefs, requested=None):
             if requested != 'AUTO': raise
     if requested != 'AUTO': raise RuntimeError('Requested Cycles device is unavailable: ' + requested)
     return []
+
+
+def create_separate_rgba_node(nodes):
+    try:
+        node = nodes.new('CompositorNodeSeparateColor')
+        if hasattr(node, 'mode'): node.mode = 'RGB'
+    except RuntimeError:
+        node = nodes.new('CompositorNodeSepRGBA')
+    outputs = [
+        node.outputs.get('Red') or node.outputs.get('R') or node.outputs[0],
+        node.outputs.get('Green') or node.outputs.get('G') or node.outputs[1],
+        node.outputs.get('Blue') or node.outputs.get('B') or node.outputs[2],
+        node.outputs.get('Alpha') or node.outputs.get('A') or node.outputs[3],
+    ]
+    return node, outputs
+
+
+def create_combine_rgba_node(nodes):
+    try:
+        node = nodes.new('CompositorNodeCombineColor')
+        if hasattr(node, 'mode'): node.mode = 'RGB'
+    except RuntimeError:
+        node = nodes.new('CompositorNodeCombRGBA')
+    inputs = [
+        node.inputs.get('Red') or node.inputs.get('R') or node.inputs[0],
+        node.inputs.get('Green') or node.inputs.get('G') or node.inputs[1],
+        node.inputs.get('Blue') or node.inputs.get('B') or node.inputs[2],
+        node.inputs.get('Alpha') or node.inputs.get('A') or node.inputs[3],
+    ]
+    return node, inputs
 
 
 def build_model_grade(scene, rendered_socket, grade, exposure):
@@ -268,10 +324,10 @@ def build_model_grade(scene, rendered_socket, grade, exposure):
         return math_node('MULTIPLY',math_node('MULTIPLY',x,x),math_node('SUBTRACT',3,math_node('MULTIPLY',2,x)))
     unpremul=nodes.new('CompositorNodePremulKey'); set_alpha_conversion(unpremul,'PREMUL_TO_STRAIGHT')
     links.new(rendered_socket,unpremul.inputs[0])
-    separate=nodes.new('CompositorNodeSeparateColor'); separate.mode='RGB'; links.new(unpremul.outputs[0],separate.inputs[0])
+    separate, sep_outputs = create_separate_rgba_node(nodes); links.new(unpremul.outputs[0],separate.inputs[0])
     colors=[]
     for channel in range(3):
-        x=math_node('MULTIPLY',separate.outputs[channel],exposure)
+        x=math_node('MULTIPLY',sep_outputs[channel],exposure)
         # Restrained local ACES fit. This curve never touches the photograph.
         top=math_node('MULTIPLY',x,math_node('ADD',math_node('MULTIPLY',2.51,x),.03))
         bottom=math_node('ADD',math_node('MULTIPLY',x,math_node('ADD',math_node('MULTIPLY',2.43,x),.59)),.14)
@@ -303,9 +359,9 @@ def build_model_grade(scene, rendered_socket, grade, exposure):
     if saturation:
         luma=math_node('ADD',math_node('ADD',math_node('MULTIPLY',colors[0],.2126),math_node('MULTIPLY',colors[1],.7152)),math_node('MULTIPLY',colors[2],.0722))
         colors=[clamp(math_node('ADD',luma,math_node('MULTIPLY',math_node('SUBTRACT',value,luma),1+saturation))) for value in colors]
-    combine=nodes.new('CompositorNodeCombineColor'); combine.mode='RGB'
-    for index,value in enumerate(colors): links.new(value,combine.inputs[index])
-    links.new(separate.outputs[3],combine.inputs[3])
+    combine, comb_inputs = create_combine_rgba_node(nodes)
+    for index,value in enumerate(colors): links.new(value,comb_inputs[index])
+    links.new(sep_outputs[3],comb_inputs[3])
     premul=nodes.new('CompositorNodePremulKey'); set_alpha_conversion(premul,'STRAIGHT_TO_PREMUL'); links.new(combine.outputs[0],premul.inputs[0])
     return premul.outputs[0]
 
@@ -347,6 +403,12 @@ def add_fdm(material, surface):
         roughness=bsdf.inputs['Roughness']; preset=surface.get('preset','auto')
         if preset=='auto' and roughness.is_linked: links.new(roughness.links[0].from_socket,rough.inputs[0])
         else: rough.inputs[0].default_value={'pla':.64,'matte':.88,'silk':.30,'petg':.38}.get(preset,roughness.default_value)
+        if preset == 'silk':
+            set_bsdf_socket(bsdf, ['Specular IOR Level', 'Specular'], 0.65)
+            set_bsdf_socket(bsdf, ['Coat Weight', 'Clearcoat'], 0.25)
+        elif preset == 'petg':
+            set_bsdf_socket(bsdf, ['Specular IOR Level', 'Specular'], 0.55)
+            set_bsdf_socket(bsdf, ['Coat Weight', 'Clearcoat'], 0.15)
         links.new(offset.outputs[0],rough.inputs[1]); links.new(rough.outputs[0],roughness)
 
 def source_height_clip(material, height, print_inverse=None):
@@ -420,17 +482,64 @@ def actual_layer_meshes(data, layer_index, materials):
         object=bpy.data.objects.new('Actual walls and infill tool '+str(tool+1),mesh); bpy.context.scene.collection.objects.link(object); objects.append(object)
     return objects,count,roles,profiles
 
+def build_compositor(scene, paths, has_backdrop, shadow_enabled, model_layer, shadow_layer, config, lighting):
+    import bpy
+    if hasattr(scene, 'compositing_node_group'):
+        tree=bpy.data.node_groups.new('Growth compositor', 'CompositorNodeTree')
+        tree.interface.new_socket(name='Image', in_out='OUTPUT', socket_type='NodeSocketColor')
+        scene.compositing_node_group=tree
+        output_node='NodeGroupOutput'
+    else:
+        scene.use_nodes=True; tree=scene.node_tree; output_node='CompositorNodeComposite'
+    nodes,links=tree.nodes,tree.links; nodes.clear(); layers=nodes.new('CompositorNodeRLayers'); layers.layer=model_layer.name
+    grade=config.get('grading',{}); rendered=build_model_grade(scene,layers.outputs['Image'],grade,setting(grade,'exposure',lighting.get('exposure',1),.25,2.5))
+    backdrop=None; background=config.get('background',{})
+    if paths['photo'] and has_backdrop:
+        photo=nodes.new('CompositorNodeImage'); photo.image=bpy.data.images.load(str(paths['photo'])); photo.image.colorspace_settings.name='sRGB'
+        scale=nodes.new('CompositorNodeScale')
+        if hasattr(scale,'space'): scale.space='RENDER_SIZE'
+        else: scale.inputs['Type'].default_value='Render Size'
+        links.new(photo.outputs['Image'],scale.inputs[0])
+        backdrop=scale.outputs[0]
+    elif has_backdrop:
+        solid=nodes.new(compositor_node_type(scene,'CompositorNodeRGB')); solid.outputs[0].default_value=(*hex_linear(background.get('color'),'#30333a'),1); backdrop=solid.outputs[0]
+    shadow_mix=None
+    if backdrop is not None:
+        if shadow_enabled:
+            shadow=nodes.new('CompositorNodeRLayers'); shadow.layer=shadow_layer.name
+            intensity=nodes.new(compositor_node_type(scene,'CompositorNodeMixRGB')); shadow_mix=intensity; intensity.blend_type='MIX'; intensity.inputs[0].default_value=setting(lighting,'shadowOpacity',.28,0,.7); intensity.inputs[1].default_value=(1,1,1,1); links.new(shadow.outputs['Shadow Catcher'],intensity.inputs[2])
+            multiply=nodes.new(compositor_node_type(scene,'CompositorNodeMixRGB')); multiply.blend_type='MULTIPLY'; multiply.inputs[0].default_value=1; links.new(backdrop,multiply.inputs[1]); links.new(intensity.outputs[0],multiply.inputs[2]); backdrop=multiply.outputs[0]
+        over=nodes.new('CompositorNodeAlphaOver')
+        if hasattr(scene,'compositing_node_group'):
+            over.inputs['Factor'].default_value=1; links.new(backdrop,over.inputs['Background']); links.new(rendered,over.inputs['Foreground'])
+        else:
+            over.inputs[0].default_value=1; links.new(backdrop,over.inputs[1]); links.new(rendered,over.inputs[2])
+        rendered=over.outputs[0]
+    if config.get('camera',{}).get('motion')=='push' and 'previewProgress' not in config.get('output',{}):
+        push_node=nodes.new('CompositorNodeScale'); push_node.name='HQ Push Scale'
+        if hasattr(push_node,'space'): push_node.space='RELATIVE'
+        elif 'Type' in push_node.inputs: push_node.inputs['Type'].default_value='Relative'
+        links.new(rendered,push_node.inputs[0]); rendered=push_node.outputs[0]
+    composite=nodes.new(output_node); links.new(rendered,composite.inputs[0])
+    return shadow_mix
+
 def render(config):
     import bpy
     from mathutils import Matrix,Vector,Quaternion
     paths=config['_paths']; output=config['output']; paths['output'].mkdir(parents=True,exist_ok=True)
     started=time.monotonic(); bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)
-    scene=bpy.context.scene; scene.render.engine='CYCLES'; scene.cycles.samples=output['samples']; scene.cycles.use_denoising=True; scene.cycles.transparent_max_bounces=128
-    scene.cycles.seed=5489; scene.cycles.use_animated_seed=False; scene.cycles.max_bounces=8; scene.cycles.diffuse_bounces=4
+    scene=bpy.context.scene; scene.render.engine='CYCLES'; scene.cycles.samples=output['samples']; scene.cycles.use_denoising=True; scene.cycles.transparent_max_bounces=12
+    if hasattr(scene.cycles, 'use_adaptive_sampling'):
+        scene.cycles.use_adaptive_sampling = True
+        scene.cycles.adaptive_threshold = 0.025
+    if hasattr(scene.cycles, 'denoising_prefilter'):
+        scene.cycles.denoising_prefilter = 'FAST'
+    scene.cycles.seed=5489; scene.cycles.use_animated_seed=False; scene.cycles.max_bounces=6; scene.cycles.diffuse_bounces=2
+    if hasattr(scene.cycles, 'glossy_bounces'): scene.cycles.glossy_bounces=2
     scene.render.resolution_x=output['width']; scene.render.resolution_y=output['height']; scene.render.resolution_percentage=100
     scene.render.film_transparent=True; scene.render.dither_intensity=0; scene.render.image_settings.file_format='PNG'; scene.render.image_settings.color_mode='RGBA'
     scene.view_settings.view_transform='Standard'; scene.view_settings.look='None'; scene.view_settings.exposure=0; scene.view_settings.gamma=1
-    devices=select_cycles_devices(scene,bpy.context.preferences.addons['cycles'].preferences)
+    devices=enable_gpu(scene,bpy.context.preferences.addons['cycles'].preferences)
     bpy.ops.import_scene.gltf(filepath=str(paths['scene']),import_pack_images=True,merge_vertices=False)
     source_objects=list(scene.objects); sources=[object for object in source_objects if object.type=='MESH']
     if not sources: raise ValueError('GLB has no mesh geometry')
@@ -505,70 +614,56 @@ def render(config):
     shadow_collection=bpy.data.collections.new('HQ shadow receiver'); scene.collection.children.link(shadow_collection)
     bounce_collection=bpy.data.collections.new('HQ model bounce receiver'); scene.collection.children.link(bounce_collection)
     receiver=bpy.data.objects.new('Physical soft shadow catcher',mesh); shadow_collection.objects.link(receiver); receiver.is_shadow_catcher=True
-    ground=bpy.data.materials.new('Approximate PEI bounce'); ground.use_nodes=True; ground.node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=(.22,.23,.24,1); ground.node_tree.nodes['Principled BSDF'].inputs['Roughness'].default_value=.9; mesh.materials.append(ground)
+    ground=bpy.data.materials.new('Approximate PEI bounce'); ground.use_nodes=True; ground_bsdf=ground.node_tree.nodes['Principled BSDF']; set_bsdf_socket(ground_bsdf, 'Base Color', (.22,.23,.24,1)); set_bsdf_socket(ground_bsdf, 'Roughness', .9); mesh.materials.append(ground)
     bounce=receiver.copy(); bounce.data=mesh; bounce.is_shadow_catcher=False; bounce.visible_camera=False; bounce_collection.objects.link(bounce)
     background=config.get('background',{}); has_backdrop=not bool(background.get('transparent',False))
     shadow_enabled=bool(plane.get('shadowEnabled',True)) and has_backdrop
     receiver.hide_render=not shadow_enabled
     model_layer=scene.view_layers[0]; model_layer.name='HQ Model'; model_layer.layer_collection.children[shadow_collection.name].exclude=True
     shadow_layer=scene.view_layers.new('HQ Shadow'); shadow_layer.layer_collection.children[bounce_collection.name].exclude=True; shadow_layer.cycles.use_pass_shadow_catcher=True; shadow_layer.use=shadow_enabled
-    if hasattr(scene, 'compositing_node_group'):
-        tree=bpy.data.node_groups.new('Growth compositor', 'CompositorNodeTree')
-        tree.interface.new_socket(name='Image', in_out='OUTPUT', socket_type='NodeSocketColor')
-        scene.compositing_node_group=tree
-        output_node='NodeGroupOutput'
-    else:
-        scene.use_nodes=True; tree=scene.node_tree; output_node='CompositorNodeComposite'
-    nodes,links=tree.nodes,tree.links; nodes.clear(); layers=nodes.new('CompositorNodeRLayers'); layers.layer=model_layer.name
-    grade=config.get('grading',{}); rendered=build_model_grade(scene,layers.outputs['Image'],grade,setting(grade,'exposure',lighting.get('exposure',1),.25,2.5))
-    backdrop=None
-    if paths['photo'] and has_backdrop:
-        photo=nodes.new('CompositorNodeImage'); photo.image=bpy.data.images.load(str(paths['photo'])); photo.image.colorspace_settings.name='sRGB'
-        scale=nodes.new('CompositorNodeScale')
-        if hasattr(scale,'space'): scale.space='RENDER_SIZE'
-        else: scale.inputs['Type'].default_value='Render Size'
-        links.new(photo.outputs['Image'],scale.inputs[0])
-        backdrop=scale.outputs[0]
-    elif has_backdrop:
-        solid=nodes.new(compositor_node_type(scene,'CompositorNodeRGB')); solid.outputs[0].default_value=(*hex_linear(background.get('color'),'#30333a'),1); backdrop=solid.outputs[0]
-    shadow_mix=None
-    if backdrop is not None:
-        if shadow_enabled:
-            shadow=nodes.new('CompositorNodeRLayers'); shadow.layer=shadow_layer.name
-            intensity=nodes.new(compositor_node_type(scene,'CompositorNodeMixRGB')); shadow_mix=intensity; intensity.blend_type='MIX'; intensity.inputs[0].default_value=setting(lighting,'shadowOpacity',.28,0,.7); intensity.inputs[1].default_value=(1,1,1,1); links.new(shadow.outputs['Shadow Catcher'],intensity.inputs[2])
-            multiply=nodes.new(compositor_node_type(scene,'CompositorNodeMixRGB')); multiply.blend_type='MULTIPLY'; multiply.inputs[0].default_value=1; links.new(backdrop,multiply.inputs[1]); links.new(intensity.outputs[0],multiply.inputs[2]); backdrop=multiply.outputs[0]
-        over=nodes.new('CompositorNodeAlphaOver')
-        if hasattr(scene,'compositing_node_group'):
-            over.inputs['Factor'].default_value=1; links.new(backdrop,over.inputs['Background']); links.new(rendered,over.inputs['Foreground'])
-        else:
-            over.inputs[0].default_value=1; links.new(backdrop,over.inputs[1]); links.new(rendered,over.inputs[2])
-        rendered=over.outputs[0]
-    composite=nodes.new(output_node); links.new(rendered,composite.inputs[0])
+    shadow_mix=build_compositor(scene,paths,has_backdrop,shadow_enabled,model_layer,shadow_layer,config,lighting)
     # Source surfaces remain untouched. Real slice beads supply the exposed
     # walls/infill; a missing slice stays open, never a fake full-solid cap.
     print_materials={}
     if print_data:
+        preset=config.get('surface',{}).get('preset','auto')
         for tool,color in print_data['colors'].items():
             material=bpy.data.materials.new('Actual sliced filament '+str(tool+1)); material.use_nodes=True
-            bsdf=material.node_tree.nodes['Principled BSDF']; bsdf.inputs['Base Color'].default_value=(*hex_linear(color,'#ffffff'),1)
-            bsdf.inputs['Metallic'].default_value=0
-            bsdf.inputs['Roughness'].default_value={'pla':.64,'matte':.88,'silk':.30,'petg':.38}.get(config.get('surface',{}).get('preset','auto'),.64)
+            bsdf=material.node_tree.nodes['Principled BSDF']; set_bsdf_socket(bsdf, 'Base Color', (*hex_linear(color,'#ffffff'),1))
+            set_bsdf_socket(bsdf, 'Metallic', 0)
+            set_bsdf_socket(bsdf, 'Roughness', {'pla':.64,'matte':.88,'silk':.30,'petg':.38}.get(preset,.64))
+            if preset == 'silk':
+                set_bsdf_socket(bsdf, ['Specular IOR Level', 'Specular'], 0.65)
+                set_bsdf_socket(bsdf, ['Coat Weight', 'Clearcoat'], 0.25)
+            elif preset == 'petg':
+                set_bsdf_socket(bsdf, ['Specular IOR Level', 'Specular'], 0.55)
+                set_bsdf_socket(bsdf, ['Coat Weight', 'Clearcoat'], 0.15)
             print_materials[tool]=material
     emit({'type':'ready','triangles':triangles,'materials':len(materials),'devices':devices,'capMode':'sliced-gcode' if print_data else 'slice-required-open-section','projectionError':projection_error})
     source_preservation_checks=0; previous_growth=None; previous_frame=None; actual_rendered_frames=0
     print_objects=[]; previous_layer=None; print_window_peak=0; print_roles={}; print_profiles={}; print_windows=[]
+    push_node=compositor_tree(scene).nodes.get('HQ Push Scale')
     for index in range(output['frames']):
         growth=growth_at_frame(index,output); raw_growth=growth; layer_index=None
+        push_scale=1.0
+        if push_node is not None and output['frames']>1:
+            cam_cfg=config.get('camera',{})
+            push_amount=min(100.0,max(0.0,float(cam_cfg.get('pushAmount',20))))/100.0
+            push_duration=max(.1,float(cam_cfg.get('pushDuration',4)))
+            frame_time=(index/(output['frames']-1)*output['durationSeconds']) if 'durationSeconds' in output else (index/output['fps'])
+            push_scale=1.0+push_amount*min(1.0,max(0.0,frame_time/push_duration))
+            set_bsdf_socket(push_node,'X',push_scale); set_bsdf_socket(push_node,'Y',push_scale)
         if print_data:
             layer_index=print_data['layers']-1 if growth==1 else min(print_data['layers'],math.floor(growth*print_data['layers']+1e-10))-1
             state_empty=layer_index<0; state_complete=growth==1
             height=print_data['arrays']['layerHeights'][layer_index] if layer_index>=0 else 0
-            state_key=(layer_index,state_complete)
+            state_key=(layer_index,state_complete,round(push_scale,6)) if push_node is not None else (layer_index,state_complete)
         else:
             if config.get('growth',{}).get('stepped') and 0<growth<1:
                 layers=int(setting(config['growth'],'layerCount',180,1,10000)); growth=math.floor(growth*layers)/layers
             state_empty=growth<=0; state_complete=growth==1
-            height=config['bounds']['minY']+(config['bounds']['maxY']-config['bounds']['minY'])*growth; state_key=growth
+            height=config['bounds']['minY']+(config['bounds']['maxY']-config['bounds']['minY'])*growth
+            state_key=(growth,round(push_scale,6)) if push_node is not None else growth
         filename='frames'+str(index).zfill(6)+'.png'; destination=paths['output']/filename
         if previous_growth==state_key and previous_frame:
             if any(object.data is not original[object] for object in sources): raise RuntimeError('Visible source mesh data was substituted')
@@ -604,7 +699,7 @@ def render(config):
         object.data.calc_loop_triangles(); final_triangles+=len(object.data.loop_triangles)
     if final_triangles!=triangles: raise RuntimeError('Complete mesh triangle count changed')
     if any(geometry_signature(mesh)!=signature for mesh,signature in original_signatures.items()): raise RuntimeError('Source positions, normals, palette regions or topology changed')
-    stats={'schemaVersion':1,'blender':bpy.app.version_string,'originalTriangles':triangles,'completeTriangles':final_triangles,'sourceGeometryUnchanged':True,'sourcePreservationFrames':source_preservation_checks,'sourceMeshes':len(sources),'materials':len(materials),'decimation':False,'frames':output['frames'],'actualRenderedFrames':actual_rendered_frames,'growthFrames':output['growthFrames'],'durationSeconds':output.get('durationSeconds'),'growthSeconds':output.get('growthSeconds'),'width':output['width'],'height':output['height'],'samples':output['samples'],'devices':devices,'seconds':round(time.monotonic()-started,3),'projectionError':projection_error,'capMode':'sliced-gcode' if print_data else 'slice-required-open-section','capOnlyTrianglesPeak':0,'printSegments':print_data['count'] if print_data else 0,'printLayerCount':print_data['layers'] if print_data else 0,'printWindowSegmentsPeak':print_window_peak,'printWindows':print_windows,'printRoleCountsPeak':print_roles,'printCrossSection':print_data['manifest']['crossSection'] if print_data else None,'printProfileCountsPeak':print_profiles,'cutTopology':'original-full-surfaces-plus-real-slice-beads' if print_data else 'original-full-surfaces-open-until-sliced','transparentBounces':128,'environmentMode':'artistic-area-light-proxy','shadowMode':'independent-rgb-catcher-times-linear-background','photoProtected':bool(paths['photo']),'gradingScope':'model-only'}
+    stats={'schemaVersion':1,'blender':bpy.app.version_string,'originalTriangles':triangles,'completeTriangles':final_triangles,'sourceGeometryUnchanged':True,'sourcePreservationFrames':source_preservation_checks,'sourceMeshes':len(sources),'materials':len(materials),'decimation':False,'frames':output['frames'],'actualRenderedFrames':actual_rendered_frames,'growthFrames':output['growthFrames'],'durationSeconds':output.get('durationSeconds'),'growthSeconds':output.get('growthSeconds'),'width':output['width'],'height':output['height'],'samples':output['samples'],'devices':devices,'seconds':round(time.monotonic()-started,3),'projectionError':projection_error,'capMode':'sliced-gcode' if print_data else 'slice-required-open-section','capOnlyTrianglesPeak':0,'printSegments':print_data['count'] if print_data else 0,'printLayerCount':print_data['layers'] if print_data else 0,'printWindowSegmentsPeak':print_window_peak,'printWindows':print_windows,'printRoleCountsPeak':print_roles,'printCrossSection':print_data['manifest']['crossSection'] if print_data else None,'printProfileCountsPeak':print_profiles,'cutTopology':'original-full-surfaces-plus-real-slice-beads' if print_data else 'original-full-surfaces-open-until-sliced','transparentBounces':12,'environmentMode':'artistic-area-light-proxy','shadowMode':'independent-rgb-catcher-times-linear-background','photoProtected':bool(paths['photo']),'gradingScope':'model-only'}
     write_completion_stats(paths['output'],stats,output)
 
 def main():

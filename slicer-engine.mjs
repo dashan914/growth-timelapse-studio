@@ -41,6 +41,29 @@ export function localSlicerCandidates(engineId, { platform = process.platform, e
       ? path.win32.join(env.LOCALAPPDATA, 'Programs', 'Flash Studio', 'Flash Studio.exe')
       : path.win32.join(env.LOCALAPPDATA, 'Programs', 'OrcaSlicer', 'orca-slicer.exe'));
     candidates.push(...windowsInstalledExecutables(engineId, { env, platform }));
+    if (engineId === 'orca') {
+      candidates.push(...roots.flatMap(root => [
+        path.win32.join(root, 'Orca Slicer', 'orca-slicer.exe'),
+        path.win32.join(root, 'Orca Slicer', 'OrcaSlicer.exe'),
+      ]));
+      if (env.LOCALAPPDATA) {
+        candidates.push(
+          path.win32.join(env.LOCALAPPDATA, 'Programs', 'OrcaSlicer', 'OrcaSlicer.exe'),
+          path.win32.join(env.LOCALAPPDATA, 'Programs', 'Orca Slicer', 'orca-slicer.exe'),
+          path.win32.join(env.LOCALAPPDATA, 'Programs', 'Orca Slicer', 'OrcaSlicer.exe'),
+          path.win32.join(env.LOCALAPPDATA, 'OrcaSlicer', 'orca-slicer.exe'),
+          path.win32.join(env.LOCALAPPDATA, 'OrcaSlicer', 'OrcaSlicer.exe'),
+          path.win32.join(env.LOCALAPPDATA, 'Orca Slicer', 'orca-slicer.exe'),
+          path.win32.join(env.LOCALAPPDATA, 'Orca Slicer', 'OrcaSlicer.exe'),
+        );
+      }
+    } else if (engineId === 'flash' && env.LOCALAPPDATA) {
+      candidates.push(
+        path.win32.join(env.LOCALAPPDATA, 'Programs', 'Orca-Flashforge', 'orca-flashforge.exe'),
+        path.win32.join(env.LOCALAPPDATA, 'Flash Studio', 'Flash Studio.exe'),
+        path.win32.join(env.LOCALAPPDATA, 'Orca-Flashforge', 'orca-flashforge.exe'),
+      );
+    }
   } else {
     candidates = engineId === 'flash'
       ? ['orca-flashforge', 'flash-studio', '/usr/bin/orca-flashforge', '/usr/local/bin/orca-flashforge']
@@ -56,8 +79,9 @@ async function resolveExecutable(candidate, platform, env) {
   const paths = platform === 'win32' ? path.win32 : path;
   const command = !/[\\/]/.test(candidate);
   const folders = command ? String(env.PATH || '').split(platform === 'win32' ? ';' : path.delimiter).filter(Boolean) : [''];
-  for (const folder of folders) {
-    const filename = command ? paths.join(folder, candidate) : candidate;
+  const extensions = platform === 'win32' && command && !paths.extname(candidate) ? ['', '.exe', '.EXE'] : [''];
+  for (const folder of folders) for (const ext of extensions) {
+    const filename = command ? paths.join(folder, candidate + ext) : candidate + ext;
     try {
       await access(filename, platform === 'win32' ? constants.F_OK : constants.X_OK);
       if ((await stat(filename)).isFile()) return await realpath(filename);

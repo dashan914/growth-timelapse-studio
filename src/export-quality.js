@@ -76,6 +76,19 @@ export async function downsampleExportFrame(blob, plan, canvas, decode = createI
   const bitmap = await decode(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'default' });
   try {
     if (bitmap.width !== plan.renderWidth || bitmap.height !== plan.renderHeight) throw new Error('渲染源图尺寸与 2×导出计划不一致，不能改裁剪或拉伸。');
+    if (canvas.width !== plan.width) canvas.width = plan.width;
+    if (canvas.height !== plan.height) canvas.height = plan.height;
+    const context = canvas.getContext('2d', { alpha: true, colorSpace: 'srgb' });
+    if (!context) throw new Error('无法创建导出画布。');
+    if (!createScratch && typeof context.drawImage === 'function' && 'imageSmoothingQuality' in context) {
+      context.clearRect?.(0, 0, plan.width, plan.height);
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(bitmap, 0, 0, plan.width, plan.height);
+      return await new Promise((resolve, reject) => canvas.toBlob(
+        result => result ? resolve(result) : reject(new Error('无法生成高清画面。')), 'image/png',
+      ));
+    }
     let state = FRAME_CANVASES.get(canvas);
     if (!state || state.width !== plan.width || state.height !== plan.height) {
       const scratch = scratchCanvas(canvas, plan.renderWidth, plan.renderHeight, createScratch);
@@ -85,10 +98,6 @@ export async function downsampleExportFrame(blob, plan, canvas, decode = createI
       state = { scratch, read, width: plan.width, height: plan.height, image: null };
       FRAME_CANVASES.set(canvas, state);
     }
-    if (canvas.width !== plan.width) canvas.width = plan.width;
-    if (canvas.height !== plan.height) canvas.height = plan.height;
-    const context = canvas.getContext('2d', { alpha: true, colorSpace: 'srgb' });
-    if (!context) throw new Error('无法创建导出画布。');
     state.read.clearRect(0, 0, plan.renderWidth, plan.renderHeight);
     state.read.imageSmoothingEnabled = false;
     state.read.drawImage(bitmap, 0, 0); // 1:1 readback; browser does no sRGB resize.

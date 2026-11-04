@@ -441,7 +441,6 @@ function updateStageBounds() {
 }
 
 function realisticEligibility(config=settings()) {
-  if(config.motion==='push'||config.soundEffect&&config.soundEffect!=='none')return {available:false,reason:'运镜和音效使用实时画质导出。关闭两者后可选择写实画质。'};
   return realisticExportAvailability({runtime:realisticRuntime,metadata:studio?.metadata,backgroundType:studio?.backgroundMetadata?.type,appearance:config.appearance,showSupports:$('show-supports').checked,supportDisplay:'solid',frames:Math.round(config.duration*config.fps)});
 }
 
@@ -451,6 +450,11 @@ function updateExportQualityUI() {
   $('export-quality').value=eligibility.available?(qualityPreference||'realtime'):'realtime';
   $('export-quality').disabled=exporting||loading;
   $('export-quality-help').textContent=!eligibility.available?eligibility.reason:$('export-quality').value==='realistic'?'静止时计算当前帧写实预览；调整和播放时实时响应。写实导出较慢。':'画面即时更新，视频生成更快，使用相同的原模型与真实切片。';
+  const active=$('export-quality').value==='realistic';
+  for(const id of ['realistic-export-button','realistic-export-button-2']){
+    const btn=$(id);
+    if(btn){btn.classList?.toggle('active',active);btn.setAttribute?.('aria-pressed',String(active));}
+  }
 }
 
 function syncRealisticPreview(progress=studio?.options.progress??1) {
@@ -497,12 +501,12 @@ async function prepareLocalModelSlice(file,{signal,preset='h2c',sourceUnits=1,on
   let id=null,cancellation=null;
   const cancelNative=()=>{if(id)cancellation ||= api(`/api/slices/${id}`,{method:'DELETE'}).catch(()=>{});};
   signal?.addEventListener('abort',cancelNative,{once:true});
+  const format=file.name.toLowerCase().split('.').pop();
   try{
     abort();onProgress({phase:'slicer',message:'正在检查本机切片器…'});
     const health=await api('/api/health',{signal});slicingRuntime=health.slicing;
     syncDetectedSlicer();
     if(!slicingRuntime?.available)throw new Error('未找到可用的本机切片器，请在运行本机服务的电脑安装 Bambu Studio、OrcaSlicer 或 Flash Studio 后重试。');
-    const format=file.name.toLowerCase().split('.').pop();
     const options={format,preset,engineId:'auto',sourceName:file.name,sourceCoordinateSystem:'printer-z-up',
       sourceToPrinter:new THREE.Matrix4().makeScale(format==='stl'?sourceUnits:1,format==='stl'?sourceUnits:1,format==='stl'?sourceUnits:1).toArray(),
       ...(format==='stl'?{toolColors:[$('model-color').value]}:{})};
@@ -521,7 +525,20 @@ async function prepareLocalModelSlice(file,{signal,preset='h2c',sourceUnits=1,on
     abort();return {job,parsed};
   }catch(error){
     cancelNative();if(cancellation)await cancellation;
-    if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+    if(signal?.aborted||error?.name==='AbortError')throw new DOMException('Aborted','AbortError');
+    if(format==='3mf'&&typeof file?.arrayBuffer==='function'){
+      try{
+        const buf=await file.arrayBuffer(),bytes=new Uint8Array(buf);
+        if(bytes.length>=4&&bytes[0]===0x50&&bytes[1]===0x4b&&bytes[2]===0x03&&bytes[3]===0x04){
+          const {parseSlicedThreeMF}=await import('./sliced-3mf.js');
+          const sliced=await parseSlicedThreeMF(buf,{fileName:file.name,signal,allowMultiPlate:true,allowAnyPlate:true});
+          abort();
+          return {job:{id:null,status:'complete',reSliced:false,engineId:'embedded',engineRevision:'embedded-3mf',engine:'内置切片路径',
+            sourceSha256:`embedded-${file.name}-${file.size||bytes.length}`,gcodeSha256:`embedded-gcode-${file.name}-${file.size||bytes.length}`,
+            printerToSource:new THREE.Matrix4().makeScale(1,1,1).toArray(),toolColors:sliced.toolColors||[],sliceSettings:sliced.sliceSettings||{}},parsed:sliced.parsedGCode};
+        }
+      }catch{}
+    }
     throw error;
   }finally{signal?.removeEventListener('abort',cancelNative);}
 }
@@ -882,7 +899,7 @@ function restoreSettings() {
 }
 
 function lockWorkspace(locked) {
-  for (const element of document.querySelectorAll('.workspace button,.workspace input,.workspace select,.header-actions #export-button')) {
+  for (const element of document.querySelectorAll('.workspace button,.workspace input,.workspace select,.header-actions #export-button,.header-actions #realistic-export-button')) {
     element.disabled = element.id === 'cancel-import' ? !importProgressUI?.cancelEnabled : locked;
   }
   const exportButton=$('export-button');
@@ -896,6 +913,7 @@ function lockWorkspace(locked) {
   if (!locked) {
     const ready=Boolean(studio?.hasModel()&&studio?.getPrintLayerData?.());
     for(const id of ['export-button','play-button','restart-button','timeline','snapshot-button','reset-camera','canvas-lock','canvas-move','canvas-rotate','canvas-scale','canvas-shadow','canvas-color','canvas-dof','lens-camera-drag'])$(id).disabled=!ready;
+    for(const id of ['realistic-export-button','realistic-export-button-2']){const btn=$(id);if(btn)btn.disabled=!ready;}
     const gcode = studio?.metadata?.mode === 'gcode';
     $('layers').disabled = gcode;
     $('layer-lines').disabled = gcode;
@@ -1538,20 +1556,28 @@ async function exportVideo() {
       studio.startExport(plan.renderWidth,plan.renderHeight);
       studio.setOptions({...renderOptions(),transparent:outputFormat(config.format).transparent});
       const pushCanvas=document.createElement('canvas');
-      for (let index = 0; index < frames; index++) {
-        if (cancelled) throw new DOMException('Aborted','AbortError');
-        const frameTime = index / Math.max(1,frames-1) * config.duration;
-        const state = timelineState(frameTime,config.duration,config.hold,config.motion);
-        let blob = await studio.captureFrame(state.progress,state.rotation,index/config.fps,{outputPlan:plan,signal});
-        if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo);
-        blob=await applyFramePush(blob,cameraMotionScale(frameTime,config),pushCanvas);
-        await api(`/api/exports/${exportId}/frames?index=${index}`,{method:'POST',headers:{'Content-Type':'image/png'},body:blob,signal});
-        const pct = Math.round((index+1)/frames*95);
-        $('export-progress').value = pct; $('export-percent').textContent = `${pct}%`;
-        $('export-frame-count').textContent = `${index+1} / ${frames} 帧`;
-        const elapsed = (performance.now()-started)/1000;
-        const remaining = (frames-index-1)*elapsed/(index+1);
-        $('export-detail').textContent = index < 3 ? '正在逐帧生成画面…' : `正在生成画面，预计还需 ${remaining >= 60 ? Math.ceil(remaining/60)+' 分钟' : Math.max(1,Math.ceil(remaining))+' 秒'}`;
+      let previousUploadPromise=null;
+      try {
+        for (let index = 0; index < frames; index++) {
+          if (cancelled) throw new DOMException('Aborted','AbortError');
+          const frameTime = index / Math.max(1,frames-1) * config.duration;
+          const state = timelineState(frameTime,config.duration,config.hold,config.motion);
+          let blob = await studio.captureFrame(state.progress,state.rotation,index/config.fps,{outputPlan:plan,signal});
+          if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo);
+          blob=await applyFramePush(blob,cameraMotionScale(frameTime,config),pushCanvas);
+          if(previousUploadPromise)await previousUploadPromise;
+          previousUploadPromise=api(`/api/exports/${exportId}/frames?index=${index}`,{method:'POST',headers:{'Content-Type':'image/png'},body:blob,signal});
+          const pct = Math.round((index+1)/frames*95);
+          $('export-progress').value = pct; $('export-percent').textContent = `${pct}%`;
+          $('export-frame-count').textContent = `${index+1} / ${frames} 帧`;
+          const elapsed = (performance.now()-started)/1000;
+          const remaining = (frames-index-1)*elapsed/(index+1);
+          $('export-detail').textContent = index < 3 ? '正在逐帧生成画面…' : `正在生成画面，预计还需 ${remaining >= 60 ? Math.ceil(remaining/60)+' 分钟' : Math.max(1,Math.ceil(remaining))+' 秒'}`;
+        }
+        if(previousUploadPromise)await previousUploadPromise;
+      } catch (loopError) {
+        await previousUploadPromise?.catch(() => {});
+        throw loopError;
       }
       $('export-detail').textContent = outputFormat(config.format).video ? '画面已完成，正在保存视频…' : '画面已完成，正在打包图片…';
       const result = await api(`/api/exports/${exportId}/finish`,{method:'POST',signal});
@@ -1577,6 +1603,17 @@ async function exportVideo() {
       $('cancel-export').disabled = false;updateReferenceView();
     }
   } finally { exportAuthorizing=false; }
+}
+
+async function triggerRealisticExport() {
+  if (exporting || exportAuthorizing || loading || snapshotting) return;
+  qualityPreference = 'realistic';
+  if ($('realistic-quality-option')) $('realistic-quality-option').disabled = false;
+  if ($('export-quality')) $('export-quality').value = 'realistic';
+  setModelMode(null);
+  updateExportQualityUI();
+  updateSettings();
+  await exportVideo();
 }
 
 function tick(timestamp) {
@@ -1771,6 +1808,7 @@ async function init() {
   $('restart-button').addEventListener('click', () => playGrowth(true));
   $('timeline').addEventListener('input', async () => {playing=false;touchPreviewInteraction();const wanted=Number($('timeline').value)/1000*settings().duration,revision=modelRevision;if(wanted<settings().duration&&!studio.getPrintLayerData?.()){time=settings().duration;showTime();if(!await ensureModelSlice()||revision!==modelRevision)return;}time=wanted;showTime();});
   $('export-button').addEventListener('click',exportVideo);$('export-button-bottom').addEventListener('click',exportVideo);
+  $('realistic-export-button')?.addEventListener('click',triggerRealisticExport);$('realistic-export-button-2')?.addEventListener('click',triggerRealisticExport);
   $('snapshot-button').addEventListener('click',saveSnapshot);$('cancel-export').addEventListener('click',cancelExport);
   $('export-dialog').addEventListener('cancel',event => {if(exporting){event.preventDefault();cancelExport();}});
   $('help-button').addEventListener('click', () => $('help-dialog').showModal());

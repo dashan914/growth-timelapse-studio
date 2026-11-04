@@ -1061,14 +1061,28 @@ export class GrowthStudio {
       } else if (format === '3mf') {
         const data = await file.arrayBuffer();
         const { loadPaintedThreeMF } = await import('./painted-3mf.js');
-        const painted = await loadPaintedThreeMF(data, { manager: local.manager });
+        const painted = await loadPaintedThreeMF(data, { manager: local.manager, allowNegativeVolumes: true, clampExtruder: true });
         const nativeSupport = inspectThreeMFArchive(data);
         if(painted.root)root=painted.root;
         else{
-          const {normalizeThreeMFUnitsForLoader}=await import('./three-mf-units.js');
-          const normalized=normalizeThreeMFUnitsForLoader(data);
-          root=new ThreeMFLoader(local.manager).parse(normalized.data);
-          Object.assign(importMetadata,{sourceUnitsToMm:1,sourceUnitsInferred:false,threeMFUnitModels:normalized.models,viewerUnitNormalization:true});
+          try{
+            const {normalizeThreeMFUnitsForLoader}=await import('./three-mf-units.js');
+            const normalized=normalizeThreeMFUnitsForLoader(data);
+            root=new ThreeMFLoader(local.manager).parse(normalized.data);
+            Object.assign(importMetadata,{sourceUnitsToMm:1,sourceUnitsInferred:false,threeMFUnitModels:normalized.models,viewerUnitNormalization:true});
+          }catch(unitError){
+            if(nativeSupport.hasEmbeddedGCode){
+              const sliced=await parseSlicedThreeMF(data,{fileName:file.name,signal,allowMultiPlate:true,allowAnyPlate:true});
+              return await this.loadFiles([new File([sliced.gcodeText||new Uint8Array(0)],file.name.replace(/\.3mf$/i,'.gcode'))],{...printOptions,parsedGCode:sliced.parsedGCode,sourceName:file.name,preserveScene});
+            }
+            throw unitError;
+          }
+        }
+        let hasMesh = false;
+        root?.traverse?.(node => { if (node.isMesh && (node.geometry?.attributes?.position?.count || 0) > 0) hasMesh = true; });
+        if (!hasMesh && nativeSupport.hasEmbeddedGCode) {
+          const sliced = await parseSlicedThreeMF(data, { fileName: file.name, signal, allowMultiPlate: true, allowAnyPlate: true });
+          return await this.loadFiles([new File([sliced.gcodeText || new Uint8Array(0)], file.name.replace(/\.3mf$/i, '.gcode'))], { ...printOptions, parsedGCode: sliced.parsedGCode, sourceName: file.name, preserveScene });
         }
         root.rotation.x = -Math.PI / 2;
         warnings.push(...(painted.warnings || []));
@@ -3221,7 +3235,8 @@ gl_FragColor = vec4(floor(packedHeight / 256.0) / 255.0, mod(packedHeight, 256.0
     const plan = outputPlan || { width: sourceWidth, height: sourceHeight, renderWidth: sourceWidth, renderHeight: sourceHeight, scale: 1 };
     if (![1, 2, 4].includes(plan.scale) || ![plan.width, plan.height].every(value => Number.isInteger(value) && value > 0)
       || plan.renderWidth !== sourceWidth || plan.renderHeight !== sourceHeight || plan.width * plan.scale !== sourceWidth || plan.height * plan.scale !== sourceHeight) throw new Error('空间采样尺寸必须与当前完整渲染画面一致。');
-    const passes = samples ?? (this._metadata?.historicalPathSurface === 'analytic-pbr-extrusion' || this._indexedSupports?.root.visible && this.options.supportDisplay !== 'paths' ? 8 : 1);
+    const defaultPasses = typeof HTMLCanvasElement !== 'undefined' && this.canvas instanceof HTMLCanvasElement ? 2 : 8;
+    const passes = samples ?? (this._metadata?.historicalPathSurface === 'analytic-pbr-extrusion' || this._indexedSupports?.root.visible && this.options.supportDisplay !== 'paths' ? defaultPasses : 1);
     const blobFrom = canvas => new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('无法生成 PNG 帧，请检查模型纹理是否来自本地。')), 'image/png'));
     if (passes === 1) {
       const blob = await blobFrom(this.canvas);

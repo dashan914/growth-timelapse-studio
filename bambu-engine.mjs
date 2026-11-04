@@ -24,6 +24,27 @@ export function bambuStudioCandidates({ platform = process.platform, env = proce
     candidates = roots.flatMap(root => ['bambu-studio.exe', 'BambuStudio.exe'].map(name => path.win32.join(root, 'Bambu Studio', name)));
     if (env.LOCALAPPDATA) candidates.push(path.win32.join(env.LOCALAPPDATA, 'Programs', 'Bambu Studio', 'bambu-studio.exe'));
     candidates.push(...windowsInstalledExecutables('bambu', { env, platform }));
+    candidates.push(...roots.flatMap(root => ['bambu-studio.exe', 'BambuStudio.exe'].map(name => path.win32.join(root, 'BambuStudio', name))));
+    if (env.LOCALAPPDATA) {
+      candidates.push(
+        path.win32.join(env.LOCALAPPDATA, 'Programs', 'Bambu Studio', 'BambuStudio.exe'),
+        path.win32.join(env.LOCALAPPDATA, 'Programs', 'BambuStudio', 'bambu-studio.exe'),
+        path.win32.join(env.LOCALAPPDATA, 'Programs', 'BambuStudio', 'BambuStudio.exe'),
+        path.win32.join(env.LOCALAPPDATA, 'Bambu Studio', 'bambu-studio.exe'),
+        path.win32.join(env.LOCALAPPDATA, 'Bambu Studio', 'BambuStudio.exe'),
+        path.win32.join(env.LOCALAPPDATA, 'BambuStudio', 'bambu-studio.exe'),
+        path.win32.join(env.LOCALAPPDATA, 'BambuStudio', 'BambuStudio.exe'),
+      );
+    }
+    if (process.platform === 'win32') {
+      for (const drive of ['C:\\', 'D:\\', 'E:\\', 'F:\\', 'G:\\']) {
+        for (const dir of ['Program Files\\Bambu Studio', 'Program Files (x86)\\Bambu Studio', 'Bambu Studio', 'BambuStudio']) {
+          for (const exe of ['bambu-studio.exe', 'BambuStudio.exe']) {
+            candidates.push(path.win32.join(drive, dir, exe));
+          }
+        }
+      }
+    }
   } else {
     candidates = ['bambu-studio', 'BambuStudio', '/usr/bin/bambu-studio', '/usr/local/bin/bambu-studio',
       '/opt/BambuStudio/bin/bambu-studio'];
@@ -34,10 +55,12 @@ export function bambuStudioCandidates({ platform = process.platform, env = proce
 export const BAMBU_STUDIO_DEFAULT_PATH = bambuStudioCandidates().find(candidate => resolveExecutablePath(candidate)) || bambuStudioCandidates()[0];
 
 async function resolveExecutable(candidate, env, platform) {
+  const paths = platform === 'win32' ? path.win32 : path;
   const isCommand = !/[\\/]/.test(candidate);
   const folders = isCommand ? String(env.PATH || '').split(platform === 'win32' ? ';' : path.delimiter).filter(Boolean) : [''];
-  for (const folder of folders) {
-    const filename = isCommand ? (platform === 'win32' ? path.win32 : path).join(folder, candidate) : candidate;
+  const extensions = platform === 'win32' && isCommand && !paths.extname(candidate) ? ['', '.exe', '.EXE'] : [''];
+  for (const folder of folders) for (const ext of extensions) {
+    const filename = isCommand ? paths.join(folder, candidate + ext) : candidate + ext;
     try {
       await access(filename, platform === 'win32' ? constants.F_OK : constants.X_OK);
       if (!(await stat(filename)).isFile()) continue;

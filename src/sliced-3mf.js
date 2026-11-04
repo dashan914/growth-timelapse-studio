@@ -63,7 +63,13 @@ function directory(bytes, limits, onProgress) {
     const nameLength = view.getUint16(at + 28, true), extraLength = view.getUint16(at + 30, true), commentLength = view.getUint16(at + 32, true);
     if (at + 46 + nameLength + extraLength + commentLength > start + size || flags & 0x41 || ![0, 8].includes(method) || view.getUint16(at + 34, true)) bad();
     if ((view.getUint32(at + 38, true) >>> 16 & 0xf000) === 0xa000) throw failure('SLICED_3MF_UNSAFE_ARCHIVE', '3MF 不能包含符号链接。');
-    let name; try { name = utf8().decode(bytes.subarray(at + 46, at + 46 + nameLength)); } catch { throw failure('SLICED_3MF_BAD_ZIP', 'ZIP 文件名不是可安全读取的 UTF-8。'); }
+    const rawName = bytes.subarray(at + 46, at + 46 + nameLength);
+    let name;
+    try { name = utf8().decode(rawName); }
+    catch {
+      try { name = new TextDecoder('gb18030', { fatal: false }).decode(rawName); }
+      catch { name = new TextDecoder('utf-8').decode(rawName); }
+    }
     safePath(name);
     if (names.has(name.toLowerCase())) throw failure('SLICED_3MF_UNSAFE_ARCHIVE', '3MF 包含重复或仅大小写不同的 ZIP 路径。');
     names.add(name.toLowerCase());
@@ -156,7 +162,7 @@ async function inflateEntry(bytes, entry, { signal, onChunk }) {
 }
 async function sha256(bytes) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(value=>value.toString(16).padStart(2,'0')).join(''); }
 
-export async function parseSlicedThreeMF(input, { fileName='sliced.3mf', signal, onProgress=()=>{}, limits: requestedLimits={} }={}) {
+export async function parseSlicedThreeMF(input, { fileName='sliced.3mf', signal, onProgress=()=>{}, limits: requestedLimits={}, allowMultiPlate=false, allowAnyPlate=false }={}) {
   checkAbort(signal);
   if(!/\.3mf$/i.test(fileName))throw failure('SLICED_3MF_REQUIRED','仅支持切片后 3MF，不会为其他模型重新计算路径。');
   const limits=limitsFor(requestedLimits), bytes=input instanceof Uint8Array?input:new Uint8Array(input);
@@ -165,10 +171,12 @@ export async function parseSlicedThreeMF(input, { fileName='sliced.3mf', signal,
   const binary=inspected.entries.find(entry=>/\.(?:gcode\.bin|bgcode)$/i.test(entry.name));
   if(binary)throw failure('SLICED_3MF_BINARY_UNSUPPORTED','这个 3MF 保存的是暂不支持的二进制切片（.gcode.bin / .bgcode）。请从切片软件导出包含普通文本 G-code 的切片后 3MF；不会重新切片。');
   const candidates=inspected.entries.filter(entry=>/^(?:Metadata\/)?plate_\d+\.gcode$/i.test(entry.name));
-  if(candidates.length>1)throw failure('SLICED_3MF_MULTIPLATE','3MF 包含多盘或重复切片，请只导出一个打印盘。不会重新计算路径。');
+  if(!allowMultiPlate&&candidates.length>1)throw failure('SLICED_3MF_MULTIPLATE','3MF 包含多盘或重复切片，请只导出一个打印盘。不会重新计算路径。');
   if(!candidates.length)throw failure('SLICED_3MF_NO_PATHS','这个文件没有原始切片路径。请先在切片软件完成切片，再导出切片后 3MF；普通工程 3MF 不会在这里重新切片。');
-  const selected=candidates[0];
-  if(!/^(?:Metadata\/)?plate_1\.gcode$/i.test(selected.name))throw failure('SLICED_3MF_WRONG_PLATE','当前只读取第 1 盘的单盘切片后 3MF，请导出第 1 盘。');
+  const sortedCandidates=[...candidates].sort((a,b)=>(Number(a.name.match(/plate_(\d+)/i)?.[1])||999)-(Number(b.name.match(/plate_(\d+)/i)?.[1])||999));
+  const selected=sortedCandidates[0];
+  if(!allowAnyPlate&&!/^(?:Metadata\/)?plate_1\.gcode$/i.test(selected.name))throw failure('SLICED_3MF_WRONG_PLATE','当前只读取第 1 盘的单盘切片后 3MF，请导出第 1 盘。');
+  const gcodeSet=new Set(candidates);
   const gcodeBytes=new Uint8Array(selected.original),previewEntries=Object.create(null),cadPreviewMembers=[];
   let unpacked=0,hasCad=false,modelEntries=0,plateCount=0;
   emit(onProgress,'unpacking',0,inspected.expanded,'bytes');
@@ -176,10 +184,10 @@ export async function parseSlicedThreeMF(input, { fileName='sliced.3mf', signal,
     checkAbort(signal);
     const isModel=/\.model$/i.test(entry.name),isPlateConfig=/^Metadata\/model_settings\.(?:config|xml)$/i.test(entry.name);
     const scanner=isModel||isPlateConfig?xmlScanner():null;
-    const previewBytes=entry===selected?null:new Uint8Array(entry.original);
+    const previewBytes=gcodeSet.has(entry)?null:new Uint8Array(entry.original);
     await inflateEntry(bytes,entry,{signal,onChunk(chunk,completed){
       if(entry===selected)gcodeBytes.set(chunk,completed-chunk.length);
-      else previewBytes.set(chunk,completed-chunk.length);
+      else if(previewBytes)previewBytes.set(chunk,completed-chunk.length);
       scanner?.push(chunk,false);unpacked+=chunk.length;
       emit(onProgress,'unpacking',unpacked,inspected.expanded,'bytes',{archiveEntry:entry.name,entryCompleted:completed,entryTotal:entry.original});
     }});
@@ -188,7 +196,7 @@ export async function parseSlicedThreeMF(input, { fileName='sliced.3mf', signal,
     if(isPlateConfig)plateCount=Math.max(plateCount,scanner.plates);
     if(previewBytes){previewEntries[entry.name]=previewBytes;cadPreviewMembers.push({name:entry.name,bytes:entry.original,crc32:entry.crc});}
   }
-  if(plateCount>1)throw failure('SLICED_3MF_MULTIPLATE','工程元数据包含多个打印盘，无法把所有 CAD 和第 1 盘路径混为同一模型。请导出单盘切片后 3MF。');
+  if(!allowMultiPlate&&plateCount>1)throw failure('SLICED_3MF_MULTIPLATE','工程元数据包含多个打印盘，无法把所有 CAD 和第 1 盘路径混为同一模型。请导出单盘切片后 3MF。');
   checkAbort(signal);
   for(let index=0;index<gcodeBytes.length;index++)if(gcodeBytes[index]<32&&![9,10,13].includes(gcodeBytes[index]))throw failure('SLICED_3MF_BINARY_UNSUPPORTED','原切片文件不是受支持的普通文本 G-code；不会忽略二进制数据或重新切片。');
   let text;try{text=utf8().decode(gcodeBytes);}catch{throw failure('SLICED_3MF_BINARY_UNSUPPORTED','原切片不是完整 UTF-8 文本 G-code，未采用部分路径。');}

@@ -1,12 +1,12 @@
 const abortError = () => new DOMException('Aborted', 'AbortError');
 
-export function realisticExportAvailability({ runtime = null, metadata = null, backgroundType = null, appearance = 'model', showSupports = false, supportDisplay = 'solid', frames = 0 } = {}) {
+export function realisticExportAvailability({ runtime = null, metadata = null, backgroundType = null, appearance = 'model', showSupports = false, supportDisplay = 'solid', frames = 0, allowIndexedSupports = true } = {}) {
   if (!runtime) return { available: false, reason: '正在检查本机写实画质…' };
   if (!runtime.available) return { available: false, reason: '本机写实画质尚未准备好，当前使用实时画质。' };
   if (metadata?.mode === 'gcode') return { available: false, reason: '打印路径使用实时画质，可保留真实挤出细节。' };
   if (backgroundType === 'video') return { available: false, reason: '背景视频使用实时画质；写实画质支持静态照片。' };
   if (appearance === 'photo') return { available: false, reason: '成品照片融合使用实时导出，直接保留实拍外观。' };
-  if (showSupports && metadata?.supportSource === 'sliced-gcode-indexed' && metadata?.supportSegments > 0) return { available: false, reason: '完整支撑使用实时画质；关闭“显示支撑”可选写实画质。' };
+  if (!allowIndexedSupports && showSupports && metadata?.supportSource === 'sliced-gcode-indexed' && metadata?.supportSegments > 0) return { available: false, reason: '完整支撑使用实时画质；关闭“显示支撑”可选写实画质。' };
   if (showSupports && metadata?.supportsAvailable && supportDisplay === 'paths') return { available: false, reason: '支撑路径使用实时画质，或切换为实体支撑。' };
   const limits = runtime.limits || {};
   const triangles = (metadata?.triangles || 0) + (showSupports ? metadata?.supportSurfaceTriangles || 0 : 0);

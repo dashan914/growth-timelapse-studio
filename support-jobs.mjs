@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findPythonPath } from './runtime-paths.mjs';
+import { findPythonPath, resolveExecutablePath } from './runtime-paths.mjs';
 
 export const SUPPORT_SLICER = '/Applications/Flash Studio.app/Contents/MacOS/Flash Studio';
 const PREPARE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scripts', 'prepare-support-project.py');
@@ -229,7 +229,13 @@ export function createSupportManager({ root, slicerPath = SUPPORT_SLICER, python
   const directory = path.join(root, '.support-jobs');
   let active = null, closed = false;
   const health = async () => {
-    try { await access(slicerPath, constants.X_OK); await access(pythonPath, constants.X_OK); return { available: true }; }
+    try {
+      const resolvedSlicer = resolveExecutablePath(slicerPath);
+      if (!resolvedSlicer) await access(slicerPath, process.platform === 'win32' ? constants.F_OK : constants.X_OK);
+      const resolvedPython = resolveExecutablePath(pythonPath);
+      if (!resolvedPython) await access(pythonPath, process.platform === 'win32' ? constants.F_OK : constants.X_OK);
+      return { available: true };
+    }
     catch { return { available: false }; }
   };
   const get = id => { const job = jobs.get(id); if (!job) throw new SupportError(404, 'SUPPORT_NOT_FOUND', '找不到这次支撑生成。'); return job; };
@@ -273,7 +279,12 @@ export function createSupportManager({ root, slicerPath = SUPPORT_SLICER, python
       await process(job, slicerPath, ['--datadir', path.join(job.directory, 'profile'), '--debug', '3', '--no-check',
         '--slice', '1', '--arrange', '0', '--orient', '0', '--mstpp', '600', '--outputdir', job.output, job.prepared]);
       if (job.cancelled) throw new Error('支撑生成已取消。');
-      const files = (await readdir(job.output)).filter(name => /^plate_1\.gcode$/i.test(name));
+      const allFiles = await readdir(job.output);
+      const files = allFiles.filter(name => /^plate_1\.gcode$/i.test(name));
+      if (!files.length) {
+        const fallbackGcode = allFiles.find(name => /^plate_\d+\.gcode$/i.test(name)) || allFiles.find(name => /\.gcode$/i.test(name));
+        if (fallbackGcode) files.push(fallbackGcode);
+      }
       if (!files.length) throw new Error('切片器没有输出第一盘的路径。请把模型保存到第 1 盘后再试。');
       job.phase = 'extracting'; job.message = '整理支撑预览，保留支撑分支与层次…';
       const report = JSON.parse(await readFile(job.report, 'utf8'));

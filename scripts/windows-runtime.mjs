@@ -15,16 +15,48 @@ function hostEnvironment(env, platform) {
     && env.SystemRoot === process.env.SystemRoot && Boolean(env.SystemRoot);
 }
 
+const registryKeys = [
+  ['HKLM\\SOFTWARE\\BlenderFoundation\\Blender', 'Blender'],
+  ['HKCU\\SOFTWARE\\BlenderFoundation\\Blender', 'Blender'],
+  ['HKLM\\SOFTWARE\\Bambu Studio', 'Bambu Studio'],
+  ['HKCU\\SOFTWARE\\Bambu Studio', 'Bambu Studio'],
+  ['HKLM\\SOFTWARE\\OrcaSlicer', 'OrcaSlicer'],
+  ['HKCU\\SOFTWARE\\OrcaSlicer', 'OrcaSlicer'],
+];
+
+function queryRegistryFallback(env) {
+  const regExe = path.win32.join(env.SystemRoot, 'System32', 'reg.exe');
+  const records = [];
+  for (const [key, name] of registryKeys) {
+    try {
+      const output = execFileSync(regExe, ['query', key, '/s'],
+        { env, encoding: 'utf8', timeout: 3000, maxBuffer: 64 * 1024, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+      for (const line of output.split(/\r?\n/)) {
+        const match = line.match(/^\s+(?:InstallLocation|InstallPath|Path|ExecutablePath|\(Default\))\s+REG_\w+\s+(.+?)\s*$/i);
+        if (match && match[1]) {
+          const val = match[1].trim().replace(/^"|"$/g, '');
+          if (val.toLowerCase().endsWith('.exe')) records.push({ DisplayName: name, DisplayIcon: val });
+          else records.push({ DisplayName: name, InstallLocation: val });
+        }
+      }
+    } catch {}
+  }
+  return records;
+}
+
 export function readWindowsInstallations({ env = process.env, platform = process.platform } = {}) {
   if (!hostEnvironment(env, platform)) return [];
   if (registryCache) return registryCache;
   try {
     const powershell = path.win32.join(env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
     const output = execFileSync(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(registryScript, 'utf16le').toString('base64')],
-      { env, encoding: 'utf8', timeout: 5000, maxBuffer: 256 * 1024, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+      { env, encoding: 'utf8', timeout: 10000, maxBuffer: 256 * 1024, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
     const records = JSON.parse(output.trim() || '[]');
     registryCache = (Array.isArray(records) ? records : [records]).filter(record => record && typeof record.DisplayName === 'string');
   } catch { registryCache = []; }
+  if (!registryCache.length) {
+    registryCache = queryRegistryFallback(env);
+  }
   return registryCache;
 }
 
@@ -41,12 +73,20 @@ export function windowsInstalledExecutables(application, { env = process.env, pl
   const descriptor = applications[application], candidates = [];
   for (const record of readRegistry({ env, platform })) {
     if (!descriptor.name.test(record.DisplayName || '')) continue;
-    if (typeof record.InstallLocation === 'string' && record.InstallLocation.trim()) {
+    const hasInstallLocation = typeof record.InstallLocation === 'string' && Boolean(record.InstallLocation.trim());
+    if (hasInstallLocation) {
       candidates.push(...descriptor.files.map(file => path.win32.join(record.InstallLocation.trim().replace(/^"|"$/g, ''), file)));
     }
     if (typeof record.DisplayIcon === 'string') {
       const icon = record.DisplayIcon.trim().replace(/,\s*-?\d+$/, '').replace(/^"|"$/g, '');
-      if (path.win32.isAbsolute(icon) && descriptor.files.some(file => path.win32.basename(icon).toLowerCase() === file.toLowerCase())) candidates.push(icon);
+      if (path.win32.isAbsolute(icon)) {
+        const matchedFile = descriptor.files.some(file => path.win32.basename(icon).toLowerCase() === file.toLowerCase());
+        if (matchedFile) candidates.push(icon);
+        if (!hasInstallLocation && !matchedFile) {
+          const iconDir = path.win32.dirname(icon);
+          candidates.push(...descriptor.files.map(file => path.win32.join(iconDir, file)));
+        }
+      }
     }
   }
   return [...new Set(candidates)];

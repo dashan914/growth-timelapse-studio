@@ -54,6 +54,71 @@ AXIS = [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1]
 IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 
 
+BBL_PROFILE_FALLBACKS = {
+    'machine': [
+        'Bambu Lab H2C 0.4 nozzle',
+        'Bambu Lab H2D 0.4 nozzle',
+        'Bambu Lab X1 Carbon 0.4 nozzle',
+        'Bambu Lab P1S 0.4 nozzle',
+        'Bambu Lab A1 0.4 nozzle',
+        'Bambu Lab P1P 0.4 nozzle',
+        'Bambu Lab A1 mini 0.4 nozzle',
+    ],
+    'process': [
+        '0.20mm Standard @BBL H2C',
+        '0.20mm Standard @BBL H2D',
+        '0.20mm Standard @BBL X1C',
+        '0.20mm Standard @BBL A1',
+        '0.20mm Standard @BBL P1P',
+        '0.20mm Standard @BBL A1M',
+    ],
+    'filament': [
+        'Generic PLA @BBL H2C 0.4 nozzle',
+        'Bambu PLA Basic @BBL X1C',
+        'Bambu PLA Basic @BBL P1S 0.4 nozzle',
+        'Generic PLA @BBL A1',
+        'Bambu PLA Basic @BBL A1',
+        'Generic PLA',
+    ],
+}
+
+BUILTIN_BBL_PROFILES = {
+    'Bambu Lab H2C 0.4 nozzle': {'name': 'Bambu Lab H2C 0.4 nozzle', 'type': 'machine', 'printer_model': 'Bambu Lab H2C', 'nozzle_diameter': ['0.4'], 'default_print_profile': '0.20mm Standard @BBL H2C', 'printable_height': '320'},
+    'Bambu Lab P1S 0.4 nozzle': {'name': 'Bambu Lab P1S 0.4 nozzle', 'type': 'machine', 'printer_model': 'Bambu Lab P1S', 'nozzle_diameter': ['0.4'], 'default_print_profile': '0.20mm Standard @BBL X1C', 'printable_height': '256'},
+    'Bambu Lab A1 0.4 nozzle': {'name': 'Bambu Lab A1 0.4 nozzle', 'type': 'machine', 'printer_model': 'Bambu Lab A1', 'nozzle_diameter': ['0.4'], 'default_print_profile': '0.20mm Standard @BBL A1', 'printable_height': '256'},
+    'Generic PLA @BBL H2C 0.4 nozzle': {'name': 'Generic PLA @BBL H2C 0.4 nozzle', 'type': 'filament', 'filament_type': ['PLA'], 'nozzle_temperature': ['220'], 'filament_flow_ratio': ['1']},
+    'Bambu PLA Basic @BBL P1S 0.4 nozzle': {'name': 'Bambu PLA Basic @BBL P1S 0.4 nozzle', 'type': 'filament', 'filament_type': ['PLA'], 'nozzle_temperature': ['220'], 'filament_flow_ratio': ['1']},
+    'Generic PLA @BBL A1': {'name': 'Generic PLA @BBL A1', 'type': 'filament', 'filament_type': ['PLA'], 'nozzle_temperature': ['220'], 'filament_flow_ratio': ['1']},
+}
+
+
+def resolve_profile_file(subdir, preferred_name, resources, vendor='BBL'):
+    resources = Path(resources) if resources else NATIVE
+    library = resources / vendor if (resources / vendor).is_dir() else resources
+    preferred = library / subdir / (preferred_name + '.json')
+    if preferred.is_file():
+        return preferred
+    if vendor == 'BBL':
+        for name in BBL_PROFILE_FALLBACKS.get(subdir, ()):
+            candidate = library / subdir / (name + '.json')
+            if candidate.is_file():
+                return candidate
+        if (library / subdir).is_dir():
+            pattern = '*0.4 nozzle.json' if subdir == 'machine' else ('0.20mm Standard*.json' if subdir == 'process' else '*PLA*.json')
+            matches = sorted((library / subdir).glob(pattern))
+            if matches:
+                return matches[0]
+    vendor_preferred = VENDOR / subdir / (preferred_name + '.json')
+    if vendor_preferred.is_file():
+        return vendor_preferred
+    if vendor == 'BBL':
+        for name in BBL_PROFILE_FALLBACKS.get(subdir, ()):
+            vendor_candidate = VENDOR / subdir / (name + '.json')
+            if vendor_candidate.is_file():
+                return vendor_candidate
+    return preferred
+
+
 def file_hash(filename):
     digest = hashlib.sha256()
     with open(filename, 'rb') as incoming:
@@ -66,25 +131,36 @@ def load_flat_profile(filename, base, stack=()):
     filename = Path(filename)
     if filename in stack or len(stack) > 20:
         raise ValueError('Slicer profile inheritance is cyclic or too deep.')
-    data = json.loads(filename.read_text(encoding='utf-8'))
+    if not filename.is_file() and filename.stem in BUILTIN_BBL_PROFILES:
+        data = dict(BUILTIN_BBL_PROFILES[filename.stem])
+    else:
+        data = json.loads(filename.read_text(encoding='utf-8'))
     inherited = data.get('inherits')
     result = {}
     if inherited:
         candidate = filename.parent / (inherited + '.json')
         if not candidate.exists():
-            candidates = list(base.rglob(inherited + '.json'))
-            if not candidates:
+            base_path = Path(base) if base else None
+            candidates = list(base_path.rglob(inherited + '.json')) if base_path and base_path.exists() else []
+            if not candidates and VENDOR.exists():
+                candidates = list(VENDOR.rglob(inherited + '.json'))
+            if candidates:
+                # Generic @System belongs to the official filament library.
+                candidates.sort(key=lambda p: (0 if 'OrcaFilamentLibrary' in str(p) else 1, str(p)))
+                candidate = candidates[0]
+            elif inherited in BUILTIN_BBL_PROFILES:
+                result.update(BUILTIN_BBL_PROFILES[inherited])
+                candidate = None
+            else:
                 raise ValueError('Cannot find local profile ancestor: ' + inherited)
-            # Generic @System belongs to the official filament library.
-            candidates.sort(key=lambda p: (0 if 'OrcaFilamentLibrary' in str(p) else 1, str(p)))
-            candidate = candidates[0]
-        result.update(load_flat_profile(candidate, base, (*stack, filename)))
+        if candidate is not None:
+            result.update(load_flat_profile(candidate, base, (*stack, filename)))
     result.update({key: value for key, value in data.items() if key not in ('inherits', 'include')})
     return result
 
 
 def official_process(preset):
-    values = load_flat_profile(VENDOR / 'process' / (PROFILE[preset] + '.json'), VENDOR)
+    values = load_flat_profile(resolve_profile_file('process', PROFILE[preset], VENDOR, 'BBL'), VENDOR)
     # These facts are constructor defaults in the pinned PrintConfig.cpp.
     values.setdefault('internal_solid_infill_pattern', 'rectilinear')
     return values
@@ -136,8 +212,10 @@ def inert_settings(settings, corrections):
 
 
 def read_project_settings(archive, names):
-    for filename in ('Metadata/project_settings.config', 'Metadata/Slic3r_PE.config'):
-        if filename not in names:
+    norm_to_actual = {name.replace('\\', '/'): name for name in names}
+    for target in ('Metadata/project_settings.config', 'Metadata/Slic3r_PE.config'):
+        filename = norm_to_actual.get(target)
+        if not filename:
             continue
         if archive.getinfo(filename).file_size > 8 * 1024 * 1024:
             raise ValueError('Saved slicer settings are too large.')
@@ -154,7 +232,7 @@ def read_project_settings(archive, names):
                     settings[match[1]] = match[2]
         if not isinstance(settings, dict):
             raise ValueError('Saved slicer settings must be an object.')
-        return filename, settings
+        return target, settings
     return None, {}
 
 
@@ -180,19 +258,28 @@ def fill_missing(settings, defaults, corrections):
 def native_fallback(destination, settings, defaults, preset, colors, resources=NATIVE, vendor='BBL'):
     """Write fixed local profiles; machine/engine provenance remains explicit."""
     destination = Path(destination)
-    resources = Path(resources)
+    resources = Path(resources) if resources else NATIVE
     if vendor not in ('BBL', 'Flashforge'):
         raise ValueError('Unsupported native profile vendor: ' + str(vendor))
-    library = resources / vendor if (resources / vendor).is_dir() else resources
     machine_name = MACHINE[preset] if vendor == 'BBL' else FLASH_PROFILES['machine']
     filament_name = FILAMENT[preset] if vendor == 'BBL' else FLASH_PROFILES['filament']
-    machine = load_flat_profile(library / 'machine' / (machine_name + '.json'), resources)
+    machine = load_flat_profile(resolve_profile_file('machine', machine_name, resources, vendor), resources)
     native_machine_name = machine['name']
     process_base = machine.get('default_print_profile', PROFILE[preset]) if vendor == 'BBL' else FLASH_PROFILES['process']
-    process = load_flat_profile(library / 'process' / (process_base + '.json'), resources)
-    filament = load_flat_profile(library / 'filament' / (filament_name + '.json'), resources)
-    process.update({key: value for key, value in defaults.items() if key in process or key in PROCESS_KEYS})
-    process.update({key: value for key, value in settings.items() if key in process or key in PROCESS_KEYS})
+    process = load_flat_profile(resolve_profile_file('process', process_base, resources, vendor), resources)
+    process_base = process.get('name', process_base)
+    filament = load_flat_profile(resolve_profile_file('filament', filament_name, resources, vendor), resources)
+    for key, value in defaults.items():
+        if key in PROCESS_KEYS or (key in process and (not isinstance(value, list) or (isinstance(process.get(key), list) and len(process[key]) == len(value)))):
+            process[key] = value
+    for key, value in settings.items():
+        if key in ('print_extruder_id', 'print_extruder_variant') and settings.get('printer_settings_id') != native_machine_name:
+            continue
+        if key in process or key in PROCESS_KEYS:
+            if key in process and isinstance(process[key], list) and isinstance(value, list) and len(process[key]) != len(value) and value and key not in ('compatible_printers', 'wipe_tower_x', 'wipe_tower_y'):
+                process[key] = [value[0]] * len(process[key])
+            else:
+                process[key] = value
     layer_height = process.get('layer_height', str(DEFAULT_LAYER_HEIGHT_MM))
     if isinstance(layer_height, list):
         layer_height = layer_height[0]
@@ -424,7 +511,8 @@ def prepare_3mf(source, destination, report, options, defaults):
     with zipfile.ZipFile(source) as original:
         entries = original.infolist()
         names = [entry.filename for entry in entries]
-        if len(entries) > 10000 or len(names) != len(set(names)):
+        norm_names = [name.replace('\\', '/') for name in names]
+        if len(entries) > 10000 or len(norm_names) != len(set(norm_names)):
             raise ValueError('3MF contains too many or duplicate ZIP entries.')
         if any((entry.external_attr >> 16) & 0o170000 == 0o120000 for entry in entries):
             raise ValueError('3MF cannot contain symbolic-link entries.')
@@ -434,14 +522,15 @@ def prepare_3mf(source, destination, report, options, defaults):
             raise ValueError('3MF expands beyond the 1 GB processing limit.')
         if any(entry.file_size > 512*1024*1024 for entry in entries):
             raise ValueError('3MF contains an excessively large entry.')
-        if not any(name.lower().endswith('.model') for name in names):
+        if not any(name.lower().endswith('.model') for name in norm_names):
             raise ValueError('3MF has no model geometry.')
         settings_name, settings = read_project_settings(original, names)
         staging_info = None
-        if 'Metadata/growth_source.json' in names:
-            if original.getinfo('Metadata/growth_source.json').file_size > 8*1024*1024:
+        growth_source_entry = next((entry.filename for entry in entries if entry.filename.replace('\\', '/') == 'Metadata/growth_source.json'), None)
+        if growth_source_entry:
+            if original.getinfo(growth_source_entry).file_size > 8*1024*1024:
                 raise ValueError('Generic staging metadata is too large.')
-            staging_info = json.loads(original.read('Metadata/growth_source.json'))
+            staging_info = json.loads(original.read(growth_source_entry))
             if not isinstance(staging_info, dict):
                 raise ValueError('Generic staging metadata must be an inert object.')
         before = settings.copy()
@@ -454,7 +543,8 @@ def prepare_3mf(source, destination, report, options, defaults):
         object_settings = {}
         plate_count = 0
         for entry in entries:
-            if entry.filename.startswith('Metadata/') and entry.filename.endswith(('.config', '.xml')) and entry.filename != settings_name and entry.file_size <= 8*1024*1024:
+            norm_entry = entry.filename.replace('\\', '/')
+            if norm_entry.startswith('Metadata/') and norm_entry.endswith(('.config', '.xml')) and norm_entry != settings_name and entry.file_size <= 8*1024*1024:
                 raw = original.read(entry)
                 if b'<!DOCTYPE' in raw or b'<!ENTITY' in raw:
                     raise ValueError('3MF metadata contains unsupported XML entities.')
@@ -464,7 +554,7 @@ def prepare_3mf(source, destination, report, options, defaults):
                     continue
                 if any(node.attrib.get('key') == 'sparse_infill_pattern' for node in xml.iter()):
                     overrides = True
-                if 'model_settings' in entry.filename:
+                if 'model_settings' in norm_entry:
                     plate_count = max(plate_count, len(xml.findall('plate')))
                     for obj in xml.findall('object'):
                         values = {node.attrib.get('key'): node.attrib.get('value') for node in obj.findall('metadata') if node.attrib.get('key')}
@@ -484,11 +574,11 @@ def prepare_3mf(source, destination, report, options, defaults):
             settings['ooze_prevention'] = '0'
             corrections.append({'field': 'ooze_prevention', 'before': value, 'after': '0',
                                 'reason': 'Resolved the mutually exclusive ooze-prevention and prime-tower flags for visualization.'})
-        embedded_entries = [entry for entry in entries if re.fullmatch(r'(?:Metadata/)?plate_\d+\.gcode', entry.filename, re.IGNORECASE)]
+        embedded_entries = [entry for entry in entries if re.fullmatch(r'(?:Metadata/)?plate_\d+\.gcode', entry.filename.replace('\\', '/'), re.IGNORECASE)]
         force_reslice = options.get('forceReslice') is True
         if plate_count > 1 or (not force_reslice and len(embedded_entries) > 1):
             raise ValueError('该工程包含多个打印盘，当前预览不能保证逐盘对应。请在切片软件导出只包含一个打印盘的工程后再导入。')
-        if not force_reslice and embedded_entries and not re.fullmatch(r'(?:Metadata/)?plate_1\.gcode', embedded_entries[0].filename, re.IGNORECASE):
+        if not force_reslice and embedded_entries and not re.fullmatch(r'(?:Metadata/)?plate_1\.gcode', embedded_entries[0].filename.replace('\\', '/'), re.IGNORECASE):
             raise ValueError('该工程的切片缓存不在第 1 盘，无法保证与原始模型盘位对齐。请导出第 1 盘的单盘工程。')
         embedded = None
         if embedded_entries and not force_reslice:
@@ -499,12 +589,25 @@ def prepare_3mf(source, destination, report, options, defaults):
             with original.open(entry) as incoming, embedded_path.open('xb') as outgoing:
                 shutil.copyfileobj(incoming, outgoing, length=1024*1024)
             os.chmod(embedded_path, 0o600)
-            embedded = {'archiveEntry': entry.filename, 'bytes': entry.file_size,
+            embedded = {'archiveEntry': entry.filename.replace('\\', '/'), 'bytes': entry.file_size,
                         'sha256': file_hash(embedded_path), 'selection': 'original-embedded-complete-gcode',
                         'file': embedded_path.name, 'reSliced': False}
         machine_missing = not settings.get('printer_settings_id') or not settings.get('printer_model')
         vendor = options.get('profileVendor', 'BBL')
         machine_foreign = not str(settings.get('printer_model', '')).startswith('Flashforge ' if vendor == 'Flashforge' else 'Bambu Lab ')
+        if not machine_missing and not embedded:
+            resources_root = Path(options.get('slicerResources') or NATIVE)
+            library_root = resources_root / vendor if (resources_root / vendor).is_dir() else resources_root
+            if library_root.is_dir():
+                printer_id = str(settings.get('printer_settings_id') or '').strip()
+                print_id = str(settings.get('print_settings_id') or '').strip()
+                target_machine = MACHINE.get(options.get('preset', 'h2c'), '') if vendor == 'BBL' else FLASH_PROFILES['machine']
+                target_model = target_machine.replace(' 0.4 nozzle', '')
+                if (not (library_root / 'machine' / f'{printer_id}.json').is_file()
+                        or not print_id
+                        or not (library_root / 'process' / f'{print_id}.json').is_file()
+                        or (target_model and settings.get('printer_model') != target_model)):
+                    machine_missing = True
         engine = None
         if (machine_missing or machine_foreign) and not embedded:
             settings, bed, engine = native_fallback(Path(destination).parent, settings, defaults, options['preset'], options.get('toolColors', []), options.get('slicerResources', NATIVE), vendor)
@@ -516,23 +619,28 @@ def prepare_3mf(source, destination, report, options, defaults):
         out_settings = 'Metadata/project_settings.config'
         hashes = {}
         removed_members = []
+        wrote_settings = False
         with zipfile.ZipFile(destination, 'w') as prepared:
             for entry in entries:
-                if force_reslice and re.fullmatch(r'(?:Metadata/)?plate_\d+\.gcode(?:\.md5)?', entry.filename, re.IGNORECASE):
-                    removed_members.append(entry.filename)
+                norm_entry = entry.filename.replace('\\', '/')
+                if force_reslice and re.fullmatch(r'(?:Metadata/)?plate_\d+\.gcode(?:\.md5)?', norm_entry, re.IGNORECASE):
+                    removed_members.append(norm_entry)
                     continue
-                if entry.filename == out_settings:
-                    prepared.writestr(entry, json.dumps(settings, ensure_ascii=False, indent=2).encode())
+                if norm_entry == out_settings:
+                    target_entry = entry if entry.filename == out_settings else out_settings
+                    prepared.writestr(target_entry, json.dumps(settings, ensure_ascii=False, indent=2).encode())
+                    wrote_settings = True
                 else:
                     digest = hashlib.sha256()
-                    with original.open(entry) as incoming, prepared.open(entry, 'w') as outgoing:
+                    target_entry = entry if entry.filename == norm_entry else norm_entry
+                    with original.open(entry) as incoming, prepared.open(target_entry, 'w') as outgoing:
                         for block in iter(lambda: incoming.read(1024*1024), b''):
                             digest.update(block)
                             outgoing.write(block)
                     # Geometry/paint/placement ZIP members copied exactly.
-                    if entry.filename.lower().endswith('.model') or 'model_settings' in entry.filename:
-                        hashes[entry.filename] = {'sha256': digest.hexdigest(), 'bytes': entry.file_size, 'unchanged': True}
-            if out_settings not in names:
+                    if norm_entry.lower().endswith('.model') or 'model_settings' in norm_entry:
+                        hashes[norm_entry] = {'sha256': digest.hexdigest(), 'bytes': entry.file_size, 'unchanged': True}
+            if not wrote_settings:
                 prepared.writestr(out_settings, json.dumps(settings, ensure_ascii=False, indent=2).encode())
         printer_to_source = AXIS.copy()
         if embedded and 'extruder_offset' in before:
@@ -548,7 +656,7 @@ def prepare_3mf(source, destination, report, options, defaults):
                        'embeddedGcode': embedded, 'sourcePaletteSaved': source_palette_saved,
                        'forceReslice': force_reslice, 'removedCachedSliceMembers': removed_members,
                        'geometrySimplified': False, 'preservedMembers': hashes,
-                       'changedZipEntries': ([out_settings] if settings != before or out_settings not in names else []) + removed_members,
+                       'changedZipEntries': ([out_settings] if settings != before or out_settings not in norm_names else []) + removed_members,
                        'sourceCoordinateSystem': 'printer-z-up', 'sourceUnits': '3MF declared units, preserved',
                        'stagingTransform': IDENTITY, 'printerToSource': printer_to_source,
                        'fallbackEngineProfiles': engine,

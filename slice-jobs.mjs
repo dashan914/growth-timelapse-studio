@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { normalizeSliceSettings } from './src/slice-settings.js';
 import { BAMBU_STUDIO_DEFAULT_PATH } from './bambu-engine.mjs';
 import { probeSlicerEngine, probeLocalSlicers, LOCAL_SLICER_IDS } from './slicer-engine.mjs';
-import { findPythonPath } from './runtime-paths.mjs';
+import { findPythonPath, resolveExecutablePath } from './runtime-paths.mjs';
 
 export const SLICE_SLICER = BAMBU_STUDIO_DEFAULT_PATH;
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -198,7 +198,12 @@ export function createSliceService({ root = HERE, slicerPath, slicerPaths = {}, 
   };
   const health = async () => {
     let embeddedAvailable = false;
-    try { await access(pythonPath, constants.X_OK); await access(prepareScript, constants.R_OK); embeddedAvailable = true; } catch {}
+    try {
+      const resolvedPython = resolveExecutablePath(pythonPath);
+      if (!resolvedPython) await access(pythonPath, process.platform === 'win32' ? constants.F_OK : constants.X_OK);
+      await access(prepareScript, constants.R_OK);
+      embeddedAvailable = true;
+    } catch {}
     const registry = await detectedEngines();
     const selected = registry.engines.find(cap => cap.id === registry.preferredEngineId);
     return { ...selected, available: Boolean(selected?.available && embeddedAvailable), embeddedAvailable,
@@ -311,8 +316,11 @@ export function createSliceService({ root = HERE, slicerPath, slicerPaths = {}, 
           '--slice', '1', '--arrange', '0', '--orient', '0', '--mstpp', String(Math.max(1, Math.min(600, Math.ceil(timeoutMs / 1000)))), '--outputdir', job.output, job.prepared]);
         if (job.cancelled) throw new SliceError(409, 'SLICE_CANCELLED', '真实切片已取消。');
         const names = await readdir(job.output);
-        if (!names.includes('plate_1.gcode')) throw new SliceError(500, 'SLICE_OUTPUT_MISSING', '切片器没有输出第 1 盘模型路径；请使用保存于第 1 盘的工程。');
-        outputFile = path.join(job.output, 'plate_1.gcode');
+        const gcodeName = names.includes('plate_1.gcode')
+          ? 'plate_1.gcode'
+          : names.find(n => /^plate_\d+\.gcode$/i.test(n)) || names.find(n => /\.gcode$/i.test(n));
+        if (!gcodeName) throw new SliceError(500, 'SLICE_OUTPUT_MISSING', '切片器没有输出第 1 盘模型路径；请使用保存于第 1 盘的工程。');
+        outputFile = path.join(job.output, gcodeName);
       }
       job.phase = 'indexing'; job.progress = 90; job.message = '完整保留真实路径，校验层索引和参数来源…';
       job.nativeProgress = null; job.total = (await stat(outputFile)).size; job.unit = 'bytes';

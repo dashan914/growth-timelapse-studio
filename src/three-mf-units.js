@@ -17,8 +17,9 @@ const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('"', '
 const local = name => name.split(':').pop();
 
 function packagePath(value, parent = '') {
-  if (!value || /^(?:[\w+.-]+:|\/\/)/.test(value) || value.includes('\\') || value.includes('\0')) throw new Error('3MF 模型或纹理路径必须位于原文件包内。');
-  const path = value.startsWith('/') ? value.slice(1) : parent.slice(0, parent.lastIndexOf('/') + 1) + value;
+  const normalizedValue = typeof value === 'string' ? value.replaceAll('\\', '/') : '';
+  if (!normalizedValue || /^(?:[\w+.-]+:|\/\/)/.test(normalizedValue) || normalizedValue.includes('\0')) throw new Error('3MF 模型或纹理路径必须位于原文件包内。');
+  const path = normalizedValue.startsWith('/') ? normalizedValue.slice(1) : parent.slice(0, parent.lastIndexOf('/') + 1) + normalizedValue;
   const parts = [];
   for (const part of path.split('/')) {
     if (!part || part === '.') continue;
@@ -86,28 +87,41 @@ function walkTags(text, visit) {
  * texture bytes and source ZIP are untouched. Do not export this as the source
  * manufacturing project; upload the original file to the slicer.
  */
-export function normalizeThreeMFUnitsForLoader(input) {
+export function normalizeThreeMFUnitsForLoader(input, options = {}) {
   const data = input instanceof Uint8Array ? input : new Uint8Array(input);
   if (!data.byteLength || data.byteLength > MAX_ARCHIVE) throw new Error('3MF 文件为空或超过完整显示上限。');
   let total = 0;
   const archive = unzipSync(data, { filter: entry => { total += entry.originalSize; if (entry.originalSize > MAX_ARCHIVE || total > MAX_ARCHIVE) throw new Error('3MF 展开超过 512 MiB，未删减数据。'); return true; } });
-  const models = new Map();
+  const models = new Map(), modelsLower = new Map();
+  const findModel = path => models.get(path) || modelsLower.get(String(path || '').toLowerCase()) || null;
+  const findArchive = path => archive[path] ?? Object.entries(archive).find(([k]) => packagePath('/' + k).toLowerCase() === String(path || '').toLowerCase())?.[1];
   for (const [path, bytes] of Object.entries(archive)) if (/\.model$/i.test(path)) {
     if (bytes.byteLength > MAX_MODEL) throw new Error('3MF 单模型 XML 过大，未删减网格。');
     const text = strFromU8(bytes), stop = {}; let attrs;
     try { walkTags(text, token => { if (!token.closing && !token.ancestors.length) { if (token.tag !== 'model') throw new Error(`3MF 缺少 model 根节点：${path}`); attrs = token.attrs; throw stop; } }); }
     catch (error) { if (error !== stop) throw error; }
     if (!attrs) throw new Error(`3MF 缺少 model 根节点：${path}`);
-    const unit = attribute(attrs, 'unit') ?? 'millimeter';
-    if (!Object.hasOwn(THREE_MF_UNIT_TO_MM, unit)) throw new Error(`3MF 单位“${unit}”不受支持，不能按毫米猜测。`);
-    models.set(packagePath('/' + path), { sourcePath: path, text, unit, factor: THREE_MF_UNIT_TO_MM[unit], ids: new Map(), objects: new Map(), vertexCount: 0, triangleCount: 0, transforms: 0 });
+    const rawUnit = attribute(attrs, 'unit') ?? 'millimeter';
+    const unit = rawUnit.trim().toLowerCase();
+    if (!Object.hasOwn(THREE_MF_UNIT_TO_MM, unit)) throw new Error(`3MF 单位“${rawUnit}”不受支持，不能按毫米猜测。`);
+    const canonicalPath = packagePath('/' + path);
+    const entry = { keyPath: canonicalPath, sourcePath: path, text, unit, factor: THREE_MF_UNIT_TO_MM[unit], ids: new Map(), objects: new Map(), vertexCount: 0, triangleCount: 0, transforms: 0 };
+    models.set(canonicalPath, entry);
+    modelsLower.set(canonicalPath.toLowerCase(), entry);
   }
   if (!models.size) throw new Error('3MF 没有 model 文件。');
-  const rels = archive['_rels/.rels']; if (!rels) throw new Error('3MF 缺少原包主模型关系。');
+  const rels = findArchive('_rels/.rels');
   let primaryPath;
-  walkTags(strFromU8(rels), ({ tag, attrs, closing }) => { if (!closing && tag === 'Relationship' && /\/3dmodel$/i.test(attribute(attrs, 'Type') || '')) { if (primaryPath) throw new Error('3MF 主模型关系重复。'); primaryPath = packagePath(attribute(attrs, 'Target')); } });
-  if (!models.has(primaryPath)) throw new Error('3MF 主模型关系指向缺失模型。');
-  const primary = models.get(primaryPath);
+  if (rels) {
+    walkTags(strFromU8(rels), ({ tag, attrs, closing }) => {
+      if (!closing && tag.toLowerCase() === 'relationship' && /\/3dmodel$/i.test(attribute(attrs, 'Type') || '')) {
+        if (!primaryPath) primaryPath = packagePath(attribute(attrs, 'Target'));
+      }
+    });
+  }
+  const primary = (primaryPath && findModel(primaryPath)) || findModel('3D/3dmodel.model') || [...models.values()][0];
+  if (!primary) throw new Error('3MF 主模型关系指向缺失模型。');
+  primaryPath = primary.keyPath;
   let nextID = 1, modelIndex = 0;
   for (const [path, model] of models) {
     model.viewerPath = path === primaryPath ? '3D/3dmodel.model' : `3D/UnitModels/unit-${modelIndex}.model`; modelIndex++;
@@ -121,8 +135,8 @@ export function normalizeThreeMFUnitsForLoader(input) {
       if (!closing && tag === 'vertex' && ancestors.includes('vertices')) model.vertexCount++;
       if (!closing && tag === 'triangle' && ancestors.includes('triangles')) model.triangleCount++;
       if (!closing && tag === 'component') {
-        const target = attribute(attrs, 'path'), targetPath = target ? packagePath(target, path) : path;
-        if (target && path !== primaryPath && targetPath !== path) throw new Error('3MF 子模型含不支持的跨文件组件引用。');
+        const target = attribute(attrs, 'path'), targetPath = target ? (findModel(packagePath(target, path))?.keyPath ?? packagePath(target, path)) : path;
+        if (options.strictSubmodelPaths && target && path !== primaryPath && targetPath !== path) throw new Error('3MF 子模型含不支持的跨文件组件引用。');
         model.objects.get(activeObject)?.push({ path: targetPath, id: attribute(attrs, 'objectid') });
       }
       if (closing && tag === 'object') activeObject = null;
@@ -130,7 +144,7 @@ export function normalizeThreeMFUnitsForLoader(input) {
   }
   const verifiedObjects = new Map();
   const checkObject = (path, id, parents = new Set()) => {
-    const key = `${path}#${id}`, model = models.get(path);
+    const model = findModel(path), actualPath = model?.keyPath ?? path, key = `${actualPath}#${id}`;
     if (!model?.objects.has(id)) throw new Error(`3MF 缺少引用对象：${key}`);
     if (parents.has(key) || parents.size >= 64) throw new Error('3MF 组件循环或嵌套过深。');
     if (verifiedObjects.has(key)) return verifiedObjects.get(key);
@@ -139,7 +153,7 @@ export function normalizeThreeMFUnitsForLoader(input) {
     if (depth > 64) throw new Error('3MF 组件嵌套过深。'); verifiedObjects.set(key, depth); return depth;
   };
   for (const [path, model] of models) for (const id of model.objects.keys()) checkObject(path, id);
-  const copy = Object.fromEntries(Object.entries(archive).filter(([path]) => !/\.model(?:\.rels)?$/i.test(path) && path !== '_rels/.rels'));
+  const copy = Object.fromEntries(Object.entries(archive).filter(([path]) => !/\.model(?:\.rels)?$/i.test(path) && !/^_rels\/\.rels$/i.test(path.replaceAll('\\', '/'))));
   const textures = new Set(), textureCopies = new Map();
   for (const [path, model] of models) {
     const normalized = walkTags(model.text, token => {
@@ -149,7 +163,7 @@ export function normalizeThreeMFUnitsForLoader(input) {
       if (ancestors.at(-1) === 'resources' && attribute(attrs, 'id') !== null) raw = update(raw, attrs, 'id', model.ids.get(attribute(attrs, 'id')));
       if (tag === 'vertex' && ancestors.includes('vertices')) for (const axis of ['x','y','z']) raw = update(raw, attrs, axis, coordinate(attribute(attrs, axis), model.factor, '顶点 ' + axis));
       if (tag === 'component' || tag === 'item' && ancestors.includes('build') && path === primaryPath) {
-        const target = attribute(attrs, 'path'), targetPath = target ? packagePath(target, path) : path, targetModel = models.get(targetPath), id = attribute(attrs, 'objectid');
+        const target = attribute(attrs, 'path'), targetPath = target ? packagePath(target, path) : path, targetModel = findModel(targetPath), id = attribute(attrs, 'objectid');
         if (!targetModel?.objects.has(id)) throw new Error(`3MF 引用对象缺失：${targetPath}#${id}`);
         raw = update(raw, attrs, 'objectid', targetModel.ids.get(id));
         if (target) raw = update(raw, attrs, 'path', '/' + targetModel.viewerPath);
@@ -166,12 +180,12 @@ export function normalizeThreeMFUnitsForLoader(input) {
         if (id !== null) { if (!model.ids.has(id)) throw new Error(`3MF 模型 ${path} 缺少属性资源 ${id}。`); raw = update(raw, attrs, name, model.ids.get(id)); }
       }
       if (tag === 'texture2d') {
-        const target = packagePath(attribute(attrs, 'path'), path);
-        if (!archive[target]) throw new Error('3MF 纹理文件缺失，不能丢弃原贴图。');
+        const target = packagePath(attribute(attrs, 'path'), path), texBytes = findArchive(target);
+        if (!texBytes) throw new Error('3MF 纹理文件缺失，不能丢弃原贴图。');
         let viewerTexture = target;
         if (!/^3D\/Textures?\//.test(target)) {
           if (!textureCopies.has(target)) textureCopies.set(target, `3D/Textures/unit-${textureCopies.size}-${target.split('/').pop()}`);
-          viewerTexture = textureCopies.get(target); copy[viewerTexture] = archive[target];
+          viewerTexture = textureCopies.get(target); copy[viewerTexture] = texBytes;
         }
         raw = update(raw, attrs, 'path', '/' + viewerTexture); textures.add(viewerTexture);
       }

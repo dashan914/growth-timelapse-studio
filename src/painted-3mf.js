@@ -41,7 +41,11 @@ const normalizedPath = path => {
   }
   return result.join('/');
 };
-const asHex = color => /^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(String(color)) ? String(color).slice(0, 7).toLowerCase() : null;
+const asHex = color => {
+  const raw = String(color ?? '').trim().replace(/^#/, '');
+  if (/^[\da-f]{3}$/i.test(raw)) return `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`.toLowerCase();
+  return /^[\da-f]{6}(?:[\da-f]{2})?$/i.test(raw) ? `#${raw.slice(0, 6).toLowerCase()}` : null;
+};
 const midpoint = (a, b) => a.map((coordinate, i) => (coordinate + b[i]) / 2);
 const nextTask = () => new Promise(resolve => setTimeout(resolve, 0));
 
@@ -141,9 +145,10 @@ export function parseSlicerSettings(projectText = '', modelText = '') {
     }
   }
   const value = project.filament_colour ?? project.filament_color ?? project.extruder_colour ?? project.extruder_color;
-  const colors = (Array.isArray(value) ? value : String(value ?? '').split(/[;,]/)).map(asHex);
+  const rawColors = (Array.isArray(value) ? value : String(value ?? '').split(/[;,]/)).map(s => String(s ?? '').trim()).filter(Boolean);
+  const colors = rawColors.map(asHex);
   if (colors.some(color => color === null)) {
-    if (value) throw new Error('工程中有无法读取的耗材颜色，请在切片软件中保存六位十六进制颜色。');
+    if (rawColors.length) throw new Error('工程中有无法读取的耗材颜色，请在切片软件中保存六位十六进制颜色。');
     colors.length = 0;
   }
   if (modelText) validateXML(modelText, '工程对象设置');
@@ -185,7 +190,7 @@ function modelDefinition(text, path) {
   validateXML(text.replace(tag('mesh'), '<mesh/>'), path);
   const root = text.match(/<(?:[\w.-]+:)?model\b([^>]*)>/i);
   if (!root) throw new Error(`缺少 3MF 模型根节点：${path}`);
-  const unit = attr(root[1], 'unit') || 'millimeter';
+  const unit = (attr(root[1], 'unit') || 'millimeter').trim().toLowerCase();
   const unitScale = { micron: .001, millimeter: 1, centimeter: 10, inch: 25.4, foot: 304.8, meter: 1000 }[unit];
   if (!unitScale) throw new Error(`暂不支持模型单位：${unit}`);
   const objects = new Map();
@@ -221,7 +226,7 @@ function readVertices(body, unitScale) {
   return positions;
 }
 
-function meshGeometry(definition, defaultExtruder, parts, paletteSize, counters, extendedStates) {
+function meshGeometry(definition, defaultExtruder, parts, paletteSize, counters, extendedStates, clampExtruder = false) {
   const positions = readVertices(definition.body, definition.unitScale);
   const trianglesBody = entries(definition.body, 'triangles')[0]?.[2];
   if (trianglesBody === undefined) throw new Error('3MF 网格缺少三角形。');
@@ -235,10 +240,14 @@ function meshGeometry(definition, defaultExtruder, parts, paletteSize, counters,
     if (ids.some(id => !Number.isInteger(id) || id < 0 || id >= positions.length / 3)) throw new Error('3MF 三角形引用了不存在的顶点。');
     const encoded = attr(attributes, 'paint_color') || attr(attributes, 'mmu_segmentation');
     const part = ranges.find(part => count >= part.first && count <= part.last);
+    if (part && /^(?:negative_part|negative_volume|NegativeVolume)$/i.test(part.subtype)) return { skip: true };
     const inherited = Number(part?.extruder || defaultExtruder);
     const tool = state => {
       const result = state ? state - 1 : inherited - 1;
-      if (!Number.isInteger(result) || result < 0 || result >= paletteSize) throw new Error(`模型使用耗材 ${result + 1}，但工程没有保存对应颜色。`);
+      if (!Number.isInteger(result) || result < 0 || result >= paletteSize) {
+        if (clampExtruder && paletteSize > 0) return Math.max(0, Math.min(paletteSize - 1, Number.isInteger(result) ? result : 0));
+        throw new Error(`模型使用耗材 ${result + 1}，但工程没有保存对应颜色。`);
+      }
       return result;
     };
     const uniform = uniformPaintState(encoded, extendedStates);
@@ -250,6 +259,7 @@ function meshGeometry(definition, defaultExtruder, parts, paletteSize, counters,
   // per face. Paint boundaries use separate material ranges, without blending.
   while ((match = expression.exec(trianglesBody))) {
     const face = readFace(match[1]);
+    if (face.skip) { count++; continue; }
     if (face.leaves) {
       addedVertexCount += face.leaves.length * 3;
       for (const leaf of face.leaves) bucketCounts[leaf.tool] += 3;
@@ -274,6 +284,7 @@ function meshGeometry(definition, defaultExtruder, parts, paletteSize, counters,
   expression.lastIndex = 0;
   while ((match = expression.exec(trianglesBody))) {
     const face = readFace(match[1]);
+    if (face.skip) { count++; continue; }
     if (face.leaves) {
       for (const leaf of face.leaves) {
         for (const position of leaf.vertices) {
@@ -304,7 +315,8 @@ function meshGeometry(definition, defaultExtruder, parts, paletteSize, counters,
  * 3MFs with no slicer-specific color information return root:null so the native
  * loader retains standard materials, textures, and vertex colors. Incomplete
  * or unknown proprietary paint is rejected explicitly rather than recolored. */
-export async function loadPaintedThreeMF(data, _options = {}) {
+export async function loadPaintedThreeMF(data, options = {}) {
+  const { allowNegativeVolumes = false, clampExtruder = false } = options;
   let total = 0;
   const archive = unzipSync(data instanceof Uint8Array ? data : new Uint8Array(data), { filter: entry => {
     if (!/\.(model|config|rels|ini)$/i.test(entry.name)) return false;
@@ -323,22 +335,30 @@ export async function loadPaintedThreeMF(data, _options = {}) {
   // Check before standard-material fallback too; unknown paint is unrelated.
   const negativeVolume = [...settings.objects.values()].some(object =>
     [...object.parts.values()].some(part => /^(?:negative_part|negative_volume|NegativeVolume)$/i.test(part.subtype)));
-  if (negativeVolume) throw new Error('工程包含尚未应用的减料体，无法保证完成模型与真实切片重合。请先在建模或切片软件中应用布尔减料，再导出完整模型；也可直接导入原 G-code 查看打印路径。');
+  if (negativeVolume && !allowNegativeVolumes) throw new Error('工程包含尚未应用的减料体，无法保证完成模型与真实切片重合。请先在建模或切片软件中应用布尔减料，再导出完整模型；也可直接导入原 G-code 查看打印路径。');
   let hasPaint = false;
   for (const [path, text] of texts) if (/\.model$/i.test(path) && /\b(?:paint_color|mmu_segmentation)\s*=/.test(text)) hasPaint = true;
   const hasExtruders = [...settings.objects.values()].some(object => object.extruder || [...object.parts.values()].some(part => part.extruder));
   const recognized = hasPaint || hasExtruders;
   const supportEnabled = /^(?:1|true)$/i.test(String(settings.project.enable_support ?? settings.project.support_material ?? ''));
   const warnings = [];
+  if (negativeVolume) warnings.push('工程包含负零件（减料辅助体），已自动隐藏该辅助体并按本机切片路径还原。');
   const surfaceMetadata = Object.fromEntries(['layerHeightMm','firstLayerHeightMm','lineWidthMm','surfaceSettingsInferred','materialProfiles','surfaceApproximate'].map(key => [key, settings[key]]));
   const result = { root: null, recognized, warnings, materialColors: settings.colors, colorSupport: 'none', supportsAvailable: false, supportEnabled, ...surfaceMetadata };
   if (!recognized) return result;
-  if (!settings.colors.length) throw new Error('检测到切片工程涂色，但工程没有保存耗材颜色；请在切片软件中重新保存完整的 3MF 工程。');
+  if (!settings.colors.length) {
+    if (clampExtruder) {
+      settings.colors.push('#f0e8d6', '#23599c', '#c89e59', '#101b2a', '#82b9a0', '#d29473', '#869fce', '#ccb979');
+      warnings.push('工程未保存耗材颜色，已使用默认调色板，可在右侧手动调整。');
+    } else throw new Error('检测到切片工程涂色，但工程没有保存耗材颜色；请在切片软件中重新保存完整的 3MF 工程。');
+  }
   const definitions = new Map();
   for (const [path, text] of texts) if (/\.model$/i.test(path)) definitions.set(path, modelDefinition(text, path));
   const relationships = findText(/^_rels\/\.rels$/i);
   const rootTarget = entries(relationships, 'Relationship').find(match => /3dmodel$/i.test(attr(match[1], 'Type')))?.[1];
-  const rootPath = rootTarget ? normalizedPath(attr(rootTarget, 'Target')) : [...definitions.keys()].find(path => /^3d\/3dmodel\.model$/i.test(path)) ?? [...definitions.keys()][0];
+  const targetNormalized = rootTarget ? normalizedPath(attr(rootTarget, 'Target')) : '';
+  const rootPath = (targetNormalized && (definitions.has(targetNormalized) ? targetNormalized : [...definitions.keys()].find(p => p.toLowerCase() === targetNormalized.toLowerCase())))
+    || [...definitions.keys()].find(path => /^3d\/3dmodel\.model$/i.test(path)) || [...definitions.keys()][0];
   const rootDefinition = definitions.get(rootPath);
   if (!rootDefinition) throw new Error('3MF 工程找不到主模型。');
   // Current Orca encodes its final state 33 as FFC, whereas current Bambu
@@ -360,11 +380,12 @@ export async function loadPaintedThreeMF(data, _options = {}) {
   });
   const counters = { sourceFaces: 0, renderedFaces: 0, paintedFaces: 0, supportMeshes: 0 };
   const geometryCache = new Map();
-  const hiddenPartTypes = new Set(['modifier_part', 'parameter_modifier', 'support_blocker', 'support_enforcer', 'other']);
+  const hiddenPartTypes = new Set(['modifier_part', 'parameter_modifier', 'support_blocker', 'support_enforcer', 'negative_part', 'negative_volume', 'NegativeVolume', 'other']);
   const instantiate = async (path, objectID, inherited = null, visited = new Set()) => {
-    const key = `${path}#${objectID}`;
+    const resolvedPath = definitions.has(path) ? path : ([...definitions.keys()].find(p => p.toLowerCase() === String(path).toLowerCase()) ?? path);
+    const key = `${resolvedPath}#${objectID}`;
     if (visited.has(key) || visited.size > 64) throw new Error('3MF 组件包含循环引用或嵌套过深。');
-    const definition = definitions.get(path)?.objects.get(String(objectID));
+    const definition = definitions.get(resolvedPath)?.objects.get(String(objectID));
     if (!definition) throw new Error(`3MF 缺少组件：${key}`);
     const info = settings.objects.get(String(objectID)) ?? inherited;
     const part = inherited?.parts.get(String(objectID));
@@ -381,20 +402,24 @@ export async function loadPaintedThreeMF(data, _options = {}) {
       const geometryKey = `${key}:${extruder}`;
       if (!geometryCache.has(geometryKey)) {
         await nextTask();
-        geometryCache.set(geometryKey, meshGeometry(definition, extruder, info?.parts, materialColors.length, counters, extendedStates));
+        const geom = meshGeometry(definition, extruder, info?.parts, materialColors.length, counters, extendedStates, clampExtruder);
+        geometryCache.set(geometryKey, geom);
       }
-      const mesh = new THREE.Mesh(geometryCache.get(geometryKey), materials);
-      mesh.name = group.name;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.userData.painted3MF = true;
-      mesh.userData.isSupport = group.userData.isSupport;
-      if (mesh.userData.isSupport) counters.supportMeshes++;
-      group.add(mesh);
+      const geom = geometryCache.get(geometryKey);
+      if (geom.index.count > 0) {
+        const mesh = new THREE.Mesh(geom, materials);
+        mesh.name = group.name;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.userData.painted3MF = true;
+        mesh.userData.isSupport = group.userData.isSupport;
+        if (mesh.userData.isSupport) counters.supportMeshes++;
+        group.add(mesh);
+      }
     }
     for (const component of entries(definition.body, 'component')) {
       const target = attr(component[1], 'path');
-      const componentPath = target ? normalizedPath(target.startsWith('/') ? target : `${path.slice(0, path.lastIndexOf('/') + 1)}${target}`) : path;
+      const componentPath = target ? normalizedPath(target.startsWith('/') ? target : `${resolvedPath.slice(0, resolvedPath.lastIndexOf('/') + 1)}${target}`) : resolvedPath;
       const child = await instantiate(componentPath, attr(component[1], 'objectid'), info, new Set([...visited, key]));
       child.applyMatrix4(transformMatrix(attr(component[1], 'transform'), definition.unitScale));
       group.add(child);

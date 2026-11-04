@@ -3,6 +3,7 @@ import { constants, createWriteStream } from 'node:fs';
 import { access, chmod, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { movAlphaEncoderArguments, probeMovAlphaEncoder } from './export-codecs.mjs';
+import { normalizeExportSound, soundMuxArguments } from './export-sound.mjs';
 import { findBlenderPath, findFFmpegPath, resolveExecutablePath } from './runtime-paths.mjs';
 import { inflateRawSync } from 'node:zlib';
 import { randomUUID } from 'node:crypto';
@@ -151,6 +152,19 @@ export function validateRenderConfig(input, files, { preview = false } = {}) {
   if (camera.effectiveSensorHeightMm !== undefined || camera.physicalFocalLengthMm !== undefined) {
     const sensor = finite(camera.effectiveSensorHeightMm, .001, 100, '有效传感器高度'), lens = finite(camera.physicalFocalLengthMm, .001, 10000, '物理等效镜头');
     if (Math.abs(2 * lens / sensor - projection[5]) > 1e-6) invalid('镜头和数字裁剪传感器与实际投影不一致。');
+  }
+  for (const motionSource of [camera.motion, output.motion, input.motion]) {
+    if (motionSource !== undefined && !['fixed', 'push'].includes(motionSource)) invalid('镜头运镜只支持固定或缓慢推进。');
+  }
+  for (const obj of [camera, output, input]) {
+    if (obj?.pushAmount !== undefined) finite(obj.pushAmount, 0, 100, '推进幅度');
+    if (obj?.pushDuration !== undefined) finite(obj.pushDuration, 0.1, 610, '推进时长');
+  }
+  const rawSoundEffect = output.soundEffect ?? input.soundEffect;
+  if (rawSoundEffect !== undefined) {
+    const mappedSound = rawSoundEffect === 'default' ? 'reference' : rawSoundEffect;
+    try { normalizeExportSound({ soundEffect: mappedSound, soundVolume: output.soundVolume ?? input.soundVolume ?? 1 }, output.frames / output.fps); }
+    catch (error) { invalid(error.message); }
   }
   const plane = object(input.plane, '承影底板'); finite(plane.widthM, 0.0001, 100, '底板宽度'); finite(plane.depthM, 0.0001, 100, '底板深度'); finite(plane.yM, -100, 100, '底板高度');
   const bounds = object(input.bounds, '模型范围'); const min = vector(bounds.min, 3, '模型下界', 100), max = vector(bounds.max, 3, '模型上界', 100);
@@ -373,7 +387,7 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
   function abort(job, code, message, status = 'error') {
     if (TERMINAL.has(job.status) || job.commitStarted) return;
     job.status = status; job.errorCode = code; job.failure = message;
-    killProcess(job.renderProcess); killProcess(job.encoderProcess); job.archiveStream?.destroy();
+    killProcess(job.renderProcess); killProcess(job.encoderProcess); killProcess(job.soundProcess); job.archiveStream?.destroy();
   }
   async function writeArchiveData(job, bytes) {
     if (TERMINAL.has(job.status)) throw new RealisticRenderError(409, 'RENDER_CANCELLED', '写实导出已停止。');
@@ -452,6 +466,23 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
       if (job.format === 'mp4' || job.format === 'mov-alpha') {
         job.encoderProcess.child.stdin.end(); const result = await job.encoderProcess.completion;
         if (result.code !== 0 || result.signal || TERMINAL.has(job.status)) throw new RealisticRenderError(500, 'ENCODER_FAILED', '视频编码失败，未保存不完整视频。');
+        if (job.soundEffect && job.soundEffect !== 'none') {
+          const suffix = job.format === 'mp4' ? 'mp4' : 'mov';
+          const soundMuxPath = path.join(job.directory, `result.sound.${suffix}`);
+          const muxFormat = job.format === 'mp4' ? 'mp4' : 'mov';
+          job.soundProcess = childProcess(ffmpegPath, soundMuxArguments({
+            root: MODULE_ROOT,
+            input: job.partialPath,
+            output: soundMuxPath,
+            options: { frames: job.config.output.frames, fps: job.config.output.fps, format: muxFormat, soundEffect: job.soundEffect, soundVolume: job.soundVolume },
+            hasAudio: false,
+            customSoundPath: job.customSoundPath,
+          }), job, 'sound');
+          job.soundProcess.child.stdin?.end();
+          const soundResult = await job.soundProcess.completion;
+          if (soundResult.code !== 0 || soundResult.signal || TERMINAL.has(job.status)) throw new RealisticRenderError(500, 'SOUND_MUX_FAILED', '音效合成失败，请关闭音效后重试。');
+          job.partialPath = soundMuxPath;
+        }
       } else if (job.format === 'png-sequence') {
         const entry = new ZipPassThrough('metadata.json'); job.archive.add(entry); entry.push(strToU8(JSON.stringify(job.stats)), true); job.archive.end(); await job.archiveWrites;
         await new Promise((resolve, reject) => { job.archiveStream.once('error', reject); job.archiveStream.end(resolve); });
@@ -470,8 +501,8 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
       if (!TERMINAL.has(job.status)) abort(job, error.code || 'RENDER_FAILED', error.status ? error.message : '写实导出失败，临时数据已清理；可使用实时导出。');
     } finally {
       clearTimeout(absoluteTimeout); clearInterval(stalled);
-      if (job.status !== 'complete') { killProcess(job.renderProcess); killProcess(job.encoderProcess); }
-      await Promise.all([job.renderProcess?.completion, job.encoderProcess?.completion].filter(Boolean));
+      if (job.status !== 'complete') { killProcess(job.renderProcess); killProcess(job.encoderProcess); killProcess(job.soundProcess); }
+      await Promise.all([job.renderProcess?.completion, job.encoderProcess?.completion, job.soundProcess?.completion].filter(Boolean));
       await rm(job.directory, { recursive: true, force: true }).catch(() => {});
       if (job.status !== 'complete') await rm(job.partialPath, { force: true }).catch(() => {});
       job.config = { output: job.config.output }; job.logs = ''; job.rawStats = null;
@@ -488,6 +519,7 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
     const capability = await health();
     if (!capability.available) throw new RealisticRenderError(503, 'REALISTIC_RENDER_UNAVAILABLE', capability.reason);
     const format = options.format || 'mp4'; if (!['mp4', 'mov-alpha', 'png-sequence', 'preview'].includes(format)) invalid('写实格式只支持 MP4、透明 MOV、PNG 序列或单张预览。');
+    if (options.motion !== undefined && !['fixed', 'push'].includes(options.motion)) invalid('镜头运镜只支持固定或缓慢推进。');
     if ((format === 'mp4' || format === 'mov-alpha') && !capability.encoderAvailable) throw new RealisticRenderError(503, 'FFMPEG_UNAVAILABLE', 'FFmpeg 未准备好，请选择 PNG 序列或实时导出。');
     if (format === 'mov-alpha' && !capability.encoderAlphaAvailable) throw new RealisticRenderError(503, 'ALPHA_ENCODER_UNAVAILABLE', '本机 FFmpeg 不支持透明 ProRes MOV，请安装支持 prores_ks 的 FFmpeg 或导出透明 PNG 序列。');
     if (queue.length + reservations >= maxQueued + (active ? 0 : 1)) throw new RealisticRenderError(409, 'REALISTIC_RENDER_BUSY', '已有写实导出和等待任务，请完成或取消后再试。');
@@ -499,7 +531,15 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
       const files = unpackRenderPackage(buffer); let sourceConfig;
       try { sourceConfig = JSON.parse(files['config.json'].toString('utf8')); } catch { invalid('渲染配置不是有效 JSON。'); }
       const config = validateRenderConfig(sourceConfig, files, { preview: format === 'preview' }), geometry = validateRenderGLB(files['scene.glb']);
+      if (options.motion) config.camera.motion = options.motion;
+      if (options.pushAmount !== undefined) config.camera.pushAmount = finite(Number(options.pushAmount), 0, 100, '推进幅度');
+      if (options.pushDuration !== undefined) config.camera.pushDuration = finite(Number(options.pushDuration), 0.1, 610, '推进时长');
       if (format === 'mov-alpha' && config.background.transparent !== true) invalid('透明 MOV 必须使用透明背景渲染，未开始写实任务。');
+      const rawSound = options.soundEffect ?? config.output.soundEffect ?? config.soundEffect ?? 'none';
+      const mappedSound = rawSound === 'default' ? 'reference' : rawSound;
+      let sound = { soundEffect: 'none', soundVolume: 1 };
+      try { sound = normalizeExportSound({ soundEffect: mappedSound, soundVolume: options.soundVolume ?? config.output.soundVolume ?? config.soundVolume ?? 1 }, config.output.frames / config.output.fps); }
+      catch (error) { invalid(error.message); }
       const printGeometry = config.printLayer ? { segments: config.printLayer.segmentCount, layers: config.printLayer.layerCount, maxWindowSegments: config.printLayer.maxWindowSegments, crossSection: config.printLayer.crossSection } : null;
       await ensureOutput();
       if (closed) throw new RealisticRenderError(503, 'REALISTIC_SERVICE_CLOSED', '写实渲染服务正在关闭。');
@@ -509,7 +549,7 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
       for (const [name, bytes] of Object.entries(files)) if (name !== 'config.json') await writeFile(path.join(directory, name), bytes, { flag: 'wx', mode: 0o600 });
       await writeFile(path.join(directory, 'config.json'), JSON.stringify(config), { flag: 'wx', mode: 0o600 });
       if (closed) throw new RealisticRenderError(503, 'REALISTIC_SERVICE_CLOSED', '写实渲染服务正在关闭。');
-      const job = { id, config, geometry, printGeometry, format, watermarked: options.watermarked === true, directory, filename, partialPath: path.join(directory, `result.partial.${suffix}`), finalPath: path.join(format === 'preview' ? tempRoot : outputRoot, filename), status: 'queued', reported: 0, encoded: 0, sequenceBytes: 0, logs: '', createdAt: new Date().toISOString() };
+      const job = { id, config, geometry, printGeometry, format, watermarked: options.watermarked === true, soundEffect: sound.soundEffect, soundVolume: sound.soundVolume, customSoundPath: options.customSoundPath, directory, filename, partialPath: path.join(directory, `result.partial.${suffix}`), finalPath: path.join(format === 'preview' ? tempRoot : outputRoot, filename), status: 'queued', reported: 0, encoded: 0, sequenceBytes: 0, logs: '', createdAt: new Date().toISOString() };
       jobs.set(id, job); queue.push(job); dispatch(); return publicJob(job);
     } catch (error) {
       if (directory) await rm(directory, { recursive: true, force: true }).catch(() => {});
