@@ -3105,11 +3105,25 @@ gl_FragColor = vec4(floor(packedHeight / 256.0) / 255.0, mod(packedHeight, 256.0
     const video = this._backgroundVideo;
     if (!video || this.options.transparent) return;
     const target = this._backgroundTime(time);
-    if (video.seeking) await waitForVideo(video, 'seeked', () => !video.seeking && video.readyState >= 2, '背景视频定位失败，请换用普通 H.264 MP4 视频。');
-    if (Math.abs(video.currentTime - target) >= 0.0005) {
-      const sought = waitForVideo(video, 'seeked', () => !video.seeking && video.readyState >= 2 && Math.abs(video.currentTime - target) < 0.0005, '背景视频定位失败，请换用普通 H.264 MP4 视频。');
-      video.currentTime = target;
-      await sought;
+    const tolerance = 0.008;
+    if (video.seeking) {
+      try {
+        await Promise.race([
+          waitForVideo(video, 'seeked', () => !video.seeking && video.readyState >= 2, '背景视频定位失败，请换用普通 H.264 MP4 视频。', 1500),
+          new Promise(r => setTimeout(r, 100))
+        ]);
+      } catch {}
+    }
+    if (Math.abs(video.currentTime - target) >= tolerance) {
+      const sought = waitForVideo(video, 'seeked', () => !video.seeking && video.readyState >= 2 && Math.abs(video.currentTime - target) < tolerance, '背景视频定位失败，请换用普通 H.264 MP4 视频。', 1500);
+      if (typeof video.fastSeek === 'function') {
+        try { video.fastSeek(target); } catch { video.currentTime = target; }
+      } else {
+        video.currentTime = target;
+      }
+      try {
+        await Promise.race([sought, new Promise(r => setTimeout(r, 100))]);
+      } catch {}
     }
     if (this._backgroundVideo !== video) throw new Error('背景视频已更换，请重新导出。');
     this._backgroundTexture.needsUpdate = true;

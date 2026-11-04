@@ -1,5 +1,10 @@
 # 版本演进与快速回溯索引 (CHANGELOG)
 
+## v1.3.2 (2026-11-04 23:13) — `perf(background-video)`
+- **变更摘要**：大幅提升带背景视频MP4导出速度：优化视频Seek步进容差并打通运镜硬件加速流式管道
+- **定位文件**：`src/app.js`, `src/camera-motion.js`, `src/studio.js`
+- **回溯上一版**：`git checkout v1.3.1` ｜ **撤回本次**：`git revert v1.3.2`
+
 ## v1.3.1 (2026-11-04 23:05) — `perf(render-export)`
 - **变更摘要**：解锁画质下拉框写实自然光影选项，移除多余按钮并实现导出全链路硬件加速大幅提速
 - **定位文件**：`index.html`, `scripts/render-cycles.py`, `server.mjs`, `src/app.js`, `src/studio.js`, `src/style.css`

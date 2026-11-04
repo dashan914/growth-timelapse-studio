@@ -1569,7 +1569,7 @@ async function exportVideo() {
           const state = timelineState(frameTime,config.duration,config.hold,config.motion);
           let blob = await studio.captureFrame(state.progress,state.rotation,index/config.fps,{outputPlan:plan,signal,format:frameMime});
           if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo);
-          blob=await applyFramePush(blob,cameraMotionScale(frameTime,config),pushCanvas);
+          blob=await applyFramePush(blob,cameraMotionScale(frameTime,config),pushCanvas,frameMime);
           if(previousUploadPromise)await previousUploadPromise;
           previousUploadPromise=api(`/api/exports/${exportId}/frames?index=${index}`,{method:'POST',headers:{'Content-Type':frameMime},body:blob,signal});
           const pct = Math.round((index+1)/frames*95);

@@ -7,7 +7,7 @@ export function cameraMotionScale(time, { motion = 'fixed', pushAmount = 20, pus
   return 1 + amount * t;
 }
 
-export async function applyFramePush(blob, scale, canvas = null) {
+export async function applyFramePush(blob, scale, canvas = null, format = null, quality = 0.95) {
   if (scale <= 1) return blob;
   canvas ||= document.createElement('canvas');
   const bitmap = await createImageBitmap(blob);
@@ -18,6 +18,8 @@ export async function applyFramePush(blob, scale, canvas = null) {
     context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
     const width = bitmap.width / scale, height = bitmap.height / scale;
     context.drawImage(bitmap, (bitmap.width-width)/2, (bitmap.height-height)/2, width, height, 0, 0, canvas.width, canvas.height);
-    return await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('运镜画面生成失败。')), 'image/png'));
+    const mime = format || blob?.type || 'image/png';
+    const blobMime = mime === 'image/jpeg' || mime === 'jpeg' ? 'image/jpeg' : 'image/png';
+    return await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('运镜画面生成失败。')), blobMime, quality));
   } finally { bitmap.close(); }
 }
