@@ -1,5 +1,10 @@
 # 版本演进与快速回溯索引 (CHANGELOG)
 
+## v1.4.0 (2026-11-05 00:43) — `feat(release)`
+- **变更摘要**：发布 1.2.0-beta.8 发行配置、写实自然光影与硬件加速导出版本说明
+- **定位文件**：`.github/workflows/source-release.yml`, `INSTALL_AGENT.md`, `README.md`, `SOURCE_MANIFEST.json`, `beta-activation.mjs`, `beta-config.json`, `docs/RELEASE.md`, `docs/SOFTWARE_PURCHASE.md` 等 15 个文件
+- **回溯上一版**：`git checkout v1.3.4` ｜ **撤回本次**：`git revert v1.4.0`
+
 ## v1.3.4 (2026-11-04 23:56) — `fix(realistic-preview)`
 - **变更摘要**：修复写实自然光影预览被切片支撑与背景视频拦截的问题并强化预览加载反馈
 - **定位文件**：`src/app.js`, `src/studio.js`, `src/style.css`, `tests/scene-package.test.mjs`

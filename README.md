@@ -71,9 +71,9 @@
 
 ## 快速安装
 
-当前固定版本为 **v1.2.0-beta.7**，官方安装文件为 `growth-timelapse-studio-1.2.0-beta.7-runtime.zip`。下载运行包和同版本外部安装清单，核对 SHA256 后安装。
+当前固定版本为 **v1.2.0-beta.8**，官方安装文件为 `growth-timelapse-studio-1.2.0-beta.8-runtime.zip`。下载运行包和同版本外部安装清单，核对 SHA256 后安装。
 
-[固定版本下载](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.7) · [直接下载官方运行包](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.7/growth-timelapse-studio-1.2.0-beta.7-runtime.zip) · [AI 一键安装](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md)
+[固定版本下载](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.8) · [直接下载官方运行包](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.8/growth-timelapse-studio-1.2.0-beta.8-runtime.zip) · [AI 一键安装](https://github.com/dashan914/growth-timelapse-studio/blob/main/INSTALL_AGENT.md)
 
 可以把安装指南交给能操作本机终端的 Agent，按固定版本检查依赖、核对 SHA256、安装并启动。Windows x64 的依赖与首次检查见 [Windows 配置说明](docs/WINDOWS_SETUP.md)。
 

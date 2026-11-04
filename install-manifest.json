@@ -3,13 +3,20 @@
   "application": "growth-timelapse-studio",
   "release": {
     "repository": "dashan914/growth-timelapse-studio",
-    "version": "1.2.0-beta.7",
-    "tag": "v1.2.0-beta.7",
+    "version": "1.2.0-beta.8",
+    "tag": "v1.2.0-beta.8",
+    "releaseDate": "2026-11-05",
     "published": false,
     "url": null,
     "sha256": null,
     "archiveRoot": "growth-timelapse-studio",
-    "kind": "runtime"
+    "kind": "runtime",
+    "highlights": [
+      "解锁「写实 · 自然光影」预览与导出，支持含支撑模型与背景视频帧实时光影预览",
+      "实时导出与带背景视频 MP4 启用 GPU 硬件加速编码与单遍合成，大幅提速并修复卡 1% 问题",
+      "自动识别 macOS / Windows 多版本 Blender（2.93 ~ 5.2+）并开启 Cycles 自适应采样加速",
+      "兼容 Windows 与拓竹全机型（A1 / A1 mini / P1 / X1 / H2D / H2C）及多盘 3MF 导入"
+    ]
   },
   "node": {
     "minimumMajor": 24,

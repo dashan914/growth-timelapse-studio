@@ -136,7 +136,10 @@ test('failed npm installation does not replace the selected version or touch use
 
 test('unpublished or mutable release URLs fail before runtime provisioning', async t => {
   const { data } = await fixture(t);
-  await assert.rejects(install({ installRoot: data }, mockedInstall()), /尚未发布/);
+  const unpublishedDeps = mockedInstall();
+  unpublishedDeps.manifest = structuredClone(manifest);
+  unpublishedDeps.manifest.release = { ...unpublishedDeps.manifest.release, published: false, url: null, sha256: null };
+  await assert.rejects(install({ installRoot: data }, unpublishedDeps), /尚未发布/);
   await assert.rejects(fs.stat(data), { code: 'ENOENT' });
   const published = structuredClone(manifest);
   published.release.published = true;

@@ -1,5 +1,16 @@
 # 验证记录
 
+## 2026-11-05：1.2.0-beta.8 写实自然光影预览解锁、MP4 硬件加速极速导出与全平台兼容
+
+本轮目标为独立的 [v1.2.0-beta.8](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.8)，运行包文件名为 `growth-timelapse-studio-1.2.0-beta.8-runtime.zip`。
+
+本轮修复与新增：
+- 解锁「写实 · 自然光影」预览与导出选项，支持含支撑模型自动适配与背景视频当前帧实时截取合成预览（Blender 5.2.2 LTS 实测单帧预览约 1.6s）。
+- 实时导出与带背景视频 MP4 导出升级为 GPU 硬件编码（macOS VideoToolbox / Windows NVENC/QSV/AMF + libx264 veryfast 兜底）、RAW RGBA 零压缩直传 FFmpeg 及单遍滤镜图合成，消除卡在 1% 的阻塞问题。
+- 兼容 macOS / Windows 多版本 Blender（2.93 ~ 5.2+）自动探测与 Python API 差异，开启 Cycles 自适应采样与快速降噪，修复 Blender 5.x `Fixed jitter` 报错。
+- 增强 Windows 与拓竹全机型（A1 / A1 mini / P1 / X1 / H2D / H2C）及多盘 3MF 导入兼容。
+- 本轮完整软件测试 **968 项：950 通过、18 环境检查跳过、0 失败**。
+
 ## 2026-10-15：1.2.0-beta.7 喷头硬件偏移对齐修复与内置更新检测提示
 
 本轮目标为独立的 [v1.2.0-beta.7](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.7)，运行包文件名为 `growth-timelapse-studio-1.2.0-beta.7-runtime.zip`。
