@@ -1,6 +1,6 @@
 # 界面操作指南
 
-本指南对应固定版本 [v1.2.0-beta.8](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.8)，官方安装文件为 `growth-timelapse-studio-1.2.0-beta.8-runtime.zip`。
+本指南对应固定版本 [v1.2.0-beta.9](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.9)，官方安装文件为 `growth-timelapse-studio-1.2.0-beta.9-runtime.zip`。
 
 制作流程：**导入模型 → 选择背景 → 调整摆放和画面 → 预览 → 导出**。
 

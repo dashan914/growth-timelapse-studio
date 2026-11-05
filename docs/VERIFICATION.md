@@ -1,5 +1,15 @@
 # 验证记录
 
+## 2026-11-06：1.2.0-beta.9 导出视频自动落盘至下载目录、一键打开文件夹与全链路审查修复
+
+本轮目标为独立的 [v1.2.0-beta.9](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.9)，运行包文件名为 `growth-timelapse-studio-1.2.0-beta.9-runtime.zip`。
+
+本轮修复与新增：
+- 导出完成（含实时导出与写实渲染导出）自动无损同步落盘至用户系统「下载 (`~/Downloads`)」文件夹，导出弹窗自动触发本地保存并新增「打开所在文件夹」按钮（支持 macOS Finder / Windows Explorer 直接定位高亮视频文件）。
+- 修复 FFmpeg `image2pipe` 输入流缺少显式 `-vcodec` 导致部分帧序列探测失败的问题，增加 JPEG SOF 尺寸校验与实拍外观融合（`appearance === 'photo'`）格式自适应。
+- 打通写实渲染导出的缓慢推进运镜（`motion: 'push'`）与音效（`soundEffect`）参数透传，文件下载接口支持 HTTP `Range` 分段请求（`206 Partial Content`）。
+- 本轮完整软件测试 **969 项：951 通过、18 环境检查跳过、0 失败**。
+
 ## 2026-11-05：1.2.0-beta.8 写实自然光影预览解锁、MP4 硬件加速极速导出与全平台兼容
 
 本轮目标为独立的 [v1.2.0-beta.8](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.8)，运行包文件名为 `growth-timelapse-studio-1.2.0-beta.8-runtime.zip`。

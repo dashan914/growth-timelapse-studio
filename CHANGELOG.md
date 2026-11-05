@@ -1,5 +1,10 @@
 # 版本演进与快速回溯索引 (CHANGELOG)
 
+## v1.6.0 (2026-11-06 01:16) — `feat(release)`
+- **变更摘要**：发布 v1.2.0-beta.9 官方运行包并同步客户端版本更新推送
+- **定位文件**：`INSTALL_AGENT.md`, `README.md`, `beta-activation.mjs`, `docs/RELEASE.md`, `docs/SOFTWARE_PURCHASE.md`, `docs/UI_GUIDE.md`, `docs/VERIFICATION.md`, `install-manifest.json` 等 11 个文件
+- **回溯上一版**：`git checkout v1.5.1` ｜ **撤回本次**：`git revert v1.6.0`
+
 ## v1.5.1 (2026-11-06 01:08) — `fix(export-save)`
 - **变更摘要**：修复导出视频不落盘问题，支持自动保存至下载目录、一键打开文件夹与完整代码审查修复
 - **定位文件**：`realistic-render.mjs`, `server.mjs`, `src/app.js`, `src/realistic-export.js`, `src/style.css`, `tests/backend.test.mjs`

@@ -1,19 +1,19 @@
 # 发布维护
 
-本轮目标为软件 **1.2.0-beta.8**，固定 tag **v1.2.0-beta.8**，官方运行包为 `growth-timelapse-studio-1.2.0-beta.8-runtime.zip`。本轮解锁「写实 · 自然光影」预览与导出（兼容含支撑模型与背景视频实时合成预览）、大幅提速实时导出与带背景视频 MP4 硬件加速导出（修复卡 1% 问题），并兼容 macOS/Windows 多版本 Blender 与拓竹全机型 3MF 导入。
+本轮目标为软件 **1.2.0-beta.9**，固定 tag **v1.2.0-beta.9**，官方运行包为 `growth-timelapse-studio-1.2.0-beta.9-runtime.zip`。本轮新增导出完成自动落盘至系统「下载 (Downloads)」文件夹与「打开所在文件夹」按钮，修复 FFmpeg `image2pipe` 输入流校验与实拍外观融合导出，完整支持写实渲染运镜与音效合成，并保留 GPU 硬件加速极速导出与多版本 Blender / 拓竹全机型 3MF 兼容。
 
-新用户安装与老用户升级共用 [安装指南](../INSTALL_AGENT.md)。beta.8 的固定 AI 读取入口为 `https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.8/INSTALL_AGENT.md`；持续维护入口仍为 `https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/main/INSTALL_AGENT.md`。老用户使用原安装目录，保留 `beta/` 中的设备授权、订单、订单历史以及 `exports/` 作品；年付到期时间不变，永久授权继续有效。软件没有自动更新器。
+新用户安装与老用户升级共用 [安装指南](../INSTALL_AGENT.md)。beta.9 的固定 AI 读取入口为 `https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/v1.2.0-beta.9/INSTALL_AGENT.md`；持续维护入口仍为 `https://raw.githubusercontent.com/dashan914/growth-timelapse-studio/main/INSTALL_AGENT.md`。老用户使用原安装目录，保留 `beta/` 中的设备授权、订单、订单历史以及 `exports/` 作品；年付到期时间不变，永久授权继续有效。软件没有自动更新器。
 
 公开仓库继续保留 MIT 源码、测试和开发打包流程。官方运行包延续轻量压缩与混淆、第三方许可和 `RUNTIME_MANIFEST.json`，不改变原签名产品 `growth-timelapse-beta`、可信公钥、购买价格、星光兑换及离线授权逻辑。
 
 ## 发布步骤
 
-1. 核对 `package.json`、锁文件、`APP_VERSION`、`beta-config.json`、安装清单模板和当前下载文档均为 beta.8；保留产品 ID、可信公钥和本机数据路径。新增依赖或素材同步 [第三方来源记录](../THIRD_PARTY_NOTICES.md)。
+1. 核对 `package.json`、锁文件、`APP_VERSION`、`beta-config.json`、安装清单模板和当前下载文档均为 beta.9；保留产品 ID、可信公钥和本机数据路径。新增依赖或素材同步 [第三方来源记录](../THIRD_PARTY_NOTICES.md)。
 2. 执行 `npm ci`、`npm run doctor` 和 `npm test`，核对安装器保留授权、订单与作品的升级回归，以及运行包内音效存在、可供浏览器和 FFmpeg 使用。需要时运行 `npm run test:native-slicing`。本轮实际结果写入 [验证记录](VERIFICATION.md)。
 3. 构建官方运行包：
 
 ```sh
-node scripts/build-runtime-release.mjs --output "release/runtime-1.2.0-beta.8"
+node scripts/build-runtime-release.mjs --output "release/runtime-1.2.0-beta.9"
 ```
 
 源码开发包仍可独立生成，使用自己的 `SOURCE_MANIFEST.json`：
@@ -27,16 +27,16 @@ python3 scripts/package-release.py
 6. 为冻结的 ZIP 生成外部安装清单，源码和 ZIP 内模板保持 `published: false`：
 
 ```sh
-node scripts/finalize-install-manifest.mjs --archive "release/runtime-1.2.0-beta.8/growth-timelapse-studio-1.2.0-beta.8-runtime.zip" --repository dashan914/growth-timelapse-studio
+node scripts/finalize-install-manifest.mjs --archive "release/runtime-1.2.0-beta.9/growth-timelapse-studio-1.2.0-beta.9-runtime.zip" --repository dashan914/growth-timelapse-studio
 ```
 
-7. 发布独立 `v1.2.0-beta.8` GitHub 预发布，将官方运行 ZIP、`SHA256SUMS.txt`、外部 `install-manifest.json` 和 `INSTALL_AGENT.md` 作为附件。
+7. 发布独立 `v1.2.0-beta.9` GitHub 预发布，将官方运行 ZIP、`SHA256SUMS.txt`、外部 `install-manifest.json` 和 `INSTALL_AGENT.md` 作为附件。
 
 固定下载地址：
 
-- [beta.8 Release](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.8)
-- [运行 ZIP](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.8/growth-timelapse-studio-1.2.0-beta.8-runtime.zip)
-- [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.8/install-manifest.json)
+- [beta.9 Release](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.9)
+- [运行 ZIP](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.9/growth-timelapse-studio-1.2.0-beta.9-runtime.zip)
+- [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.9/install-manifest.json)
 
 安装器在同一根目录的 `releases/` 下准备新版本，检查通过后才切换 `installation.json` 和启动入口。准备阶段失败时保留已选旧版本；升级时不得删除整个根目录、重建 `beta/`、解除设备绑定或要求重新付款。启动服务前后以 `/api/health` 和本机解锁状态检查实际选中的版本，PID 停止流程见安装指南。
 

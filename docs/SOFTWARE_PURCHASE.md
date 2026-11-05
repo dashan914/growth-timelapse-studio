@@ -1,10 +1,10 @@
 # 软件授权购买与免费水印导出
 
-日期：2026-11-05。网站 **1.15.1 已部署**。本轮固定目标为 **1.2.0-beta.8**，官方安装资产为 `growth-timelapse-studio-1.2.0-beta.8-runtime.zip`；软件内增加购买凭据的查看、复制和本机保存，沿用既有付费授权码、签名、公钥、价格、星光兑换和离线逻辑。实际发行与验证结果见 [验证记录](VERIFICATION.md)。
+日期：2026-11-06。网站 **1.15.1 已部署**。本轮固定目标为 **1.2.0-beta.9**，官方安装资产为 `growth-timelapse-studio-1.2.0-beta.9-runtime.zip`；软件内增加购买凭据的查看、复制和本机保存，沿用既有付费授权码、签名、公钥、价格、星光兑换和离线逻辑。实际发行与验证结果见 [验证记录](VERIFICATION.md)。
 
 用户已确认开发：软件内扫码支付，网站提供购买页；一年 19.90 元（365 天）、永久 39.90 元；购买授权绑定一台设备，激活后可离线，换机先解绑。学员继续原星光兑换，不变更资格、扣星光和原设备规则。
 
-用户入口：[山地造物购买页](https://ai3dclass.cn/software/checkout) · [学员原星光兑换页](https://ai3dclass.cn/points) · [本轮固定目标 v1.2.0-beta.8](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.8)。发行后使用 [同版本安装指南及完整 AI 提示词](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.8/INSTALL_AGENT.md) 和 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.8/install-manifest.json)。固定链接经公开验证后使用；已保存的旧 ZIP 仍兼容，公开源码开发打包保留。
+用户入口：[山地造物购买页](https://ai3dclass.cn/software/checkout) · [学员原星光兑换页](https://ai3dclass.cn/points) · [本轮固定目标 v1.2.0-beta.9](https://github.com/dashan914/growth-timelapse-studio/releases/tag/v1.2.0-beta.9)。发行后使用 [同版本安装指南及完整 AI 提示词](https://github.com/dashan914/growth-timelapse-studio/blob/v1.2.0-beta.9/INSTALL_AGENT.md) 和 [外部安装清单](https://github.com/dashan914/growth-timelapse-studio/releases/download/v1.2.0-beta.9/install-manifest.json)。固定链接经公开验证后使用；已保存的旧 ZIP 仍兼容，公开源码开发打包保留。
 
 ## 保存购买凭据与恢复授权
 
