@@ -1,5 +1,10 @@
 # 版本演进与快速回溯索引 (CHANGELOG)
 
+## v1.5.1 (2026-11-06 01:08) — `fix(export-save)`
+- **变更摘要**：修复导出视频不落盘问题，支持自动保存至下载目录、一键打开文件夹与完整代码审查修复
+- **定位文件**：`realistic-render.mjs`, `server.mjs`, `src/app.js`, `src/realistic-export.js`, `src/style.css`, `tests/backend.test.mjs`
+- **回溯上一版**：`git checkout v1.5.0` ｜ **撤回本次**：`git revert v1.5.1`
+
 ## v1.5.0 (2026-11-05 00:49) — `feat(update-push)`
 - **变更摘要**：向已安装客户端推送 v1.2.0-beta.8 正式更新清单与校验指纹
 - **定位文件**：`SOURCE_MANIFEST.json`, `install-manifest.json`

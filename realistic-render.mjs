@@ -1,12 +1,13 @@
 import { freeWatermarkArguments } from './free-watermark.mjs';
 import { constants, createWriteStream } from 'node:fs';
-import { access, chmod, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { access, chmod, copyFile, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { movAlphaEncoderArguments, probeMovAlphaEncoder } from './export-codecs.mjs';
 import { normalizeExportSound, soundMuxArguments } from './export-sound.mjs';
 import { findBlenderPath, findFFmpegPath, resolveExecutablePath } from './runtime-paths.mjs';
 import { inflateRawSync } from 'node:zlib';
 import { randomUUID } from 'node:crypto';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Zip, ZipPassThrough, strToU8 } from 'three/addons/libs/fflate.module.js';
@@ -345,15 +346,18 @@ function safeStats(stats, job) {
   return Object.fromEntries(['schemaVersion', 'originalTriangles', 'completeTriangles', 'sourceMeshes', 'materials', 'decimation', 'sourceGeometryUnchanged', 'frames', 'growthFrames', 'previewProgress', 'width', 'height', 'samples', 'seconds', 'projectionError', 'photoProtected', 'gradingScope', 'capMode', 'capOnlyTrianglesPeak', 'printSegments', 'printLayerCount', 'printWindowSegmentsPeak', 'printCrossSection', 'environmentMode', 'shadowMode'].map(key => [key, typeof stats[key] === 'string' ? stats[key].slice(0, 120) : stats[key]]));
 }
 
-export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath = findBlenderPath({ root }), ffmpegPath = findFFmpegPath(), timeoutMs = 6 * 60 * 60 * 1000, stallTimeoutMs = 15 * 60 * 1000, maxQueued = 1, killGraceMs = 1500, maxOutputBytes = REALISTIC_RENDER_LIMITS.maxOutputBytes, spawnImpl = spawn, renameImpl = rename, alphaEncoderProbe = probeMovAlphaEncoder, exportDirectory } = {}) {
+export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath = findBlenderPath({ root }), ffmpegPath = findFFmpegPath(), timeoutMs = 6 * 60 * 60 * 1000, stallTimeoutMs = 15 * 60 * 1000, maxQueued = 1, killGraceMs = 1500, maxOutputBytes = REALISTIC_RENDER_LIMITS.maxOutputBytes, spawnImpl = spawn, renameImpl = rename, alphaEncoderProbe = probeMovAlphaEncoder, exportDirectory, downloadsDirectory } = {}) {
   if (!Number.isInteger(maxQueued) || maxQueued < 0 || maxQueued > 1 || ![timeoutMs, stallTimeoutMs].every(value => Number.isFinite(value) && value >= 25 && value <= 86400000) || !Number.isFinite(killGraceMs) || killGraceMs < 10 || killGraceMs > 5000) throw new RealisticRenderError(500, 'INVALID_RENDER_SERVICE_LIMITS', '写实渲染服务的队列或时间范围配置无效。');
   if (!Number.isInteger(maxOutputBytes) || maxOutputBytes < 1 || maxOutputBytes > REALISTIC_RENDER_LIMITS.maxOutputBytes) throw new RealisticRenderError(500, 'INVALID_RENDER_SERVICE_LIMITS', '写实导出文件大小范围配置无效。');
   root = path.resolve(root);
   let outputRoot = exportDirectory ? path.resolve(exportDirectory) : path.join(root, 'exports'), tempRoot = path.join(outputRoot, '.realistic-work');
+  const targetDownloadsDir = downloadsDirectory !== undefined
+    ? (downloadsDirectory ? path.resolve(downloadsDirectory) : null)
+    : (!process.env.NODE_TEST_CONTEXT && !outputRoot.startsWith(os.tmpdir()) ? path.join(os.homedir(), 'Downloads') : null);
   const jobs = new Map(), queue = []; let active = null, reservations = 0, closed = false;
   const preparations = new Set();
   const get = (id, { preview } = {}) => { const job = jobs.get(id); if (!job || typeof preview === 'boolean' && (job.format === 'preview') !== preview) throw new RealisticRenderError(404, 'REALISTIC_EXPORT_NOT_FOUND', '找不到这次写实任务。'); return job; };
-  const publicJob = job => ({ id: job.id, status: job.status, format: job.format, rendered: job.reported, encoded: job.encoded, received: job.encoded, total: job.config.output.frames, progress: Math.round(job.encoded / job.config.output.frames * 100), ...(job.format === 'preview' ? { previewProgress: job.config.output.previewProgress } : {}), queued: job.status === 'queued', failure: job.failure || null, error: job.errorCode || null, filename: job.status === 'complete' ? job.filename : null, bytes: job.status === 'complete' ? job.bytes : null, url: job.status === 'complete' ? `/api/realistic-${job.format === 'preview' ? 'previews' : 'exports'}/${job.id}/file` : null, stats: job.stats || null, warnings: [job.printGeometry ? job.printGeometry.crossSection === 'stadium-with-elliptical-fallback' ? '实际路径完整保留；普通道路为圆角扁平截面，桥接或线宽小于层高时用椭圆近似。' : '旧研究封包采用椭圆截面；实际路径完整保留。' : '没有切片数据，生长截面保持开放；不会满铺假填充。'], createdAt: job.createdAt });
+  const publicJob = job => ({ id: job.id, status: job.status, format: job.format, rendered: job.reported, encoded: job.encoded, received: job.encoded, total: job.config.output.frames, progress: Math.round(job.encoded / job.config.output.frames * 100), ...(job.format === 'preview' ? { previewProgress: job.config.output.previewProgress } : {}), queued: job.status === 'queued', failure: job.failure || null, error: job.errorCode || null, filename: job.status === 'complete' ? job.filename : null, bytes: job.status === 'complete' ? job.bytes : null, url: job.status === 'complete' ? `/api/realistic-${job.format === 'preview' ? 'previews' : 'exports'}/${job.id}/file` : null, ...(job.status === 'complete' && job.savedPath ? { savedPath: job.savedPath } : {}), stats: job.stats || null, warnings: [job.printGeometry ? job.printGeometry.crossSection === 'stadium-with-elliptical-fallback' ? '实际路径完整保留；普通道路为圆角扁平截面，桥接或线宽小于层高时用椭圆近似。' : '旧研究封包采用椭圆截面；实际路径完整保留。' : '没有切片数据，生长截面保持开放；不会满铺假填充。'], createdAt: job.createdAt });
   async function health() {
     const blender = Boolean(resolveExecutablePath(blenderPath)), encoder = Boolean(resolveExecutablePath(ffmpegPath));
     const worker = await access(WORKER, constants.R_OK).then(() => true, () => false);
@@ -495,7 +499,16 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
       // Once rename starts, cancel waits for this verified finalization; it
       // never deletes a completed user export or turns it into a partial one.
       job.commitStarted = true; clearTimeout(absoluteTimeout); clearInterval(stalled);
-      await renameImpl(job.partialPath, job.finalPath); job.status = 'complete'; job.bytes = info.size; job.failure = null; job.errorCode = null;
+      await renameImpl(job.partialPath, job.finalPath);
+      if (job.format !== 'preview' && targetDownloadsDir) {
+        try {
+          await mkdir(targetDownloadsDir, { recursive: true });
+          const dlPath = path.join(targetDownloadsDir, job.filename);
+          await copyFile(job.finalPath, dlPath);
+          job.savedPath = dlPath;
+        } catch {}
+      }
+      job.status = 'complete'; job.bytes = info.size; job.failure = null; job.errorCode = null;
     } catch (error) {
       job.commitStarted = false;
       if (!TERMINAL.has(job.status)) abort(job, error.code || 'RENDER_FAILED', error.status ? error.message : '写实导出失败，临时数据已清理；可使用实时导出。');
@@ -536,7 +549,7 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
       if (options.pushDuration !== undefined) config.camera.pushDuration = finite(Number(options.pushDuration), 0.1, 610, '推进时长');
       if (format === 'mov-alpha' && config.background.transparent !== true) invalid('透明 MOV 必须使用透明背景渲染，未开始写实任务。');
       const rawSound = options.soundEffect ?? config.output.soundEffect ?? config.soundEffect ?? 'none';
-      const mappedSound = rawSound === 'default' ? 'reference' : rawSound;
+      const mappedSound = rawSound === 'default' || (rawSound === 'custom' && !options.customSoundPath) ? 'reference' : rawSound;
       let sound = { soundEffect: 'none', soundVolume: 1 };
       try { sound = normalizeExportSound({ soundEffect: mappedSound, soundVolume: options.soundVolume ?? config.output.soundVolume ?? config.soundVolume ?? 1 }, config.output.frames / config.output.fps); }
       catch (error) { invalid(error.message); }
@@ -546,7 +559,7 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
       const id = randomUUID(), suffix = format === 'preview' ? 'png' : format === 'mov-alpha' ? 'mov' : format === 'mp4' ? 'mp4' : 'zip';
       const name = safeName(options.name), filename = `${name}-${new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15)}-${id.slice(0, 8)}.${suffix}`;
       directory = path.join(tempRoot, id); await mkdir(directory, { mode: 0o700 }); await mkdir(path.join(directory, 'frames'), { mode: 0o700 });
-      for (const [name, bytes] of Object.entries(files)) if (name !== 'config.json') await writeFile(path.join(directory, name), bytes, { flag: 'wx', mode: 0o600 });
+      for (const [name, bytes] of Object.entries(files)) if (name !== 'config.json') await writeFile(path.join(directory, name), bytes, { flag: 'wx', mode: 0o700 });
       await writeFile(path.join(directory, 'config.json'), JSON.stringify(config), { flag: 'wx', mode: 0o600 });
       if (closed) throw new RealisticRenderError(503, 'REALISTIC_SERVICE_CLOSED', '写实渲染服务正在关闭。');
       const job = { id, config, geometry, printGeometry, format, watermarked: options.watermarked === true, soundEffect: sound.soundEffect, soundVolume: sound.soundVolume, customSoundPath: options.customSoundPath, directory, filename, partialPath: path.join(directory, `result.partial.${suffix}`), finalPath: path.join(format === 'preview' ? tempRoot : outputRoot, filename), status: 'queued', reported: 0, encoded: 0, sequenceBytes: 0, logs: '', createdAt: new Date().toISOString() };
@@ -573,7 +586,7 @@ export function createRealisticRenderService({ root = MODULE_ROOT, blenderPath =
   async function file(id, options) {
     const job = get(id, options); if (job.status !== 'complete') throw new RealisticRenderError(409, 'REALISTIC_FILE_NOT_READY', job.failure || '写实导出尚未完成。');
     const info = await stat(job.finalPath); if (!info.isFile() || await realpath(job.finalPath) !== job.finalPath) throw new RealisticRenderError(404, 'REALISTIC_FILE_MISSING', '已完成文件不存在或位置无效。');
-    return { path: job.finalPath, mime: job.format === 'preview' ? 'image/png' : job.format === 'mov-alpha' ? 'video/quicktime' : job.format === 'mp4' ? 'video/mp4' : 'application/zip', name: job.filename, filename: job.filename, size: info.size, bytes: info.size };
+    return { path: job.finalPath, ...(job.savedPath ? { savedPath: job.savedPath } : {}), mime: job.format === 'preview' ? 'image/png' : job.format === 'mov-alpha' ? 'video/quicktime' : job.format === 'mp4' ? 'video/mp4' : 'application/zip', name: job.filename, filename: job.filename, size: info.size, bytes: info.size };
   }
   async function close() {
     if (closed) return; closed = true;

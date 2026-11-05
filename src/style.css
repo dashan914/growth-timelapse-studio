@@ -352,5 +352,4 @@ body[data-export-state="unlocked"] .preview-watermark{display:none}
 .update-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);padding-top:12px}
 .update-skip-row{font-size:11px;color:var(--muted);margin:0}
 .update-footer-actions{display:flex;gap:8px}
-
-
+#export-result .export-reveal-button{width:100%;margin-top:8px}

@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -234,6 +235,60 @@ function validateJpeg(buffer, options) {
     if (tail[i] === 0xFF && tail[i + 1] === 0xD9) { hasEoi = true; break; }
   }
   if (!hasEoi) throw new ApiError(400, 'INVALID_JPEG', 'JPEG 图片不完整，请重试这一帧。');
+  let offset = 2, width = 0, height = 0;
+  while (offset + 4 <= buffer.length) {
+    if (buffer[offset++] !== 0xFF) break;
+    while (offset < buffer.length && buffer[offset] === 0xFF) offset++;
+    if (offset >= buffer.length) break;
+    const marker = buffer[offset++];
+    if (marker === 0xD9 || marker === 0xDA) break;
+    if (marker === 0x01 || (marker >= 0xD0 && marker <= 0xD7)) continue;
+    if (offset + 2 > buffer.length) break;
+    const length = buffer.readUInt16BE(offset);
+    if (length < 2 || offset + length > buffer.length) break;
+    if ([0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF].includes(marker) && length >= 8) {
+      height = buffer.readUInt16BE(offset + 3);
+      width = buffer.readUInt16BE(offset + 5);
+      break;
+    }
+    offset += length;
+  }
+  if (width > 0 && height > 0 && (width !== options.width || height !== options.height)) {
+    throw new ApiError(400, 'FRAME_SIZE_MISMATCH', 'JPEG 图片尺寸与导出设置不一致。');
+  }
+}
+
+export async function syncExportToDownloads(sourcePath, filename, downloadsDir) {
+  if (!downloadsDir) return null;
+  try {
+    await mkdir(downloadsDir, { recursive: true });
+    const targetPath = path.join(downloadsDir, filename);
+    const tempPath = path.join(downloadsDir, `.${filename}.${randomUUID().slice(0, 8)}.part`);
+    await copyFile(sourcePath, tempPath);
+    await rename(tempPath, targetPath);
+    return targetPath;
+  } catch {
+    return null;
+  }
+}
+
+export async function revealFileInOS(targetPath, revealImpl = null) {
+  const resolved = await realpath(targetPath).catch(() => null);
+  if (!resolved) throw new ApiError(404, 'FILE_NOT_FOUND', '导出文件不存在或已被移动。');
+  if (typeof revealImpl === 'function') {
+    await revealImpl(resolved);
+    return { ok: true, path: resolved };
+  }
+  if (process.platform === 'darwin') {
+    await execFileAsync('/usr/bin/open', ['-R', resolved], { timeout: 8000 });
+  } else if (process.platform === 'win32') {
+    await execFileAsync('explorer.exe', [`/select,${resolved}`], { timeout: 8000, windowsHide: false }).catch(err => {
+      if (err && err.code === 'ENOENT') throw err;
+    });
+  } else {
+    await execFileAsync('xdg-open', [path.dirname(resolved)], { timeout: 8000 });
+  }
+  return { ok: true, path: resolved };
 }
 
 function loopbackHost(hostname) {
@@ -285,16 +340,21 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
   supportJobTimeoutMs = 15 * 60 * 1000, supportMaximumUploadBytes = 128 * 1024 * 1024,
   photoCalibrationService = { detect: detectPhotoUprights, capability: photoCalibrationCapability },
   realisticRenderService, sliceService, blenderPath = process.env.BLENDER_PATH, alphaEncoderProbe = probeMovAlphaEncoder,
-  betaService = createBetaActivationService(), paymentService, versionCheckService, exportDirectory = process.env.GROWTH_EXPORT_DIR } = {}) {
+  betaService = createBetaActivationService(), paymentService, versionCheckService, exportDirectory = process.env.GROWTH_EXPORT_DIR,
+  downloadsDirectory, revealImpl } = {}) {
   const payments = paymentService || createSoftwarePurchaseService({ betaService });
   const versionChecker = versionCheckService || createVersionCheckService();
   const supports = createSupportManager({ root, slicerPath: supportsSlicerPath, pythonPath: supportsPythonPath,
     timeoutMs: supportJobTimeoutMs, maximumUploadBytes: supportMaximumUploadBytes, spawnImpl: supportSpawnImpl });
-  const realistic = realisticRenderService || createRealisticRenderService({ root, ffmpegPath, alphaEncoderProbe, ...(exportDirectory ? { exportDirectory } : {}), ...(blenderPath ? { blenderPath } : {}) });
+  const outputDirectory = exportDirectory ? path.resolve(exportDirectory) : path.join(root, 'exports');
+  const resolvedTmp = os.tmpdir();
+  const targetDownloadsDir = downloadsDirectory !== undefined
+    ? (downloadsDirectory ? path.resolve(downloadsDirectory) : null)
+    : (!process.env.NODE_TEST_CONTEXT && !within(resolvedTmp, outputDirectory) ? path.join(os.homedir(), 'Downloads') : null);
+  const realistic = realisticRenderService || createRealisticRenderService({ root, ffmpegPath, alphaEncoderProbe, ...(exportDirectory ? { exportDirectory } : {}), ...(downloadsDirectory !== undefined ? { downloadsDirectory } : {}), ...(blenderPath ? { blenderPath } : {}) });
   const slices = sliceService || createSliceService({ root, pythonPath: supportsPythonPath });
   const jobs = new Map();
   const freeRealisticJobs = new Set();
-  const outputDirectory = exportDirectory ? path.resolve(exportDirectory) : path.join(root, 'exports');
   let activeJob = null;
   let ffmpegInfoPromise;
   let ffmpegInfoTime = 0;
@@ -379,16 +439,6 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
       if (options.format === 'png-sequence') {
         job.frameDirectory = path.join(outputDirectory, `${id}.frames`);
         await mkdir(job.frameDirectory, { mode: 0o700 });
-      } else {
-        const inputCodecArgs = options.format === 'mov-alpha' ? ['-vcodec', 'png'] : [];
-        const encoderArgs = options.format === 'mov-alpha' ? movAlphaEncoderArguments() : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-f', 'mp4'];
-        startEncoder(job, ffmpegPath, [
-          '-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-f', 'image2pipe',
-          ...inputCodecArgs, '-framerate', String(options.fps), '-i', 'pipe:0',
-          ...(watermarked ? freeWatermarkArguments(options.width, options.height) : []),
-          '-frames:v', String(options.frames), '-an',
-          ...encoderArgs, partialPath,
-        ]);
       }
       jobs.set(id, job);
       json(response, 201, { id, watermarked });
@@ -570,12 +620,29 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
     try {
       const maximum = Math.min(MAX_PNG_BYTES, job.options.width * job.options.height * 5 + 65536);
       const frameBuffer = await readBody(request, maximum);
+      if (job.frameMime && mime !== job.frameMime) {
+        throw new ApiError(400, 'INVALID_CONTENT_TYPE', '同一导出任务的画面格式必须一致。');
+      }
       if (mime === 'image/jpeg') validateJpeg(frameBuffer, job.options);
       else validatePng(frameBuffer, job.options);
       assertEncoding(job);
+      job.frameMime ||= mime;
       if (job.options.format === 'png-sequence') {
         await writeFile(path.join(job.frameDirectory, `frame_${String(job.received).padStart(6, '0')}.png`), frameBuffer, { flag: 'wx' });
       } else {
+        if (!job.child) {
+          const inputCodecArgs = mime === 'image/jpeg' ? ['-vcodec', 'mjpeg'] : ['-vcodec', 'png'];
+          const encoderArgs = job.options.format === 'mov-alpha'
+            ? movAlphaEncoderArguments()
+            : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-f', 'mp4'];
+          startEncoder(job, ffmpegPath, [
+            '-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-f', 'image2pipe',
+            ...inputCodecArgs, '-framerate', String(job.options.fps), '-i', 'pipe:0',
+            ...(job.watermarked ? freeWatermarkArguments(job.options.width, job.options.height) : []),
+            '-frames:v', String(job.options.frames), '-an',
+            ...encoderArgs, job.partialPath,
+          ]);
+        }
         // Awaiting the write callback applies pipe backpressure before accepting the next frame.
         await new Promise((resolve, reject) => {
           job.child.stdin.write(frameBuffer, error => error ? reject(new ApiError(500, 'ENCODER_FAILED', 'FFmpeg 停止接收画面，请重新导出。')) : resolve());
@@ -598,7 +665,7 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
   async function finishExport(job, request, response) {
     request.resume();
     if (job.status === 'finished') {
-      json(response, 200, { url: `/api/exports/${job.id}/file`, filename: job.filename, bytes: job.bytes });
+      json(response, 200, { url: `/api/exports/${job.id}/file`, filename: job.filename, bytes: job.bytes, ...(job.savedPath ? { savedPath: job.savedPath } : {}) });
       return;
     }
     assertEncoding(job);
@@ -667,11 +734,12 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
       if (job.status !== 'finishing') throw new ApiError(409, 'EXPORT_NOT_ACTIVE', job.failure || '导出已取消。');
       await rename(completedPath, job.finalPath);
       await cleanupJobFiles(job);
+      job.savedPath = await syncExportToDownloads(job.finalPath, job.filename, targetDownloadsDir);
       job.bytes = info.size;
       job.status = 'finished';
       job.touchedAt = Date.now();
       if (activeJob === job) activeJob = null;
-      json(response, 200, { url: `/api/exports/${job.id}/file`, filename: job.filename, bytes: job.bytes });
+      json(response, 200, { url: `/api/exports/${job.id}/file`, filename: job.filename, bytes: job.bytes, ...(job.savedPath ? { savedPath: job.savedPath } : {}) });
     } catch (error) {
       await stopJob(job, 'failed', error.message);
       throw error;
@@ -683,10 +751,40 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
     try { info = await stat(filename); }
     catch { throw new ApiError(404, 'FILE_NOT_FOUND', '文件不存在。'); }
     if (!info.isFile()) throw new ApiError(404, 'FILE_NOT_FOUND', '文件不存在。');
+    const mimeType = MIME[path.extname(filename).toLowerCase()] || 'application/octet-stream';
     const gzip = compress && /(?:^|[,\s])gzip(?:[,\s;]|$)/i.test(request.headers['accept-encoding'] || '') ? createGzip() : null;
+    const rangeHeader = !gzip && typeof request.headers.range === 'string' ? /^bytes=(\d*)-(\d*)$/i.exec(request.headers.range.trim()) : null;
+    if (rangeHeader && info.size > 0) {
+      let start = rangeHeader[1] ? Number(rangeHeader[1]) : 0;
+      let end = rangeHeader[2] ? Number(rangeHeader[2]) : info.size - 1;
+      if (!rangeHeader[1] && rangeHeader[2]) {
+        start = Math.max(0, info.size - Number(rangeHeader[2]));
+        end = info.size - 1;
+      }
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start > end || start >= info.size) {
+        response.writeHead(416, { 'Content-Range': `bytes */${info.size}`, 'Cache-Control': 'no-cache' });
+        response.end();
+        return;
+      }
+      end = Math.min(end, info.size - 1);
+      response.writeHead(206, {
+        'Content-Type': mimeType,
+        'Content-Range': `bytes ${start}-${end}/${info.size}`,
+        'Content-Length': end - start + 1,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-cache',
+        ...(downloadName ? { 'Content-Disposition': contentDisposition(downloadName) } : {}),
+      });
+      if (request.method === 'HEAD') { response.end(); return; }
+      const stream = createReadStream(filename, { start, end });
+      stream.on('error', () => response.destroy());
+      response.on('close', () => stream.destroy());
+      stream.pipe(response);
+      return;
+    }
     response.writeHead(200, {
-      'Content-Type': MIME[path.extname(filename).toLowerCase()] || 'application/octet-stream',
-      ...(gzip ? { 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' } : { 'Content-Length': info.size }), 'Cache-Control': 'no-cache',
+      'Content-Type': mimeType,
+      ...(gzip ? { 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' } : { 'Content-Length': info.size, 'Accept-Ranges': 'bytes' }), 'Cache-Control': 'no-cache',
       ...(downloadName ? { 'Content-Disposition': contentDisposition(downloadName) } : {}),
     });
     if (request.method === 'HEAD') { gzip?.destroy(); response.end(); return; }
@@ -786,12 +884,20 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
         if (!preview && !watermarked) await betaService.requireActivation();
         if (!preview && !['mp4', 'mov-alpha', 'png-sequence'].includes(format)) { request.resume(); throw new ApiError(400, 'INVALID_FORMAT', '写实导出格式须为 mp4、mov-alpha 或 png-sequence。'); }
         const body = await readBody(request, REALISTIC_RENDER_LIMITS.maxUploadBytes);
-        const created = await realistic.create(body, { name: url.searchParams.get('name') || undefined, format, watermarked });
+        const realisticOptions = { name: url.searchParams.get('name') || undefined, format, watermarked };
+        if (!preview) {
+          if (url.searchParams.has('motion')) realisticOptions.motion = url.searchParams.get('motion');
+          if (url.searchParams.has('pushAmount')) realisticOptions.pushAmount = Number(url.searchParams.get('pushAmount'));
+          if (url.searchParams.has('pushDuration')) realisticOptions.pushDuration = Number(url.searchParams.get('pushDuration'));
+          if (url.searchParams.has('soundEffect')) realisticOptions.soundEffect = url.searchParams.get('soundEffect');
+          if (url.searchParams.has('soundVolume')) realisticOptions.soundVolume = Number(url.searchParams.get('soundVolume'));
+        }
+        const created = await realistic.create(body, realisticOptions);
         if (watermarked) freeRealisticJobs.add(created.id);
         json(response, 201, { ...created, watermarked });
         return;
       }
-      const realisticMatch = /^\/api\/realistic-(exports|previews)\/([0-9a-f-]{36})(?:\/(file))?$/.exec(url.pathname);
+      const realisticMatch = /^\/api\/realistic-(exports|previews)\/([0-9a-f-]{36})(?:\/(file|reveal))?$/.exec(url.pathname);
       if (realisticMatch) {
         const options = { preview: realisticMatch[1] === 'previews' }, id = realisticMatch[2], resource = realisticMatch[3];
         if (request.method === 'GET' && !resource) { json(response, 200, realistic.snapshot(id, options)); return; }
@@ -799,6 +905,15 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
         if (['GET', 'HEAD'].includes(request.method) && resource === 'file') {
           const file = await realistic.file(id, options);
           await streamFile(request, response, file.path, options.preview ? undefined : file.name); return;
+        }
+        if (request.method === 'POST' && resource === 'reveal' && !options.preview) {
+          request.resume();
+          const file = await realistic.file(id, options);
+          let targetPath = file.savedPath || file.path;
+          if (!file.savedPath && targetDownloadsDir) {
+            targetPath = (await syncExportToDownloads(file.path, file.name, targetDownloadsDir)) || file.path;
+          }
+          json(response, 200, await revealFileInOS(targetPath, revealImpl)); return;
         }
         throw new ApiError(405, 'METHOD_NOT_ALLOWED', '此接口不支持这个操作。');
       }
@@ -819,13 +934,22 @@ export function createApp({ root = ROOT, ffmpegPath = findFFmpegPath(),
         await createExport(request, response);
         return;
       }
-      const match = /^\/api\/exports\/([0-9a-f-]{36})(?:\/(frames|finish|file|background|sound))?$/.exec(url.pathname);
+      const match = /^\/api\/exports\/([0-9a-f-]{36})(?:\/(frames|finish|file|reveal|background|sound))?$/.exec(url.pathname);
       if (match) {
         const job = getJob(match[1]);
         if (request.method === 'POST' && match[2] === 'background') { await uploadBackground(job, request, response); return; }
         if (request.method === 'POST' && match[2] === 'sound') { await uploadSound(job, request, response); return; }
         if (request.method === 'POST' && match[2] === 'frames') { await uploadFrame(job, request, response, url); return; }
         if (request.method === 'POST' && match[2] === 'finish') { await finishExport(job, request, response); return; }
+        if (request.method === 'POST' && match[2] === 'reveal') {
+          request.resume();
+          if (job.status !== 'finished') throw new ApiError(409, 'EXPORT_NOT_FINISHED', '视频仍在导出中。');
+          if (!job.savedPath && targetDownloadsDir) {
+            job.savedPath = await syncExportToDownloads(job.finalPath, job.filename, targetDownloadsDir);
+          }
+          json(response, 200, await revealFileInOS(job.savedPath || job.finalPath, revealImpl));
+          return;
+        }
         if (['GET', 'HEAD'].includes(request.method) && match[2] === 'file') {
           if (job.status !== 'finished') throw new ApiError(409, 'EXPORT_NOT_FINISHED', '视频仍在导出中。');
           await streamFile(request, response, job.finalPath, job.filename);

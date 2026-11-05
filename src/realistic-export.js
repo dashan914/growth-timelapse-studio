@@ -65,5 +65,5 @@ export async function waitForRealisticExport({ id, request, signal, onSnapshot =
 
 export function realisticDownloadResult(result, id) {
   if (result?.status !== 'complete' || result.id !== id || result.rendered !== result.total || result.encoded !== result.total || !Number.isInteger(result.total) || result.total < 1 || !Number.isFinite(result.bytes) || result.bytes < 1 || typeof result.filename !== 'string' || result.url !== `/api/realistic-exports/${id}/file`) throw new Error('完成文件校验未通过，请重新导出。');
-  return { url: result.url, filename: result.filename, bytes: result.bytes };
+  return { url: result.url, filename: result.filename, bytes: result.bytes, ...(result.savedPath ? { savedPath: result.savedPath } : {}) };
 }

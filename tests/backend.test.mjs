@@ -837,3 +837,58 @@ test('GET /api/version/check returns version check data from service', async t =
   assert.equal(data.latestVersion, '1.2.1');
   assert.equal(data.forceChecked, true);
 });
+
+test('MP4 export accepts JPEG frames, syncs finished files to downloadsDirectory, supports Range requests and reveals in OS', async t => {
+  try { await execFileAsync(FFMPEG, ['-version']); }
+  catch { t.skip('FFmpeg is not available in this environment.'); return; }
+  const rawDownloadsDir = await mkdtemp(path.join(tmpdir(), 'growth-downloads-'));
+  const downloadsDir = await execFileAsync(findPythonPath(), ['-c', 'import os,sys; print(os.path.realpath(sys.argv[1]), end="")', rawDownloadsDir]).then(r => r.stdout);
+  t.after(() => rm(rawDownloadsDir, { recursive: true, force: true }));
+  const revealed = [];
+  const { base } = await fixture(t, {
+    ffmpegPath: FFMPEG,
+    downloadsDirectory: downloadsDir,
+    revealImpl: async targetPath => { revealed.push(targetPath); },
+  });
+  const { stdout: jpeg64 } = await execFileAsync(FFMPEG, [
+    '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64', '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'mjpeg', 'pipe:1',
+  ], { encoding: 'buffer' });
+  const { stdout: jpeg32 } = await execFileAsync(FFMPEG, [
+    '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=32x32', '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'mjpeg', 'pipe:1',
+  ], { encoding: 'buffer' });
+
+  const { body: { id }, response } = await createExport(base, { frames: 2, name: 'JPEG落盘测试' });
+  assert.equal(response.status, 201);
+
+  const wrongSize = await fetch(`${base}/api/exports/${id}/frames?index=0`, {
+    method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: jpeg32,
+  });
+  assert.equal(wrongSize.status, 400);
+  assert.equal((await wrongSize.json()).error.code, 'FRAME_SIZE_MISMATCH');
+
+  for (let i = 0; i < 2; i++) {
+    const res = await fetch(`${base}/api/exports/${id}/frames?index=${i}`, {
+      method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: jpeg64,
+    });
+    assert.equal(res.status, 200);
+  }
+
+  const completed = await finish(base, id);
+  assert.equal(completed.status, 200);
+  const result = await completed.json();
+  assert.ok(result.savedPath);
+  assert.equal(result.savedPath, path.join(downloadsDir, result.filename));
+  assert.equal((await readFile(result.savedPath)).length, result.bytes);
+
+  const partial = await fetch(base + result.url, { headers: { Range: 'bytes=0-15' } });
+  assert.equal(partial.status, 206);
+  assert.match(partial.headers.get('content-range') || '', /^bytes 0-15\/\d+$/);
+  assert.equal((await partial.arrayBuffer()).byteLength, 16);
+
+  const revealRes = await fetch(`${base}/api/exports/${id}/reveal`, { method: 'POST' });
+  assert.equal(revealRes.status, 200);
+  const revealBody = await revealRes.json();
+  assert.equal(revealBody.ok, true);
+  assert.equal(revealBody.path, result.savedPath);
+  assert.deepEqual(revealed, [result.savedPath]);
+});

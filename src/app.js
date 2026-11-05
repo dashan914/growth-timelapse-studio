@@ -873,12 +873,13 @@ async function preparePhotoFrames(width,height){
   return{state,canvas,context:canvas.getContext('2d',{willReadFrequently:true}),out:new Uint8ClampedArray(width*height*4)};
 }
 
-async function composePhotoBlob(baseBlob,progress,prepared){
+async function composePhotoBlob(baseBlob,progress,prepared,format='image/png',quality=0.95){
   const image=await createImageBitmap(baseBlob);prepared.context.drawImage(image,0,0);image.close();
   const base=prepared.context.getImageData(0,0,prepared.canvas.width,prepared.canvas.height);
   composePhotoReveal({state:prepared.state,progress,baseRGBA:base.data,out:prepared.out});
   prepared.context.putImageData(new ImageData(prepared.out,prepared.canvas.width,prepared.canvas.height),0,0);
-  return new Promise((resolve,reject)=>prepared.canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('无法生成实拍合成画面')),'image/png'));
+  const mime=format==='image/jpeg'?'image/jpeg':'image/png';
+  return new Promise((resolve,reject)=>prepared.canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('无法生成实拍合成画面')),mime,mime==='image/jpeg'?quality:undefined));
 }
 function growthProgress(progress){return $('stepped').checked?Math.floor(progress*Number($('layers').value)+1e-7)/Number($('layers').value):progress;}
 function restoreSettings() {
@@ -1448,6 +1449,48 @@ async function cancelExport() {
   }
 }
 
+async function triggerExportFileDownload(url,filename){
+  try{
+    const response=await fetch(url,{cache:'no-store'});
+    if(!response.ok)throw new Error('下载文件读取失败');
+    const blob=await response.blob();
+    if(!blob.size)throw new Error('导出文件为空');
+    downloadBlob(blob,filename);
+    return true;
+  }catch{
+    const fallback=document.createElement('a');
+    fallback.href=url;fallback.download=filename;fallback.rel='noopener';
+    document.body?.appendChild?.(fallback);
+    fallback.click?.();
+    fallback.remove?.();
+    return false;
+  }
+}
+
+function enhanceExportResultUI(container,link,info,result,revealUrl){
+  if(!container||!link)return;
+  if(result?.savedPath&&info)info.textContent=`${result.filename} · ${(result.bytes/1024/1024).toFixed(1)} MB · 已自动保存至系统「下载」文件夹`;
+  link.addEventListener?.('click',event=>{
+    event.preventDefault?.();
+    void triggerExportFileDownload(result.url,result.filename);
+  });
+  if(revealUrl&&typeof document?.createElement==='function'){
+    const revealBtn=document.createElement('button');
+    revealBtn.type='button';
+    revealBtn.className='button quiet export-reveal-button';
+    revealBtn.textContent='打开所在文件夹';
+    revealBtn.addEventListener?.('click',async()=>{
+      try{
+        const res=await api(revealUrl,{method:'POST'});
+        if(res?.path)say(`已在文件夹中定位：${res.path}`);
+      }catch(err){say(err.message||'无法打开所在文件夹',true);}
+    });
+    if(typeof container.insertBefore==='function'&&info?.parentNode===container)container.insertBefore(revealBtn,info);
+    else container.append?.(revealBtn);
+  }
+  void triggerExportFileDownload(result.url,result.filename);
+}
+
 function showRealisticExportResult(snapshot,config,id) {
   const result=realisticDownloadResult(snapshot,id);
   $('export-title').textContent='完成，可以下载了。';
@@ -1457,9 +1500,11 @@ function showRealisticExportResult(snapshot,config,id) {
   const link=document.createElement('a');link.href=result.url;link.download=result.filename;link.className='button primary';
   link.textContent=outputFormat(config.format).download;
   const info=document.createElement('small');info.textContent=`${result.filename} · ${(result.bytes/1024/1024).toFixed(1)} MB`;
-  $('export-result').replaceChildren(link,info);$('export-result').hidden=false;
+  const container=$('export-result');
+  container.replaceChildren(link,info);container.hidden=false;
+  if(typeof enhanceExportResultUI==='function')enhanceExportResultUI(container,link,info,result,id?`/api/realistic-exports/${id}/reveal`:null);
   $('cancel-export').textContent='返回工作台';
-  say('写实导出完成。模型面数、完整帧数与相机透视已验证。');
+  say(result.savedPath?'写实导出完成，视频已自动保存至系统「下载」文件夹。':'写实导出完成。模型面数、完整帧数与相机透视已验证。');
 }
 
 async function exportRealisticVideo(config) {
@@ -1487,6 +1532,15 @@ async function exportRealisticVideo(config) {
     if(cancelled)throw new DOMException('Aborted','AbortError');
     $('export-detail').textContent='正在提交完整写实任务…';
     const parameters=new URLSearchParams({name:studio.metadata.name.replace(/\.[^.]+$/,'')+'-写实生长',format:config.format,exportMode:config.watermarked?'watermarked':'unlocked'});
+    if(config.motion==='push'){
+      parameters.set('motion','push');
+      if(Number.isFinite(config.pushAmount))parameters.set('pushAmount',String(config.pushAmount));
+      if(Number.isFinite(config.pushDuration))parameters.set('pushDuration',String(config.pushDuration));
+    }
+    if(config.soundEffect&&config.soundEffect!=='none'){
+      parameters.set('soundEffect',config.soundEffect);
+      if(Number.isFinite(config.soundVolume))parameters.set('soundVolume',String(config.soundVolume));
+    }
     // Keep POST un-aborted so a cancellation can always receive and clean its ID.
     const job=await api(`/api/realistic-exports?${parameters}`,{method:'POST',headers:{'Content-Type':'application/zip'},body:packageResult.blob});
     exportId=job.id;
@@ -1579,10 +1633,11 @@ async function exportVideo() {
           const frameTime = index / Math.max(1,frames-1) * config.duration;
           const state = timelineState(frameTime,config.duration,config.hold,config.motion);
           let blob = await studio.captureFrame(state.progress,state.rotation,index/config.fps,{outputPlan:plan,signal,format:frameMime});
-          if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo);
+          if(photo)blob=await composePhotoBlob(blob,growthProgress(state.progress),photo,frameMime);
           blob=await applyFramePush(blob,cameraMotionScale(frameTime,config),pushCanvas,frameMime);
+          const actualMime = blob?.type === 'image/jpeg' || blob?.type === 'image/png' ? blob.type : frameMime;
           if(previousUploadPromise)await previousUploadPromise;
-          previousUploadPromise=api(`/api/exports/${exportId}/frames?index=${index}`,{method:'POST',headers:{'Content-Type':frameMime},body:blob,signal});
+          previousUploadPromise=api(`/api/exports/${exportId}/frames?index=${index}`,{method:'POST',headers:{'Content-Type':actualMime},body:blob,signal});
           const pct = Math.round((index+1)/frames*95);
           $('export-progress').value = pct; $('export-percent').textContent = `${pct}%`;
           $('export-frame-count').textContent = `${index+1} / ${frames} 帧`;
@@ -1596,7 +1651,8 @@ async function exportVideo() {
         throw loopError;
       }
       $('export-detail').textContent = outputFormat(config.format).video ? '画面已完成，正在保存视频…' : '画面已完成，正在打包图片…';
-      const result = await api(`/api/exports/${exportId}/finish`,{method:'POST',signal});
+      const finishedId = exportId;
+      const result = await api(`/api/exports/${finishedId}/finish`,{method:'POST',signal});
       if (cancelled) throw new DOMException('Aborted','AbortError');
       exportId = null;
       $('export-title').textContent = '完成，可以下载了。';
@@ -1605,9 +1661,11 @@ async function exportVideo() {
       const link = document.createElement('a'); link.href = result.url; link.download = result.filename; link.className = 'button primary';
       link.textContent = outputFormat(config.format).download;
       const info = document.createElement('small'); info.textContent = `${result.filename} · ${(result.bytes/1024/1024).toFixed(1)} MB`;
-      $('export-result').append(link,info); $('export-result').hidden = false;
+      const container = $('export-result');
+      container.append(link,info); container.hidden = false;
+      if (typeof enhanceExportResultUI === 'function') enhanceExportResultUI(container, link, info, result, `/api/exports/${finishedId}/reveal`);
       $('cancel-export').textContent = '返回工作台';
-      say('导出完成。可以下载文件，也可以继续制作下一个视频。');
+      say(result.savedPath ? '导出完成，已自动保存至系统「下载」文件夹。' : '导出完成。可以下载文件，也可以继续制作下一个视频。');
     } catch (error) {
       if (exportId) await api(`/api/exports/${exportId}`,{method:'DELETE'}).catch(() => {});
       exportId = null;
